@@ -779,6 +779,18 @@ These standards are mandatory.
 
 ---
 
+### Governance
+
+Refer to:
+
+- docs/03-Governance/02-Engineering-Principles.md
+- docs/03-Governance/03-Coding-Standards.md
+- docs/03-Governance/04-Naming-Conventions.md
+- docs/03-Governance/05-Repository-Standards.md
+
+---
+
+
 # General Rules
 
 Always:

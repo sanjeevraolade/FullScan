@@ -71,6 +71,44 @@ Group them logically.
 
 - react-native-vision-camera
 
+## Splash Screen
+
+- react-native-bootsplash
+
+### Post-install setup
+
+After providing a logo image (recommended: 1024×1024 PNG with transparent background), run:
+
+```bash
+cd mobile
+npx react-native-bootsplash generate <path-to-logo>.png \
+  --platforms=ios,android \
+  --background=#FFFFFF \
+  --logo-width=100
+```
+
+This command automatically:
+
+- Generates `BootSplash.storyboard` and image assets for iOS
+- Generates `bootsplash_logo` drawables and `bootsplash.xml` colors for Android
+- Patches `AppDelegate.swift` to initialize the splash screen
+- Patches `MainActivity.kt` to install the splash on activity create
+- Adds the `BootTheme` style to Android `styles.xml`
+- Updates `AndroidManifest.xml` to use the boot theme on launch
+
+After running the command, on iOS re-run `bundle exec pod install`.
+
+### JS integration
+
+The helper is available at `src/infrastructure/splash/`:
+
+```ts
+import { hideSplashScreen } from '@/infrastructure/splash';
+
+// Call after navigation is mounted and initial bootstrap completes
+await hideSplashScreen();
+```
+
 ## Localization
 
 - i18next
