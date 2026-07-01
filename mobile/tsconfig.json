@@ -1,25 +1,121 @@
 {
-  "extends": "@react-native/typescript-config/tsconfig.json",
+  "$schema": "https://json.schemastore.org/tsconfig",
+
+  "extends": "@react-native/typescript-config/",
 
   "compilerOptions": {
+    /* Language */
     "target": "ESNext",
-    "module": "ESNext",
+    "lib": [
+      "ES2023"
+    ],
 
+    /* Module */
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+
+    /* JSX */
+    "jsx": "react-native",
+
+    /* Type Checking */
     "strict": true,
     "noImplicitAny": true,
     "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noImplicitThis": true,
+    "alwaysStrict": true,
+
+    /* Additional Safety */
     "noUncheckedIndexedAccess": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
+    "noImplicitOverride": true,
     "noFallthroughCasesInSwitch": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
+    "useUnknownInCatchVariables": true,
 
+    /* Imports */
+    "isolatedModules": true,
+    "verbatimModuleSyntax": true,
+    "importsNotUsedAsValues": "error",
+
+    /* Paths */
     "baseUrl": ".",
-
     "paths": {
-      "@/*": ["src/*"]
-    }
-  },
-  "include": ["**/*.ts", "**/*.tsx"],
-  "exclude": ["**/node_modules", "**/Pods"]
+      "@/*": [
+        "src/*"
+      ],
+      "@assets/*": [
+        "src/assets/*"
+      ],
+      "@components/*": [
+        "src/components/*"
+      ],
+      "@screens/*": [
+        "src/screens/*"
+      ],
+      "@navigation/*": [
+        "src/navigation/*"
+      ],
+      "@services/*": [
+        "src/services/*"
+      ],
+      "@hooks/*": [
+        "src/hooks/*"
+      ],
+      "@utils/*": [
+        "src/utils/*"
+      ],
+      "@constants/*": [
+        "src/constants/*"
+      ],
+      "@types/*": [
+        "src/types/*"
+      ],
+      "@store/*": [
+        "src/store/*"
+      ],
+      "@theme/*": [
+        "src/theme/*"
+      ],
+      "@config/*": [
+        "src/config/*"
+      ]
+    },
 
+    /* Performance */
+    "skipLibCheck": true,
+    "incremental": true,
+
+    /* Consistency */
+    "forceConsistentCasingInFileNames": true
+  },
+
+  "include": [
+    "src",
+    "App.tsx",
+    "index.js",
+    "index.ts",
+    "**/*.ts",
+    "**/*.tsx",
+    "**/*.d.ts"
+  ],
+
+  "exclude": [
+    "node_modules",
+    "android",
+    "ios",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "coverage",
+    "dist",
+    "build",
+    "**/node_modules", 
+    "**/Pods"
+  ]
 }

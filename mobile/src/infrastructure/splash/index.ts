@@ -12,7 +12,6 @@ export const hideSplashScreen = async (): Promise<void> => {
 /**
  * Check whether the splash screen is currently visible.
  */
-export const isSplashVisible = async (): Promise<boolean> => {
-  const status = await BootSplash.getVisibilityStatus();
-  return status === 'visible' || status === 'transitioning';
+export const isSplashVisible = (): boolean => {
+  return BootSplash.isVisible();
 };
