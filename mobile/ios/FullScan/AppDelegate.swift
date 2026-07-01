@@ -22,6 +22,10 @@ class AppDelegate: UIResponder, UIApplicationDelegate {
     reactNativeDelegate = delegate
     reactNativeFactory = factory
 
+//    factory.rootViewFactory.customizeRootView = { rootView in
+//      RNBootSplash.initWithStoryboard("BootSplash", rootView: rootView)
+//    }
+
     window = UIWindow(frame: UIScreen.main.bounds)
 
     factory.startReactNative(
