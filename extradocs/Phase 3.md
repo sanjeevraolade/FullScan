@@ -8,11 +8,7 @@ Milestone 1 — Repository Bootstrap
 
 Create repositories.
 
-FullScan/
-
-mobile/
-
-server/
+FullScanApp/
 
 docs/
 
