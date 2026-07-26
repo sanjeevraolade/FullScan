@@ -14,14 +14,17 @@ export class WidgetRegistry implements IWidgetRegistryEngine {
   private readonly factories = new Map<WidgetType, WidgetFactory>();
 
   initialize(): void {
+    LoggerService.info('WidgetRegistry.initialize: clearing registered factories');
     this.factories.clear();
   }
 
   register(type: WidgetType, factory: WidgetFactory): void {
+    LoggerService.info('WidgetRegistry.register: registering widget type', { type });
     this.factories.set(type, factory);
   }
 
   resolve(type: WidgetType): WidgetComponent | undefined {
+    LoggerService.info('WidgetRegistry.resolve: resolving widget type', { type });
     const factory = this.factories.get(type);
     if (!factory) {
       LoggerService.warn(WIDGET_REGISTRY_UNKNOWN_TYPE_MESSAGE, { type });
@@ -31,10 +34,13 @@ export class WidgetRegistry implements IWidgetRegistryEngine {
   }
 
   isRegistered(type: WidgetType): boolean {
-    return this.factories.has(type);
+    const isRegistered = this.factories.has(type);
+    LoggerService.info('WidgetRegistry.isRegistered: checked widget type', { type, isRegistered });
+    return isRegistered;
   }
 
   dispose(): void {
+    LoggerService.info('WidgetRegistry.dispose: clearing registered factories');
     this.factories.clear();
   }
 }

@@ -26,6 +26,12 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   private readonly localizationEngine: RequiredDependencies['localizationEngine'];
 
   constructor(dependencies: VerificationRuntimeEngineDependencies = {}) {
+    LoggerService.info('VerificationRuntimeEngine.constructor: creating engine', {
+      usesCustomConfigurationEngine: Boolean(dependencies.configurationEngine),
+      usesCustomWidgetRegistry: Boolean(dependencies.widgetRegistry),
+      usesCustomThemeEngine: Boolean(dependencies.themeEngine),
+      usesCustomLocalizationEngine: Boolean(dependencies.localizationEngine),
+    });
     this.configurationEngine = dependencies.configurationEngine ?? new ConfigurationEngine();
     this.widgetRegistry = dependencies.widgetRegistry ?? new WidgetRegistry();
     this.themeEngine = dependencies.themeEngine ?? DefaultThemeEngine;
@@ -33,17 +39,22 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   }
 
   async initialize(): Promise<void> {
-    LoggerService.info('Runtime initializing');
+    LoggerService.info('VerificationRuntimeEngine.initialize: starting');
 
+    LoggerService.info('VerificationRuntimeEngine.initialize: initializing configuration engine');
     await this.configurationEngine.initialize();
+    LoggerService.info('VerificationRuntimeEngine.initialize: initializing theme engine');
     this.themeEngine.initialize();
+    LoggerService.info('VerificationRuntimeEngine.initialize: initializing localization engine');
     await this.localizationEngine.initialize();
+    LoggerService.info('VerificationRuntimeEngine.initialize: initializing widget registry');
     this.widgetRegistry.initialize();
 
-    LoggerService.info('Runtime initialized');
+    LoggerService.info('VerificationRuntimeEngine.initialize: completed');
   }
 
   getContext(): RuntimeContext {
+    LoggerService.info('VerificationRuntimeEngine.getContext: building runtime context snapshot');
     return {
       theme: {
         mode: this.themeEngine.getMode(),
@@ -56,17 +67,21 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   }
 
   getWidgetRegistry(): IWidgetRegistry {
+    LoggerService.info('VerificationRuntimeEngine.getWidgetRegistry: returning widget registry');
     return this.widgetRegistry;
   }
 
   getScreen(screenId: string): ScreenDefinition | undefined {
+    LoggerService.info('VerificationRuntimeEngine.getScreen: resolving screen', { screenId });
     return this.configurationEngine.getScreen(screenId);
   }
 
   dispose(): void {
+    LoggerService.info('VerificationRuntimeEngine.dispose: disposing engines');
     this.configurationEngine.dispose();
     this.themeEngine.dispose();
     this.localizationEngine.dispose();
     this.widgetRegistry.dispose();
+    LoggerService.info('VerificationRuntimeEngine.dispose: completed');
   }
 }

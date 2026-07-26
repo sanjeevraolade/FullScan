@@ -21,12 +21,15 @@ export function ApplicationProvider({ children }: PropsWithChildren): ReactEleme
   useEffect(() => {
     let isMounted = true;
 
+    LoggerService.info('ApplicationProvider: mount effect started, running bootstrap');
     runBootstrap()
       .then((result) => {
         if (!isMounted) {
+          LoggerService.info('ApplicationProvider: bootstrap resolved after unmount, ignoring');
           return;
         }
         if (result.success) {
+          LoggerService.info('ApplicationProvider: bootstrap succeeded, runtime engine ready');
           setRuntimeEngine(result.context.runtimeEngine);
         } else {
           LoggerService.error('Bootstrap failed, application cannot start', {
@@ -39,6 +42,7 @@ export function ApplicationProvider({ children }: PropsWithChildren): ReactEleme
       });
 
     return () => {
+      LoggerService.info('ApplicationProvider: unmounting');
       isMounted = false;
     };
   }, []);

@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { Input, InputField, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
 import type { WidgetComponentProps } from '@/widgets/base';
 
 /**
@@ -17,13 +18,22 @@ import type { WidgetComponentProps } from '@/widgets/base';
 export function TextInputWidget({ definition, value = '', error, onChange }: WidgetComponentProps): ReactElement {
   const { t } = useTranslation();
 
+  const handleChangeText = (nextValue: string): void => {
+    // Never log field content — this widget type also covers "password".
+    LoggerService.info('TextInputWidget.onChangeText: input changed', {
+      widgetId: definition.widgetId,
+      type: definition.type,
+    });
+    onChange?.(nextValue);
+  };
+
   return (
     <VStack space="xs">
       <Text size="sm">{t(definition.labelKey)}</Text>
       <Input isInvalid={Boolean(error)}>
         <InputField
           value={value}
-          onChangeText={onChange}
+          onChangeText={handleChangeText}
           secureTextEntry={definition.type === 'password'}
           keyboardType={definition.type === 'email' ? 'email-address' : 'default'}
           autoCapitalize="none"

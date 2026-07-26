@@ -1,4 +1,5 @@
 import type { IWidgetRegistry } from '@/contracts';
+import { LoggerService } from '@/infrastructure/logger';
 
 import { registerCheckboxWidget } from './checkbox';
 import { registerTextWidget } from './text';
@@ -11,7 +12,9 @@ import { registerTextInputWidget } from './text-input';
  * directly by the runtime pipeline tests.
  */
 export function registerBuiltInWidgets(registry: IWidgetRegistry): void {
+  LoggerService.info('registerBuiltInWidgets: registering built-in widgets');
   registerTextWidget(registry);
   registerTextInputWidget(registry);
   registerCheckboxWidget(registry);
+  LoggerService.info('registerBuiltInWidgets: completed');
 }

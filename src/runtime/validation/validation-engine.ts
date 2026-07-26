@@ -6,14 +6,17 @@ import type { IValidationEngine } from './validation-engine.interface';
 
 export class ValidationEngine implements IValidationEngine {
   initialize(): void {
+    LoggerService.info('ValidationEngine.initialize: starting');
     LoggerService.info(VALIDATION_ENGINE_READY_MESSAGE);
   }
 
   dispose(): void {
+    LoggerService.info('ValidationEngine.dispose: no persistent state to release');
     // No persistent state to release — validateScreen is a pure function of its arguments.
   }
 
   validateScreen(screen: ScreenDefinition, values: Readonly<Record<string, string>>): Record<string, string> {
+    LoggerService.info('ValidationEngine.validateScreen: validating screen', { screenId: screen.screenId });
     const errors: Record<string, string> = {};
 
     for (const section of screen.sections) {
@@ -28,6 +31,10 @@ export class ValidationEngine implements IValidationEngine {
       }
     }
 
+    LoggerService.info('ValidationEngine.validateScreen: completed', {
+      screenId: screen.screenId,
+      errorCount: Object.keys(errors).length,
+    });
     return errors;
   }
 }

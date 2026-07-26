@@ -1,4 +1,5 @@
 import { hideSplashScreen } from '@/infrastructure/splash';
+import { LoggerService } from '@/infrastructure/logger';
 import { VerificationRuntimeEngine } from '@/runtime/engine';
 import { registerBuiltInWidgets } from '@/widgets';
 
@@ -17,21 +18,28 @@ import type { BootstrapStep } from './BootstrapStep';
 const initializeRuntimeStep: BootstrapStep = {
   name: 'runtime',
   async execute(context: BootstrapContext): Promise<void> {
+    LoggerService.info('initializeRuntimeStep.execute: starting');
     const runtimeEngine = new VerificationRuntimeEngine();
     await runtimeEngine.initialize();
     registerBuiltInWidgets(runtimeEngine.getWidgetRegistry());
     context.runtimeEngine = runtimeEngine;
+    LoggerService.info('initializeRuntimeStep.execute: completed');
   },
 };
 
 const hideSplashStep: BootstrapStep = {
   name: 'splash',
   async execute(): Promise<void> {
+    LoggerService.info('hideSplashStep.execute: starting');
     await hideSplashScreen();
+    LoggerService.info('hideSplashStep.execute: completed');
   },
 };
 
 export async function runBootstrap(): Promise<BootstrapResult> {
+  LoggerService.info('runBootstrap: starting');
   const pipeline = new BootstrapPipeline([initializeRuntimeStep, hideSplashStep]);
-  return pipeline.run();
+  const result = await pipeline.run();
+  LoggerService.info('runBootstrap: finished', { success: result.success });
+  return result;
 }

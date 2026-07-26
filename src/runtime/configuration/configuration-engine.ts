@@ -23,6 +23,10 @@ const SAMPLE_CONFIGURATION: ConfigurationPackage = {
 };
 
 function isValidConfigurationPackage(candidate: ConfigurationPackage): boolean {
+  LoggerService.info('isValidConfigurationPackage: validating configuration package', {
+    configurationVersion: candidate.configurationVersion,
+    screenCount: candidate.screens.length,
+  });
   if (!candidate.configurationVersion || !candidate.minimumAppVersion || !candidate.generatedOn) {
     return false;
   }
@@ -41,6 +45,7 @@ export class ConfigurationEngine implements IConfigurationEngine {
   private activeConfiguration: ConfigurationPackage | undefined;
 
   async initialize(): Promise<void> {
+    LoggerService.info('ConfigurationEngine.initialize: starting');
     const candidate = SAMPLE_CONFIGURATION;
 
     if (!isValidConfigurationPackage(candidate)) {
@@ -50,17 +55,29 @@ export class ConfigurationEngine implements IConfigurationEngine {
     }
 
     this.activeConfiguration = candidate;
+    LoggerService.info('ConfigurationEngine.initialize: activated configuration package', {
+      configurationVersion: candidate.configurationVersion,
+    });
   }
 
   getActiveConfiguration(): ConfigurationPackage | undefined {
+    LoggerService.info('ConfigurationEngine.getActiveConfiguration: returning active configuration', {
+      hasActiveConfiguration: Boolean(this.activeConfiguration),
+    });
     return this.activeConfiguration;
   }
 
   getScreen(screenId: string): ScreenDefinition | undefined {
-    return this.activeConfiguration?.screens.find((screen) => screen.screenId === screenId);
+    LoggerService.info('ConfigurationEngine.getScreen: looking up screen', { screenId });
+    const screen = this.activeConfiguration?.screens.find((candidateScreen) => candidateScreen.screenId === screenId);
+    if (!screen) {
+      LoggerService.warn('ConfigurationEngine.getScreen: screen not found in active configuration', { screenId });
+    }
+    return screen;
   }
 
   dispose(): void {
+    LoggerService.info('ConfigurationEngine.dispose: clearing active configuration');
     this.activeConfiguration = undefined;
   }
 }

@@ -3,6 +3,7 @@ import type { ReactElement } from 'react';
 import { Checkbox, CheckboxIcon, CheckboxIndicator, CheckboxLabel, CheckIcon } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
 import type { WidgetComponentProps } from '@/widgets/base';
 
 /**
@@ -22,7 +23,13 @@ export function CheckboxWidget({ definition, value = 'false', onChange }: Widget
     <Checkbox
       value={definition.widgetId}
       isChecked={isChecked}
-      onChange={(nextIsChecked: boolean) => onChange?.(nextIsChecked ? 'true' : 'false')}
+      onChange={(nextIsChecked: boolean) => {
+        LoggerService.info('CheckboxWidget.onChange: checkbox toggled', {
+          widgetId: definition.widgetId,
+          isChecked: nextIsChecked,
+        });
+        onChange?.(nextIsChecked ? 'true' : 'false');
+      }}
     >
       <CheckboxIndicator mr="$2">
         <CheckboxIcon as={CheckIcon} />

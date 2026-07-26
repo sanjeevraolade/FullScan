@@ -19,6 +19,7 @@ const LAUNCH_SCREEN_ID = 'login';
 
 export function ApplicationShell(): ReactElement {
   const runtimeEngine = useRuntimeEngine();
+  LoggerService.info('ApplicationShell: resolving launch screen', { screenId: LAUNCH_SCREEN_ID });
   const screen = runtimeEngine.getScreen(LAUNCH_SCREEN_ID);
 
   if (!screen) {
@@ -33,7 +34,7 @@ export function ApplicationShell(): ReactElement {
   }
 
   const handleAction = (action: ScreenAction): void => {
-    LoggerService.info('Screen action triggered (Workflow Engine not implemented yet)', { action });
+    LoggerService.info('ApplicationShell.handleAction: screen action triggered (Workflow Engine not implemented yet)', { action });
   };
 
   return (

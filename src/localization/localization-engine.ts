@@ -1,6 +1,8 @@
 import i18next from 'i18next';
 import { initReactI18next } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
+
 import en from './en/common.json';
 import hi from './hi/common.json';
 import te from './te/common.json';
@@ -19,6 +21,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   private language: SupportedLanguage = DEFAULT_LANGUAGE;
 
   async initialize(language: SupportedLanguage = DEFAULT_LANGUAGE): Promise<void> {
+    LoggerService.info('LocalizationEngine.initialize: starting', { language });
     this.language = language;
     await i18next.use(initReactI18next).init({
       lng: language,
@@ -27,6 +30,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
       resources: RESOURCES,
       interpolation: { escapeValue: false },
     });
+    LoggerService.info('LocalizationEngine.initialize: completed', { language });
   }
 
   getLanguage(): SupportedLanguage {
@@ -34,6 +38,10 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   }
 
   async setLanguage(language: SupportedLanguage): Promise<void> {
+    LoggerService.info('LocalizationEngine.setLanguage: switching language', {
+      from: this.language,
+      to: language,
+    });
     this.language = language;
     await i18next.changeLanguage(language);
   }
@@ -43,6 +51,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   }
 
   dispose(): void {
+    LoggerService.info('LocalizationEngine.dispose: resetting to default language');
     this.language = DEFAULT_LANGUAGE;
   }
 }
