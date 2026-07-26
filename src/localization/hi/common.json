@@ -19,10 +19,15 @@
     "welcome": "FullScan में आपका स्वागत है",
     "fields": {
       "username": "उपयोगकर्ता नाम",
-      "password": "पासवर्ड"
+      "password": "पासवर्ड",
+      "rememberMe": "मुझे याद रखें",
+      "employeeId": "कर्मचारी आईडी (वैकल्पिक)"
     },
     "actions": {
       "submit": "लॉगिन करें"
     }
+  },
+  "validation": {
+    "required": "यह फ़ील्ड आवश्यक है"
   }
 }

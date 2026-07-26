@@ -50,3 +50,8 @@ then provides the initialized `VerificationRuntimeEngine` via `ApplicationContex
 `ApplicationShell` (renders the `login` screen through `ScreenRenderer` — the launch screen id is a fixed
 constant since there is no Workflow Engine yet to decide it). No React Navigation stack is wired in yet;
 there is only one screen to show.
+
+Both the loading state and the shell render through `AppSafeArea`, which applies real safe-area insets
+(`react-native-safe-area-context`'s `SafeAreaView`, not Gluestack's deprecated one) and a `$white`
+background matching the native splash screen exactly, so there's no inset clipping and no color flash
+between splash-hide and first paint.

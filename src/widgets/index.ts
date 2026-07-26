@@ -1,5 +1,6 @@
 import type { IWidgetRegistry } from '@/contracts';
 
+import { registerCheckboxWidget } from './checkbox';
 import { registerTextWidget } from './text';
 import { registerTextInputWidget } from './text-input';
 
@@ -12,4 +13,5 @@ import { registerTextInputWidget } from './text-input';
 export function registerBuiltInWidgets(registry: IWidgetRegistry): void {
   registerTextWidget(registry);
   registerTextInputWidget(registry);
+  registerCheckboxWidget(registry);
 }

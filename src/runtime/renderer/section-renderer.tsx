@@ -2,7 +2,26 @@ import React from 'react';
 import type { ReactElement } from 'react';
 import { VStack } from '@gluestack-ui/themed';
 
+import type { WidgetComponent, WidgetDefinition } from '@/contracts';
+
 import type { SectionRendererProps } from './dynamic-form-engine.types';
+import { useFormField } from './form-state';
+
+interface ConnectedWidgetProps {
+  readonly Component: WidgetComponent;
+  readonly definition: WidgetDefinition;
+}
+
+/**
+ * One component per widget instance so `useFormField` (a hook) can be called
+ * unconditionally per iteration, per the Rules of Hooks — it can't be called
+ * directly inside `.map()`.
+ */
+function ConnectedWidget({ Component, definition }: ConnectedWidgetProps): ReactElement {
+  const { value, error, onChange } = useFormField(definition.widgetId);
+
+  return <Component definition={definition} value={value} error={error} onChange={onChange} />;
+}
 
 /**
  * Resolves each widget through the Widget Registry rather than a switch
@@ -18,7 +37,9 @@ export function SectionRenderer({ section, registry }: SectionRendererProps): Re
     <VStack space="sm">
       {sortedWidgets.map((widget) => {
         const WidgetComponent = registry.resolve(widget.type);
-        return WidgetComponent ? <WidgetComponent key={widget.widgetId} definition={widget} /> : null;
+        return WidgetComponent ? (
+          <ConnectedWidget key={widget.widgetId} Component={WidgetComponent} definition={widget} />
+        ) : null;
       })}
     </VStack>
   );

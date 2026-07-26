@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import type { ReactElement } from 'react';
 import { Input, InputField, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
@@ -10,26 +10,30 @@ import type { WidgetComponentProps } from '@/widgets/base';
  * (docs/06-Contracts/04-Widget-Schema.md §4) — one component, registered
  * three times, since they only differ in keyboard/secure-entry behaviour.
  *
- * Local component state only: not yet bound to Runtime Context form state
- * or the Validation Engine (see src/runtime/renderer/README.md) — there is
- * no Workflow/Validation Engine yet to hand the value to.
+ * Controlled by the Dynamic Form Engine's per-screen form state
+ * (`value`/`error`/`onChange`, see src/runtime/renderer/form-state.ts) so
+ * the Validation Engine can check the current value on submit.
  */
-export function TextInputWidget({ definition }: WidgetComponentProps): ReactElement {
+export function TextInputWidget({ definition, value = '', error, onChange }: WidgetComponentProps): ReactElement {
   const { t } = useTranslation();
-  const [value, setValue] = useState('');
 
   return (
     <VStack space="xs">
       <Text size="sm">{t(definition.labelKey)}</Text>
-      <Input>
+      <Input isInvalid={Boolean(error)}>
         <InputField
           value={value}
-          onChangeText={setValue}
+          onChangeText={onChange}
           secureTextEntry={definition.type === 'password'}
           keyboardType={definition.type === 'email' ? 'email-address' : 'default'}
           autoCapitalize="none"
         />
       </Input>
+      {error ? (
+        <Text size="xs" color="$error600">
+          {t(error)}
+        </Text>
+      ) : null}
     </VStack>
   );
 }

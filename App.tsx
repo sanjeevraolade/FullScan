@@ -5,7 +5,8 @@
  */
 
 import React from 'react';
-import { StatusBar, useColorScheme } from 'react-native';
+import { useColorScheme } from 'react-native';
+import { StatusBar } from '@gluestack-ui/themed';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
 import { Application } from '@/app';

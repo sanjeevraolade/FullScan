@@ -1,0 +1,26 @@
+{
+  "screenId": "runtime-preview",
+  "version": 1,
+  "titleKey": "screen.runtimePreview.title",
+  "workflowId": "runtimePreview",
+  "layout": "vertical",
+  "visible": true,
+  "sections": [
+    {
+      "sectionId": "info",
+      "titleKey": "screen.runtimePreview.title",
+      "layout": "vertical",
+      "order": 1,
+      "visible": true,
+      "widgets": [
+        {
+          "widgetId": "helloMessage",
+          "type": "text",
+          "labelKey": "runtimePreview.helloMessage",
+          "visible": true,
+          "order": 1
+        }
+      ]
+    }
+  ]
+}

@@ -19,10 +19,15 @@
     "welcome": "Welcome to FullScan",
     "fields": {
       "username": "Username",
-      "password": "Password"
+      "password": "Password",
+      "rememberMe": "Remember me",
+      "employeeId": "Employee ID (optional)"
     },
     "actions": {
       "submit": "Login"
     }
+  },
+  "validation": {
+    "required": "This field is required"
   }
 }

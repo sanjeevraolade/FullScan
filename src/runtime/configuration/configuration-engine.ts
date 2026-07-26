@@ -3,7 +3,24 @@ import { LoggerService } from '@/infrastructure/logger';
 
 import { CONFIGURATION_ENGINE_INVALID_PACKAGE_MESSAGE } from './configuration-engine.constants';
 import type { IConfigurationEngine } from './configuration-engine.interface';
-import sampleConfiguration from './sample-configuration.json';
+import loginScreen from './screens/login.json';
+import runtimePreviewScreen from './screens/runtime-preview.json';
+
+/**
+ * One JSON file per screen under `screens/` (easier to navigate/diff than a
+ * single growing file — see the "split it" discussion). This is still a
+ * source-authoring choice only: the assembly below is a runtime merge of
+ * already bundle-time-embedded JSON (Metro inlines every one of these files
+ * into the JS bundle regardless of how they're split), so it costs nothing
+ * beyond this one array literal. A real downloaded Configuration Package
+ * arrives over the wire as a single JSON payload either way.
+ */
+const SAMPLE_CONFIGURATION: ConfigurationPackage = {
+  configurationVersion: '1.0.0',
+  minimumAppVersion: '1.0.0',
+  generatedOn: '2026-06-29T10:30:00Z',
+  screens: [runtimePreviewScreen, loginScreen] as ScreenDefinition[],
+};
 
 function isValidConfigurationPackage(candidate: ConfigurationPackage): boolean {
   if (!candidate.configurationVersion || !candidate.minimumAppVersion || !candidate.generatedOn) {
@@ -24,7 +41,7 @@ export class ConfigurationEngine implements IConfigurationEngine {
   private activeConfiguration: ConfigurationPackage | undefined;
 
   async initialize(): Promise<void> {
-    const candidate = sampleConfiguration as ConfigurationPackage;
+    const candidate = SAMPLE_CONFIGURATION;
 
     if (!isValidConfigurationPackage(candidate)) {
       LoggerService.error(CONFIGURATION_ENGINE_INVALID_PACKAGE_MESSAGE);

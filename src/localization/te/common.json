@@ -19,10 +19,15 @@
     "welcome": "FullScanకి స్వాగతం",
     "fields": {
       "username": "వినియోగదారు పేరు",
-      "password": "పాస్‌వర్డ్"
+      "password": "పాస్‌వర్డ్",
+      "rememberMe": "నన్ను గుర్తుంచుకో",
+      "employeeId": "ఉద్యోగి ఐడీ (ఐచ్ఛికం)"
     },
     "actions": {
       "submit": "లాగిన్"
     }
+  },
+  "validation": {
+    "required": "ఈ ఫీల్డ్ తప్పనిసరి"
   }
 }

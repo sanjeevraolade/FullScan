@@ -7,6 +7,7 @@ import { LoggerService } from '@/infrastructure/logger';
 import { ScreenRenderer } from '@/runtime/renderer';
 
 import { useRuntimeEngine } from './ApplicationContext';
+import { AppSafeArea } from './AppSafeArea';
 
 /**
  * There is no Workflow Engine wired up yet (see src/runtime/workflow —
@@ -24,7 +25,11 @@ export function ApplicationShell(): ReactElement {
     LoggerService.error('Launch screen missing from active configuration', {
       screenId: LAUNCH_SCREEN_ID,
     });
-    return <Box flex={1} />;
+    return (
+      <AppSafeArea>
+        <Box flex={1} />
+      </AppSafeArea>
+    );
   }
 
   const handleAction = (action: ScreenAction): void => {
@@ -32,8 +37,10 @@ export function ApplicationShell(): ReactElement {
   };
 
   return (
-    <Box flex={1} p="$4">
-      <ScreenRenderer screen={screen} registry={runtimeEngine.getWidgetRegistry()} onAction={handleAction} />
-    </Box>
+    <AppSafeArea>
+      <Box flex={1} p="$4">
+        <ScreenRenderer screen={screen} registry={runtimeEngine.getWidgetRegistry()} onAction={handleAction} />
+      </Box>
+    </AppSafeArea>
   );
 }

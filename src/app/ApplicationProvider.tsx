@@ -8,6 +8,7 @@ import type { VerificationRuntimeEngine } from '@/runtime/engine';
 import { ThemeProvider } from '@/theme';
 
 import { ApplicationContext } from './ApplicationContext';
+import { AppSafeArea } from './AppSafeArea';
 
 /**
  * Runs the Bootstrap Pipeline once on mount and only renders `children` once
@@ -45,9 +46,11 @@ export function ApplicationProvider({ children }: PropsWithChildren): ReactEleme
   if (!runtimeEngine) {
     return (
       <ThemeProvider>
-        <Box flex={1} alignItems="center" justifyContent="center">
-          <Spinner />
-        </Box>
+        <AppSafeArea>
+          <Box flex={1} alignItems="center" justifyContent="center">
+            <Spinner />
+          </Box>
+        </AppSafeArea>
       </ThemeProvider>
     );
   }

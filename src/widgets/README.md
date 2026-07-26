@@ -44,9 +44,17 @@ Widgets are the atomic building blocks of configurable forms. Each widget self-r
 
 ## Implementation status
 
-Implemented: `base/` (the shared `WidgetComponentProps` contract), `text/` (`TextWidget`, the
-Display-category `text` widget), and `text-input/` (`TextInputWidget`, one component registered for the
-Input-category `textInput`/`email`/`password` types — local state only, not yet bound to Runtime Context
-or the Validation Engine). Every other folder above is still a placeholder. `index.ts` exports
-`registerBuiltInWidgets(registry)`, the single place that imports both concrete widgets and the registry
-(see `src/runtime/registry/README.md`).
+Implemented:
+
+- `base/` — the shared `WidgetComponentProps` contract.
+- `text/` — `TextWidget`, the Display-category `text` widget.
+- `text-input/` — `TextInputWidget`, one component registered for the Input-category
+  `textInput`/`email`/`password` types. Controlled by the Dynamic Form Engine's per-screen form state
+  (`value`/`error`/`onChange`, see `src/runtime/renderer/form-state.ts`) and shows a Validation Engine
+  error message when invalid.
+- `checkbox/` — `CheckboxWidget`, the Selection-category `checkbox` type. Same controlled `value`/`onChange`
+  contract as `text-input/`, with the checked state represented as the string `'true'`/`'false'` rather
+  than widening the shared widget contract to a union type for one boolean field.
+
+Every other folder above is still a placeholder. `index.ts` exports `registerBuiltInWidgets(registry)`, the
+single place that imports both concrete widgets and the registry (see `src/runtime/registry/README.md`).

@@ -1,9 +1,9 @@
 import { LoggerService } from '@/infrastructure/logger';
 
-import { VALIDATION_ENGINE_SKELETON_MESSAGE } from './validation-engine.constants';
+import { VALIDATION_ENGINE_READY_MESSAGE } from './validation-engine.constants';
 import { ValidationEngine } from './validation-engine';
 
-describe('ValidationEngine (skeleton)', () => {
+describe('ValidationEngine', () => {
   it('initializes and disposes without throwing', () => {
     const engine = new ValidationEngine();
 
@@ -11,12 +11,12 @@ describe('ValidationEngine (skeleton)', () => {
     expect(() => engine.dispose()).not.toThrow();
   });
 
-  it('logs that it is a skeleton with no business logic yet', () => {
+  it('logs readiness, noting only required-field checks are implemented', () => {
     const spy = jest.spyOn(LoggerService, 'info').mockImplementation(() => undefined);
 
     new ValidationEngine().initialize();
 
-    expect(spy).toHaveBeenCalledWith(VALIDATION_ENGINE_SKELETON_MESSAGE);
+    expect(spy).toHaveBeenCalledWith(VALIDATION_ENGINE_READY_MESSAGE);
 
     spy.mockRestore();
   });
