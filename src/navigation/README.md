@@ -1,29 +1,14 @@
 # Navigation
 
-Navigation configuration and route definitions.
+## Purpose
 
-## Responsibility
+Defines application navigation.
 
-- Navigation container setup
-- Route definitions
-- Authentication flow (pre-login screens)
-- Main drawer navigation
-- Stack navigation per module
-- Modal navigation
-- Deep link handling
+## Responsibilities
 
-## Navigation Flows
+- Navigation containers
+- Navigation stacks
+- Deep linking
+- Route configuration
 
-- Authentication Flow
-- Main Drawer
-- Assignment Stack
-- Verification Stack
-- Settings Stack
-- Profile Stack
-
-## Rules
-
-- Navigation is workflow-driven.
-- Avoid embedding business decisions inside navigation code.
-- Navigation should react to workflow state rather than controlling it.
-- Navigation logic remains independent of business logic.
+Navigation should never contain business logic.

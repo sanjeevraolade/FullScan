@@ -1,21 +1,28 @@
 # Theme
 
-Design tokens, color palettes, typography scales, and spacing definitions.
+## Purpose
 
-## Responsibility
+Defines the visual design system of the application.
 
-- Light theme tokens
-- Dark theme tokens
-- Color palette definitions
-- Typography scale
-- Spacing scale
-- Border radius tokens
-- Shadow definitions
-- Component variant tokens
+## Responsibilities
 
-## Rules
+- Colors
+- Typography
+- Spacing
+- Elevation
+- Component styling
 
-- No hardcoded visual styling anywhere in the app.
-- All styles reference theme tokens.
-- Every style must support light and dark themes.
-- Design tokens are the single source of truth for visual properties.
+Never hardcode visual values outside the Theme layer.
+
+## Theme Engine (minimal, "Hello Runtime" pass)
+
+- `theme-engine.ts` — resolves `light` / `dark` / `system` mode (via `Appearance`) and exposes the active
+  `ThemeTokens`. Tokens are sourced from `@gluestack-ui/config`'s default palette, never new hex literals.
+- `gluestack-ui.config.ts` — the single import point for the Gluestack config; future customer branding /
+  white-label overrides extend this file only.
+- `ThemeProvider.tsx` — wraps `GluestackUIProvider` with the active config + resolved color mode. Not yet
+  mounted in `App.tsx` — used directly by the runtime pipeline tests until app-shell wiring lands.
+
+Not implemented yet: reading theme configuration from the backend Configuration Package
+(`docs/06-Contracts/01-Configuration-Schema.md` §14) and runtime theme switching from a Zustand
+`store/theme` slice — deferred until there's a mounted UI to subscribe to it.

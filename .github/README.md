@@ -226,23 +226,26 @@ Developers should prefer:
 
 ---
 
-# GitHub Copilot
+# AI Assistant Workspace
 
-This repository is optimized for GitHub Copilot.
-
-Before generating code, Copilot should always reference:
+This repository is developed with **Claude Code**. Before generating code, Claude should always reference:
 
 ```
-.github/
+CLAUDE.md              # always-loaded project brief: architecture, folder ownership, rules
+.claude/agents/         # role subagents — solution-architect, runtime-engineer, mobile-engineer,
+                         # integration-engineer, qa-engineer
+.claude/skills/          # domain deep-dives, auto-loaded when relevant (fullscan-runtime-engine,
+                         # fullscan-widget-development, fullscan-validation, etc.)
+.claude/commands/        # scaffolding slash commands — /create-feature, /create-screen,
+                         # /create-widget, /create-runtime-engine, /create-api, /create-repository,
+                         # /create-state
 ```
 
-including:
-
-- copilot-instructions.md
-- instructions/
-- agents/
-- prompts/
-- skills/
+This `.github/` folder now holds only `PROJECT_CONTEXT.md` and `PROJECT_GLOSSARY.md`, which are
+tool-agnostic project reference material (not specific to any AI assistant). The prior GitHub
+Copilot workspace (`copilot-instructions.md`, `instructions/`, `agents/`, `prompts/`, `skills/`) has
+been migrated into the Claude structure above and removed — see `CLAUDE_MIGRATION.md` at the repo
+root for the full mapping.
 
 These documents define the engineering standards and architectural rules for the project.
 
@@ -263,7 +266,7 @@ Runtime
 Contracts
       │
       ▼
-GitHub Copilot Workspace
+Claude Code Workspace
       │
       ▼
 Implementation

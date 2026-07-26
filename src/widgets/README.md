@@ -41,3 +41,10 @@ Widgets are the atomic building blocks of configurable forms. Each widget self-r
 - All widgets are configuration-driven.
 - Widgets do not own business state — state belongs to Runtime Context.
 - Widgets must support validation through the Validation Engine.
+
+## Implementation status
+
+Only `base/` (the shared `WidgetComponentProps` contract) and `text/` (`TextWidget`, the Display-category
+`text` widget) are implemented, to prove the Widget Registry → Renderer pipeline end-to-end. Every other
+folder above is still a placeholder. `index.ts` exports `registerBuiltInWidgets(registry)`, the single
+place that imports both concrete widgets and the registry (see `src/runtime/registry/README.md`).

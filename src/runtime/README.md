@@ -1,28 +1,34 @@
 # Runtime
 
-Verification Runtime Engine (VRE) — the central orchestration component of the platform.
+## Purpose
 
-The Runtime layer is the heart of the FullScan platform. It executes configurable business workflows without requiring application code changes.
+The Runtime Platform is responsible for executing configuration-driven behavior.
 
-## Structure
+It is the heart of the FullScan platform.
 
-| Directory          | Responsibility                                       |
-|--------------------|------------------------------------------------------|
-| `configuration/`   | Runtime configuration loading and management         |
-| `engine/`          | Core VRE orchestration logic                         |
-| `lifecycle/`       | Runtime lifecycle management (init, start, stop)     |
-| `localization/`    | Runtime localization integration                     |
-| `navigation/`      | Workflow-driven navigation coordination              |
-| `plugins/`         | Plugin system for engine extensibility               |
-| `registry/`        | Widget and engine registry management                |
-| `renderer/`        | Dynamic screen/form rendering orchestration          |
-| `serialization/`   | State serialization/deserialization                   |
-| `validation/`      | Runtime validation coordination                      |
-| `workflow/`        | Workflow state machine and execution                  |
+## Responsibilities
 
-## Rules
+- Configuration
+- Rendering
+- Validation
+- Workflow
+- Registry
+- Runtime orchestration
 
-- The VRE orchestrates all other engines.
-- Business state belongs to the Runtime Context.
-- Widgets and screens do not own business state.
-- Never bypass the VRE for business execution.
+## Runtime Flow
+
+```text
+Configuration
+    ↓
+Engine
+    ↓
+Registry
+    ↓
+Renderer
+    ↓
+Validation
+    ↓
+Workflow
+```
+
+Business features consume the Runtime instead of implementing it.

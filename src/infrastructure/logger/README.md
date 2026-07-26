@@ -1,17 +1,16 @@
-# Logger Service
+# Logger
 
-Structured logging for debugging, audit, and observability.
+`LoggerService` is the only sanctioned entry point to `console` in the app. No other file should call
+`console.log`/`console.info`/`console.warn`/`console.error` directly.
 
-## Responsibility
+## Usage
 
-- Log level management (debug, info, warn, error)
-- Structured log formatting
-- Log persistence for offline debugging
-- Crash context capture
-- Sensitive data redaction
+```ts
+import { LoggerService } from '@/infrastructure/logger';
 
-## Rules
+LoggerService.info('Configuration loaded', { screenCount: 3 });
+LoggerService.warn('Widget type unresolved', { type: 'unknownWidget' });
+LoggerService.error('Configuration failed to load');
+```
 
-- Never log sensitive user data (passwords, tokens, PII).
-- Logs must be structured (key-value pairs).
-- Must support remote log shipping when online.
+Never pass tokens, passwords, biometric data, or PII (Aadhaar/PAN numbers included) as `context`.

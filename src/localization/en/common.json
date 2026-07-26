@@ -1,0 +1,10 @@
+{
+  "screen": {
+    "runtimePreview": {
+      "title": "Runtime Preview"
+    }
+  },
+  "runtimePreview": {
+    "helloMessage": "Hello Runtime"
+  }
+}

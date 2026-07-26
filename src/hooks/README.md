@@ -1,15 +1,20 @@
 # Hooks
 
-Shared React hooks used across the platform.
+## Purpose
 
-## Responsibility
+Contains reusable React Hooks.
 
-- Reusable custom hooks
-- Platform-level hooks (permissions, connectivity, lifecycle)
-- Composition hooks
+Hooks encapsulate reusable UI behavior.
+
+## Examples
+
+- useTheme
+- useLocalization
+- useNetwork
+- usePermission
 
 ## Rules
 
-- Hooks must not contain feature-specific business logic.
-- Hooks must be composable and independently testable.
-- Prefer small, focused hooks over large monolithic ones.
+Hooks should not contain business rules.
+
+Hooks should remain reusable.

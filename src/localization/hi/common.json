@@ -1,0 +1,10 @@
+{
+  "screen": {
+    "runtimePreview": {
+      "title": "रनटाइम पूर्वावलोकन"
+    }
+  },
+  "runtimePreview": {
+    "helloMessage": "नमस्ते रनटाइम"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "screen": {
+    "runtimePreview": {
+      "title": "రన్‌టైమ్ ప్రివ్యూ"
+    }
+  },
+  "runtimePreview": {
+    "helloMessage": "హలో రన్‌టైమ్"
+  }
+}
