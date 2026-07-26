@@ -2,9 +2,27 @@
   "screen": {
     "runtimePreview": {
       "title": "రన్‌టైమ్ ప్రివ్యూ"
+    },
+    "login": {
+      "title": "లాగిన్"
     }
   },
   "runtimePreview": {
     "helloMessage": "హలో రన్‌టైమ్"
+  },
+  "section": {
+    "login": {
+      "credentials": "ఆధారాలు"
+    }
+  },
+  "login": {
+    "welcome": "FullScanకి స్వాగతం",
+    "fields": {
+      "username": "వినియోగదారు పేరు",
+      "password": "పాస్‌వర్డ్"
+    },
+    "actions": {
+      "submit": "లాగిన్"
+    }
   }
 }

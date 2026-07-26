@@ -8,6 +8,9 @@ Per `docs/04-Runtime/06-Configuration-Engine.md`. Single source of runtime metad
   networking**, per the current sprint scope. It still runs the validate-before-activate step (required
   metadata fields present, no duplicate `screenId`s) that a real downloaded package would go through; an
   invalid package is never activated.
+- The bundled package currently defines two screens: `runtime-preview` (the original pipeline smoke-test
+  fixture, still used by `dynamic-form-engine.test.tsx`) and `login` — the app's actual launch screen,
+  rendered by `src/app/ApplicationShell.tsx`.
 - `getActiveConfiguration()` / `getScreen(screenId)` read the activated package.
 - `dispose()` clears the active package.
 

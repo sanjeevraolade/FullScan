@@ -2,9 +2,27 @@
   "screen": {
     "runtimePreview": {
       "title": "रनटाइम पूर्वावलोकन"
+    },
+    "login": {
+      "title": "लॉगिन"
     }
   },
   "runtimePreview": {
     "helloMessage": "नमस्ते रनटाइम"
+  },
+  "section": {
+    "login": {
+      "credentials": "प्रमाण-पत्र"
+    }
+  },
+  "login": {
+    "welcome": "FullScan में आपका स्वागत है",
+    "fields": {
+      "username": "उपयोगकर्ता नाम",
+      "password": "पासवर्ड"
+    },
+    "actions": {
+      "submit": "लॉगिन करें"
+    }
   }
 }

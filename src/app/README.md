@@ -42,3 +42,11 @@ Runtime
     ↓
 Features
 ```
+
+## Current implementation
+
+`Application` = `ApplicationProvider` (runs `runBootstrap()`, shows a themed `Spinner` until it resolves,
+then provides the initialized `VerificationRuntimeEngine` via `ApplicationContext`) wrapping
+`ApplicationShell` (renders the `login` screen through `ScreenRenderer` — the launch screen id is a fixed
+constant since there is no Workflow Engine yet to decide it). No React Navigation stack is wired in yet;
+there is only one screen to show.

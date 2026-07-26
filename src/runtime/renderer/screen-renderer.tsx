@@ -4,6 +4,7 @@ import { ScrollView, VStack } from '@gluestack-ui/themed';
 
 import { LoggerService } from '@/infrastructure/logger';
 
+import { ActionBar } from './action-bar';
 import type { ScreenRendererProps } from './dynamic-form-engine.types';
 import { SectionRenderer } from './section-renderer';
 
@@ -17,7 +18,7 @@ const SUPPORTED_ROOT_LAYOUTS = new Set<string>(['vertical', 'scroll']);
  * screen, per the schema's "unknown properties ignored for forward
  * compatibility" rule.
  */
-export function ScreenRenderer({ screen, registry }: ScreenRendererProps): ReactElement {
+export function ScreenRenderer({ screen, registry, onAction }: ScreenRendererProps): ReactElement {
   if (!SUPPORTED_ROOT_LAYOUTS.has(screen.layout)) {
     LoggerService.warn('Unsupported screen layout, falling back to vertical', {
       screenId: screen.screenId,
@@ -34,6 +35,7 @@ export function ScreenRenderer({ screen, registry }: ScreenRendererProps): React
       {sortedSections.map((section) => (
         <SectionRenderer key={section.sectionId} section={section} registry={registry} />
       ))}
+      <ActionBar screenId={screen.screenId} actions={screen.actions ?? []} onAction={onAction} />
     </VStack>
   );
 

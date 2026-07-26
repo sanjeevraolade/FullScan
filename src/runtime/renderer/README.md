@@ -19,6 +19,10 @@ contracts) instead of a `.interface.ts` + class pair.
   falls back to `vertical` rather than failing the whole screen.
 - An unresolved widget type is skipped (the Widget Registry already logs the miss) — one bad widget never
   takes down the rest of the screen.
+- `screen.actions` (submit/cancel/...) render as an `ActionBar` below the sections. The Screen Schema only
+  gives actions a verb, not a label key, so labels resolve by convention: `${screenId}.actions.${action}`.
+  `ScreenRenderer` accepts an optional `onAction` callback — pressing a button calls it (or just logs, if
+  none is given); there is no Workflow Engine yet to actually act on it.
 - `grid`/`card`/`accordion`/`tabs` layouts, validation binding, and localization/theme binding beyond what
   Gluestack + `react-i18next` already provide per-widget are not implemented yet.
 

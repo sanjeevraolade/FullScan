@@ -2,9 +2,27 @@
   "screen": {
     "runtimePreview": {
       "title": "Runtime Preview"
+    },
+    "login": {
+      "title": "Login"
     }
   },
   "runtimePreview": {
     "helloMessage": "Hello Runtime"
+  },
+  "section": {
+    "login": {
+      "credentials": "Credentials"
+    }
+  },
+  "login": {
+    "welcome": "Welcome to FullScan",
+    "fields": {
+      "username": "Username",
+      "password": "Password"
+    },
+    "actions": {
+      "submit": "Login"
+    }
   }
 }

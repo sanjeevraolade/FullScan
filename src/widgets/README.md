@@ -44,7 +44,9 @@ Widgets are the atomic building blocks of configurable forms. Each widget self-r
 
 ## Implementation status
 
-Only `base/` (the shared `WidgetComponentProps` contract) and `text/` (`TextWidget`, the Display-category
-`text` widget) are implemented, to prove the Widget Registry → Renderer pipeline end-to-end. Every other
-folder above is still a placeholder. `index.ts` exports `registerBuiltInWidgets(registry)`, the single
-place that imports both concrete widgets and the registry (see `src/runtime/registry/README.md`).
+Implemented: `base/` (the shared `WidgetComponentProps` contract), `text/` (`TextWidget`, the
+Display-category `text` widget), and `text-input/` (`TextInputWidget`, one component registered for the
+Input-category `textInput`/`email`/`password` types — local state only, not yet bound to Runtime Context
+or the Validation Engine). Every other folder above is still a placeholder. `index.ts` exports
+`registerBuiltInWidgets(registry)`, the single place that imports both concrete widgets and the registry
+(see `src/runtime/registry/README.md`).

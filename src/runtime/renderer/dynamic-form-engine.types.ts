@@ -1,8 +1,9 @@
-import type { IWidgetRegistry, ScreenDefinition, SectionDefinition } from '@/contracts';
+import type { IWidgetRegistry, ScreenAction, ScreenDefinition, SectionDefinition } from '@/contracts';
 
 export interface ScreenRendererProps {
   readonly screen: ScreenDefinition;
   readonly registry: IWidgetRegistry;
+  readonly onAction?: (action: ScreenAction) => void;
 }
 
 export interface SectionRendererProps {

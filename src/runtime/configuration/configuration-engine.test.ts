@@ -17,7 +17,7 @@ describe('ConfigurationEngine', () => {
     const activeConfiguration = engine.getActiveConfiguration();
 
     expect(activeConfiguration?.configurationVersion).toBe('1.0.0');
-    expect(activeConfiguration?.screens).toHaveLength(1);
+    expect(activeConfiguration?.screens).toHaveLength(2);
   });
 
   it('resolves a screen definition by screenId', async () => {
