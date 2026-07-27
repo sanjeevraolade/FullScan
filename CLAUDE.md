@@ -102,7 +102,10 @@ Ten engines, each with exactly one responsibility. Full detail per engine is in 
   user-visible text (never hardcoded strings).
 - **TypeScript strict**, no `any`, no unchecked type assertions.
 - **No `console.log`** — use the LoggerService, and never log tokens, passwords, biometric data, or PII
-  (Aadhaar/PAN numbers included).
+  (Aadhaar/PAN numbers included). Every function/method/component gets at least one log call, every
+  logging file declares a `FILE_NAME` constant and prefixes each log message with it, and logging is
+  globally toggleable via `LoggerService.setEnabled(boolean)` (see `fullscan-engineering-standards` for
+  the exact convention).
 - **Repository pattern for all backend I/O** — repositories return Domain Models, never raw DTOs.
 
 ## Coding conventions

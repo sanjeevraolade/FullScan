@@ -3,6 +3,10 @@ import type { PropsWithChildren, ReactElement } from 'react';
 import { Box } from '@gluestack-ui/themed';
 import { SafeAreaView } from 'react-native-safe-area-context';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'AppSafeArea.tsx';
+
 /**
  * Applies real safe-area insets (notch/status bar/home indicator) via
  * react-native-safe-area-context's SafeAreaView — Gluestack's own
@@ -17,6 +21,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
  * stays white regardless of color scheme until one is generated.
  */
 export function AppSafeArea({ children }: PropsWithChildren): ReactElement {
+  LoggerService.info(`${FILE_NAME}: AppSafeArea: rendering`);
+
   return (
     <SafeAreaView style={{ flex: 1 }}>
       <Box flex={1} bg="$white">

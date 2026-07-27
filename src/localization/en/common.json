@@ -29,5 +29,8 @@
   },
   "validation": {
     "required": "This field is required"
+  },
+  "error": {
+    "screenNotFound": "This screen is not available. Please contact your administrator."
   }
 }

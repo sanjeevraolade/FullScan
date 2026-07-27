@@ -8,6 +8,8 @@ import { LoggerService } from '@/infrastructure/logger';
 import type { SectionRendererProps } from './dynamic-form-engine.types';
 import { useFormField } from './form-state';
 
+const FILE_NAME = 'section-renderer.tsx';
+
 interface ConnectedWidgetProps {
   readonly Component: WidgetComponent;
   readonly definition: WidgetDefinition;
@@ -30,7 +32,7 @@ function ConnectedWidget({ Component, definition }: ConnectedWidgetProps): React
  * already logs the miss — so one bad widget never fails the whole screen.
  */
 export function SectionRenderer({ section, registry }: SectionRendererProps): ReactElement {
-  LoggerService.info('SectionRenderer: rendering section', { sectionId: section.sectionId });
+  LoggerService.info(`${FILE_NAME}: SectionRenderer: rendering section`, { sectionId: section.sectionId });
   const sortedWidgets = [...section.widgets]
     .filter((widget) => widget.visible !== false)
     .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -40,7 +42,7 @@ export function SectionRenderer({ section, registry }: SectionRendererProps): Re
       {sortedWidgets.map((widget) => {
         const WidgetComponent = registry.resolve(widget.type);
         if (!WidgetComponent) {
-          LoggerService.warn('SectionRenderer: skipping widget, no component resolved', {
+          LoggerService.warn(`${FILE_NAME}: SectionRenderer: skipping widget, no component resolved`, {
             sectionId: section.sectionId,
             widgetId: widget.widgetId,
             type: widget.type,

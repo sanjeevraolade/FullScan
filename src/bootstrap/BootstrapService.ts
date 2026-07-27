@@ -8,6 +8,8 @@ import { BootstrapPipeline } from './BootstrapPipeline';
 import type { BootstrapResult } from './BootstrapResult';
 import type { BootstrapStep } from './BootstrapStep';
 
+const FILE_NAME = 'BootstrapService.ts';
+
 /**
  * Concrete startup pipeline (src/bootstrap/README.md):
  * Logger (already live, no init needed) -> Storage (not implemented yet,
@@ -18,28 +20,28 @@ import type { BootstrapStep } from './BootstrapStep';
 const initializeRuntimeStep: BootstrapStep = {
   name: 'runtime',
   async execute(context: BootstrapContext): Promise<void> {
-    LoggerService.info('initializeRuntimeStep.execute: starting');
+    LoggerService.info(`${FILE_NAME}: initializeRuntimeStep.execute: starting`);
     const runtimeEngine = new VerificationRuntimeEngine();
     await runtimeEngine.initialize();
     registerBuiltInWidgets(runtimeEngine.getWidgetRegistry());
     context.runtimeEngine = runtimeEngine;
-    LoggerService.info('initializeRuntimeStep.execute: completed');
+    LoggerService.info(`${FILE_NAME}: initializeRuntimeStep.execute: completed`);
   },
 };
 
 const hideSplashStep: BootstrapStep = {
   name: 'splash',
   async execute(): Promise<void> {
-    LoggerService.info('hideSplashStep.execute: starting');
+    LoggerService.info(`${FILE_NAME}: hideSplashStep.execute: starting`);
     await hideSplashScreen();
-    LoggerService.info('hideSplashStep.execute: completed');
+    LoggerService.info(`${FILE_NAME}: hideSplashStep.execute: completed`);
   },
 };
 
 export async function runBootstrap(): Promise<BootstrapResult> {
-  LoggerService.info('runBootstrap: starting');
+  LoggerService.info(`${FILE_NAME}: runBootstrap: starting`);
   const pipeline = new BootstrapPipeline([initializeRuntimeStep, hideSplashStep]);
   const result = await pipeline.run();
-  LoggerService.info('runBootstrap: finished', { success: result.success });
+  LoggerService.info(`${FILE_NAME}: runBootstrap: finished`, { success: result.success });
   return result;
 }

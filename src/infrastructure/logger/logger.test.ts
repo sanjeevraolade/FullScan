@@ -29,4 +29,40 @@ describe('LoggerService', () => {
 
     expect(spy).toHaveBeenCalledWith('[FullScan] Configuration failed to load');
   });
+
+  describe('setEnabled', () => {
+    afterEach(() => {
+      LoggerService.setEnabled(true);
+    });
+
+    it('defaults to enabled', () => {
+      expect(LoggerService.isEnabled()).toBe(true);
+    });
+
+    it('suppresses info/warn/error once disabled', () => {
+      const infoSpy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+
+      LoggerService.setEnabled(false);
+      LoggerService.info('should not log');
+      LoggerService.warn('should not log');
+      LoggerService.error('should not log');
+
+      expect(LoggerService.isEnabled()).toBe(false);
+      expect(infoSpy).not.toHaveBeenCalled();
+      expect(warnSpy).not.toHaveBeenCalled();
+      expect(errorSpy).not.toHaveBeenCalled();
+    });
+
+    it('resumes logging once re-enabled', () => {
+      const spy = jest.spyOn(console, 'info').mockImplementation(() => undefined);
+
+      LoggerService.setEnabled(false);
+      LoggerService.setEnabled(true);
+      LoggerService.info('logging again');
+
+      expect(spy).toHaveBeenCalledWith('[FullScan] logging again');
+    });
+  });
 });

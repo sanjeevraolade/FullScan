@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import type { WidgetComponentProps } from '@/widgets/base';
 
+const FILE_NAME = 'CheckboxWidget.tsx';
+
 /**
  * Selection-category `checkbox` widget type (docs/06-Contracts/04-Widget-Schema.md §4).
  *
@@ -24,7 +26,7 @@ export function CheckboxWidget({ definition, value = 'false', onChange }: Widget
       value={definition.widgetId}
       isChecked={isChecked}
       onChange={(nextIsChecked: boolean) => {
-        LoggerService.info('CheckboxWidget.onChange: checkbox toggled', {
+        LoggerService.info(`${FILE_NAME}: CheckboxWidget.onChange: checkbox toggled`, {
           widgetId: definition.widgetId,
           isChecked: nextIsChecked,
         });

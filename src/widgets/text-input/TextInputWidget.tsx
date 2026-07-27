@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import type { WidgetComponentProps } from '@/widgets/base';
 
+const FILE_NAME = 'TextInputWidget.tsx';
+
 /**
  * Covers the Input-category `textInput` / `email` / `password` widget types
  * (docs/06-Contracts/04-Widget-Schema.md §4) — one component, registered
@@ -20,7 +22,7 @@ export function TextInputWidget({ definition, value = '', error, onChange }: Wid
 
   const handleChangeText = (nextValue: string): void => {
     // Never log field content — this widget type also covers "password".
-    LoggerService.info('TextInputWidget.onChangeText: input changed', {
+    LoggerService.info(`${FILE_NAME}: TextInputWidget.onChangeText: input changed`, {
       widgetId: definition.widgetId,
       type: definition.type,
     });

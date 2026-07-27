@@ -2,6 +2,8 @@ import { createContext, useCallback, useContext } from 'react';
 
 import { LoggerService } from '@/infrastructure/logger';
 
+const FILE_NAME = 'form-state.ts';
+
 /**
  * Per-screen form state — current field values and validation errors, keyed
  * by `widgetId`. Owned and provided by `ScreenRenderer` (see
@@ -26,14 +28,14 @@ export function useFormField(widgetId: string): {
 } {
   const context = useContext(FormStateContext);
   if (!context) {
-    LoggerService.error('useFormField: called outside ScreenRenderer', { widgetId });
+    LoggerService.error(`${FILE_NAME}: useFormField: called outside ScreenRenderer`, { widgetId });
     throw new Error('useFormField() must be used within a ScreenRenderer');
   }
 
   const { values, errors, setValue } = context;
   const onChange = useCallback(
     (value: string) => {
-      LoggerService.info('useFormField.onChange: widget value changed', { widgetId });
+      LoggerService.info(`${FILE_NAME}: useFormField.onChange: widget value changed`, { widgetId });
       setValue(widgetId, value);
     },
     [widgetId, setValue],

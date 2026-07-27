@@ -12,6 +12,7 @@ import type { FormStateContextValue } from './form-state';
 import { FormStateContext } from './form-state';
 import { SectionRenderer } from './section-renderer';
 
+const FILE_NAME = 'screen-renderer.tsx';
 const SUPPORTED_ROOT_LAYOUTS = new Set<string>(['vertical', 'scroll']);
 
 /**
@@ -34,7 +35,7 @@ export function ScreenRenderer({ screen, registry, onAction }: ScreenRendererPro
   const [errors, setErrors] = useState<Record<string, string>>({});
 
   const setValue = useCallback((widgetId: string, value: string) => {
-    LoggerService.info('ScreenRenderer.setValue: field value changed', { widgetId });
+    LoggerService.info(`${FILE_NAME}: ScreenRenderer.setValue: field value changed`, { widgetId });
     setValues((previous) => ({ ...previous, [widgetId]: value }));
   }, []);
 
@@ -45,12 +46,15 @@ export function ScreenRenderer({ screen, registry, onAction }: ScreenRendererPro
 
   const handleAction = useCallback(
     (action: ScreenAction) => {
-      LoggerService.info('ScreenRenderer.handleAction: action triggered', { screenId: screen.screenId, action });
+      LoggerService.info(`${FILE_NAME}: ScreenRenderer.handleAction: action triggered`, {
+        screenId: screen.screenId,
+        action,
+      });
       if (action === 'submit') {
         const validationErrors = validationEngine.validateScreen(screen, values);
         setErrors(validationErrors);
         if (Object.keys(validationErrors).length > 0) {
-          LoggerService.warn('ScreenRenderer.handleAction: submit blocked by validation errors', {
+          LoggerService.warn(`${FILE_NAME}: ScreenRenderer.handleAction: submit blocked by validation errors`, {
             screenId: screen.screenId,
             errorCount: Object.keys(validationErrors).length,
           });
@@ -62,10 +66,13 @@ export function ScreenRenderer({ screen, registry, onAction }: ScreenRendererPro
     [screen, values, onAction],
   );
 
-  LoggerService.info('ScreenRenderer: rendering screen', { screenId: screen.screenId, layout: screen.layout });
+  LoggerService.info(`${FILE_NAME}: ScreenRenderer: rendering screen`, {
+    screenId: screen.screenId,
+    layout: screen.layout,
+  });
 
   if (!SUPPORTED_ROOT_LAYOUTS.has(screen.layout)) {
-    LoggerService.warn('Unsupported screen layout, falling back to vertical', {
+    LoggerService.warn(`${FILE_NAME}: Unsupported screen layout, falling back to vertical`, {
       screenId: screen.screenId,
       layout: screen.layout,
     });

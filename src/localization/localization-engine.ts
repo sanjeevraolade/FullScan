@@ -9,6 +9,7 @@ import te from './te/common.json';
 import type { ILocalizationEngine } from './localization-engine.interface';
 import type { SupportedLanguage } from './localization-engine.types';
 
+const FILE_NAME = 'localization-engine.ts';
 const DEFAULT_LANGUAGE: SupportedLanguage = 'en';
 
 const RESOURCES = {
@@ -21,7 +22,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   private language: SupportedLanguage = DEFAULT_LANGUAGE;
 
   async initialize(language: SupportedLanguage = DEFAULT_LANGUAGE): Promise<void> {
-    LoggerService.info('LocalizationEngine.initialize: starting', { language });
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.initialize: starting`, { language });
     this.language = language;
     await i18next.use(initReactI18next).init({
       lng: language,
@@ -30,7 +31,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
       resources: RESOURCES,
       interpolation: { escapeValue: false },
     });
-    LoggerService.info('LocalizationEngine.initialize: completed', { language });
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.initialize: completed`, { language });
   }
 
   getLanguage(): SupportedLanguage {
@@ -38,7 +39,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   }
 
   async setLanguage(language: SupportedLanguage): Promise<void> {
-    LoggerService.info('LocalizationEngine.setLanguage: switching language', {
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.setLanguage: switching language`, {
       from: this.language,
       to: language,
     });
@@ -51,7 +52,7 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   }
 
   dispose(): void {
-    LoggerService.info('LocalizationEngine.dispose: resetting to default language');
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.dispose: resetting to default language`);
     this.language = DEFAULT_LANGUAGE;
   }
 }

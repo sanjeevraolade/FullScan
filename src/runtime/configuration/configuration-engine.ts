@@ -6,6 +6,8 @@ import type { IConfigurationEngine } from './configuration-engine.interface';
 import loginScreen from './screens/login.json';
 import runtimePreviewScreen from './screens/runtime-preview.json';
 
+const FILE_NAME = 'configuration-engine.ts';
+
 /**
  * One JSON file per screen under `screens/` (easier to navigate/diff than a
  * single growing file — see the "split it" discussion). This is still a
@@ -23,7 +25,7 @@ const SAMPLE_CONFIGURATION: ConfigurationPackage = {
 };
 
 function isValidConfigurationPackage(candidate: ConfigurationPackage): boolean {
-  LoggerService.info('isValidConfigurationPackage: validating configuration package', {
+  LoggerService.info(`${FILE_NAME}: isValidConfigurationPackage: validating configuration package`, {
     configurationVersion: candidate.configurationVersion,
     screenCount: candidate.screens.length,
   });
@@ -45,39 +47,41 @@ export class ConfigurationEngine implements IConfigurationEngine {
   private activeConfiguration: ConfigurationPackage | undefined;
 
   async initialize(): Promise<void> {
-    LoggerService.info('ConfigurationEngine.initialize: starting');
+    LoggerService.info(`${FILE_NAME}: ConfigurationEngine.initialize: starting`);
     const candidate = SAMPLE_CONFIGURATION;
 
     if (!isValidConfigurationPackage(candidate)) {
-      LoggerService.error(CONFIGURATION_ENGINE_INVALID_PACKAGE_MESSAGE);
+      LoggerService.error(`${FILE_NAME}: ${CONFIGURATION_ENGINE_INVALID_PACKAGE_MESSAGE}`);
       this.activeConfiguration = undefined;
       return;
     }
 
     this.activeConfiguration = candidate;
-    LoggerService.info('ConfigurationEngine.initialize: activated configuration package', {
+    LoggerService.info(`${FILE_NAME}: ConfigurationEngine.initialize: activated configuration package`, {
       configurationVersion: candidate.configurationVersion,
     });
   }
 
   getActiveConfiguration(): ConfigurationPackage | undefined {
-    LoggerService.info('ConfigurationEngine.getActiveConfiguration: returning active configuration', {
+    LoggerService.info(`${FILE_NAME}: ConfigurationEngine.getActiveConfiguration: returning active configuration`, {
       hasActiveConfiguration: Boolean(this.activeConfiguration),
     });
     return this.activeConfiguration;
   }
 
   getScreen(screenId: string): ScreenDefinition | undefined {
-    LoggerService.info('ConfigurationEngine.getScreen: looking up screen', { screenId });
+    LoggerService.info(`${FILE_NAME}: ConfigurationEngine.getScreen: looking up screen`, { screenId });
     const screen = this.activeConfiguration?.screens.find((candidateScreen) => candidateScreen.screenId === screenId);
     if (!screen) {
-      LoggerService.warn('ConfigurationEngine.getScreen: screen not found in active configuration', { screenId });
+      LoggerService.warn(`${FILE_NAME}: ConfigurationEngine.getScreen: screen not found in active configuration`, {
+        screenId,
+      });
     }
     return screen;
   }
 
   dispose(): void {
-    LoggerService.info('ConfigurationEngine.dispose: clearing active configuration');
+    LoggerService.info(`${FILE_NAME}: ConfigurationEngine.dispose: clearing active configuration`);
     this.activeConfiguration = undefined;
   }
 }

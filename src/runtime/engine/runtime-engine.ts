@@ -11,6 +11,8 @@ import type { VerificationRuntimeEngineDependencies } from './runtime-engine.typ
 
 type RequiredDependencies = Required<VerificationRuntimeEngineDependencies>;
 
+const FILE_NAME = 'runtime-engine.ts';
+
 /**
  * Per docs/04-Runtime/01-Verification-Runtime-Engine.md §7 — the Runtime
  * Lifecycle this pass actually implements is:
@@ -26,7 +28,7 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   private readonly localizationEngine: RequiredDependencies['localizationEngine'];
 
   constructor(dependencies: VerificationRuntimeEngineDependencies = {}) {
-    LoggerService.info('VerificationRuntimeEngine.constructor: creating engine', {
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.constructor: creating engine`, {
       usesCustomConfigurationEngine: Boolean(dependencies.configurationEngine),
       usesCustomWidgetRegistry: Boolean(dependencies.widgetRegistry),
       usesCustomThemeEngine: Boolean(dependencies.themeEngine),
@@ -39,22 +41,22 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   }
 
   async initialize(): Promise<void> {
-    LoggerService.info('VerificationRuntimeEngine.initialize: starting');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: starting`);
 
-    LoggerService.info('VerificationRuntimeEngine.initialize: initializing configuration engine');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: initializing configuration engine`);
     await this.configurationEngine.initialize();
-    LoggerService.info('VerificationRuntimeEngine.initialize: initializing theme engine');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: initializing theme engine`);
     this.themeEngine.initialize();
-    LoggerService.info('VerificationRuntimeEngine.initialize: initializing localization engine');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: initializing localization engine`);
     await this.localizationEngine.initialize();
-    LoggerService.info('VerificationRuntimeEngine.initialize: initializing widget registry');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: initializing widget registry`);
     this.widgetRegistry.initialize();
 
-    LoggerService.info('VerificationRuntimeEngine.initialize: completed');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: completed`);
   }
 
   getContext(): RuntimeContext {
-    LoggerService.info('VerificationRuntimeEngine.getContext: building runtime context snapshot');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.getContext: building runtime context snapshot`);
     return {
       theme: {
         mode: this.themeEngine.getMode(),
@@ -67,21 +69,21 @@ export class VerificationRuntimeEngine implements IVerificationRuntimeEngine {
   }
 
   getWidgetRegistry(): IWidgetRegistry {
-    LoggerService.info('VerificationRuntimeEngine.getWidgetRegistry: returning widget registry');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.getWidgetRegistry: returning widget registry`);
     return this.widgetRegistry;
   }
 
   getScreen(screenId: string): ScreenDefinition | undefined {
-    LoggerService.info('VerificationRuntimeEngine.getScreen: resolving screen', { screenId });
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.getScreen: resolving screen`, { screenId });
     return this.configurationEngine.getScreen(screenId);
   }
 
   dispose(): void {
-    LoggerService.info('VerificationRuntimeEngine.dispose: disposing engines');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.dispose: disposing engines`);
     this.configurationEngine.dispose();
     this.themeEngine.dispose();
     this.localizationEngine.dispose();
     this.widgetRegistry.dispose();
-    LoggerService.info('VerificationRuntimeEngine.dispose: completed');
+    LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.dispose: completed`);
   }
 }

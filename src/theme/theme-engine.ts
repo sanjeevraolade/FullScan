@@ -6,13 +6,14 @@ import { DARK_THEME_TOKENS, LIGHT_THEME_TOKENS } from './default-theme';
 import type { IThemeEngine } from './theme-engine.interface';
 import type { ResolvedThemeMode, ThemeMode, ThemeTokens } from './theme.types';
 
+const FILE_NAME = 'theme-engine.ts';
 const DEFAULT_MODE: ThemeMode = 'system';
 
 class ThemeEngineImpl implements IThemeEngine {
   private mode: ThemeMode = DEFAULT_MODE;
 
   initialize(mode: ThemeMode = DEFAULT_MODE): void {
-    LoggerService.info('ThemeEngine.initialize: starting', { mode });
+    LoggerService.info(`${FILE_NAME}: ThemeEngine.initialize: starting`, { mode });
     this.mode = mode;
   }
 
@@ -23,7 +24,7 @@ class ThemeEngineImpl implements IThemeEngine {
   getResolvedMode(): ResolvedThemeMode {
     if (this.mode === 'system') {
       const resolvedMode = Appearance.getColorScheme() === 'dark' ? 'dark' : 'light';
-      LoggerService.info('ThemeEngine.getResolvedMode: resolved system mode', { resolvedMode });
+      LoggerService.info(`${FILE_NAME}: ThemeEngine.getResolvedMode: resolved system mode`, { resolvedMode });
       return resolvedMode;
     }
     return this.mode;
@@ -34,7 +35,7 @@ class ThemeEngineImpl implements IThemeEngine {
   }
 
   dispose(): void {
-    LoggerService.info('ThemeEngine.dispose: resetting to default mode');
+    LoggerService.info(`${FILE_NAME}: ThemeEngine.dispose: resetting to default mode`);
     this.mode = DEFAULT_MODE;
   }
 }

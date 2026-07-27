@@ -5,6 +5,8 @@ import { registerCheckboxWidget } from './checkbox';
 import { registerTextWidget } from './text';
 import { registerTextInputWidget } from './text-input';
 
+const FILE_NAME = 'widgets/index.ts';
+
 /**
  * The one place that knows about both the Widget Registry and concrete
  * widgets — keeps the registry itself free of widget imports (Open/Closed).
@@ -12,9 +14,9 @@ import { registerTextInputWidget } from './text-input';
  * directly by the runtime pipeline tests.
  */
 export function registerBuiltInWidgets(registry: IWidgetRegistry): void {
-  LoggerService.info('registerBuiltInWidgets: registering built-in widgets');
+  LoggerService.info(`${FILE_NAME}: registerBuiltInWidgets: registering built-in widgets`);
   registerTextWidget(registry);
   registerTextInputWidget(registry);
   registerCheckboxWidget(registry);
-  LoggerService.info('registerBuiltInWidgets: completed');
+  LoggerService.info(`${FILE_NAME}: registerBuiltInWidgets: completed`);
 }

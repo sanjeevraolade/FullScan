@@ -17,7 +17,7 @@ Per `docs/04-Runtime/06-Configuration-Engine.md`. Single source of runtime metad
   Package still arrives over the wire as a single JSON payload either way; this split is a source-authoring
   choice only.
 - `runtime-preview` is the original pipeline smoke-test fixture, still used by `dynamic-form-engine.test.tsx`.
-  `login` is the app's actual launch screen, rendered by `src/app/ApplicationShell.tsx`.
+  `login` is the app's actual launch screen — the initial route of `src/navigation/root-navigator.tsx`.
 - `getActiveConfiguration()` / `getScreen(screenId)` read the activated package.
 - `dispose()` clears the active package.
 

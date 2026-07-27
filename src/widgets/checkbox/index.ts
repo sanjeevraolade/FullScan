@@ -5,7 +5,9 @@ import { CheckboxWidget } from './CheckboxWidget';
 
 export { CheckboxWidget };
 
+const FILE_NAME = 'widgets/checkbox/index.ts';
+
 export function registerCheckboxWidget(registry: IWidgetRegistry): void {
-  LoggerService.info('registerCheckboxWidget: registering checkbox widget type');
+  LoggerService.info(`${FILE_NAME}: registerCheckboxWidget: registering checkbox widget type`);
   registry.register('checkbox', () => CheckboxWidget);
 }

@@ -4,6 +4,8 @@ import { LoggerService } from '@/infrastructure/logger';
 import { WIDGET_REGISTRY_UNKNOWN_TYPE_MESSAGE } from './widget-registry.constants';
 import type { IWidgetRegistryEngine } from './widget-registry.interface';
 
+const FILE_NAME = 'widget-registry.ts';
+
 /**
  * Widget Registry per docs/04-Runtime/04-Widget-Registry.md — registration is
  * a plain Map lookup (Register(widgetType, widgetFactory) -> resolve), kept
@@ -14,17 +16,17 @@ export class WidgetRegistry implements IWidgetRegistryEngine {
   private readonly factories = new Map<WidgetType, WidgetFactory>();
 
   initialize(): void {
-    LoggerService.info('WidgetRegistry.initialize: clearing registered factories');
+    LoggerService.info(`${FILE_NAME}: WidgetRegistry.initialize: clearing registered factories`);
     this.factories.clear();
   }
 
   register(type: WidgetType, factory: WidgetFactory): void {
-    LoggerService.info('WidgetRegistry.register: registering widget type', { type });
+    LoggerService.info(`${FILE_NAME}: WidgetRegistry.register: registering widget type`, { type });
     this.factories.set(type, factory);
   }
 
   resolve(type: WidgetType): WidgetComponent | undefined {
-    LoggerService.info('WidgetRegistry.resolve: resolving widget type', { type });
+    LoggerService.info(`${FILE_NAME}: WidgetRegistry.resolve: resolving widget type`, { type });
     const factory = this.factories.get(type);
     if (!factory) {
       LoggerService.warn(WIDGET_REGISTRY_UNKNOWN_TYPE_MESSAGE, { type });
@@ -35,12 +37,12 @@ export class WidgetRegistry implements IWidgetRegistryEngine {
 
   isRegistered(type: WidgetType): boolean {
     const isRegistered = this.factories.has(type);
-    LoggerService.info('WidgetRegistry.isRegistered: checked widget type', { type, isRegistered });
+    LoggerService.info(`${FILE_NAME}: WidgetRegistry.isRegistered: checked widget type`, { type, isRegistered });
     return isRegistered;
   }
 
   dispose(): void {
-    LoggerService.info('WidgetRegistry.dispose: clearing registered factories');
+    LoggerService.info(`${FILE_NAME}: WidgetRegistry.dispose: clearing registered factories`);
     this.factories.clear();
   }
 }

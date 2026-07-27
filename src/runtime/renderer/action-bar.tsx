@@ -6,6 +6,8 @@ import { useTranslation } from 'react-i18next';
 import type { ScreenAction } from '@/contracts';
 import { LoggerService } from '@/infrastructure/logger';
 
+const FILE_NAME = 'action-bar.tsx';
+
 export interface ActionBarProps {
   readonly screenId: string;
   readonly actions: readonly ScreenAction[];
@@ -22,7 +24,7 @@ export function ActionBar({ screenId, actions, onAction }: ActionBarProps): Reac
   const { t } = useTranslation();
 
   if (actions.length === 0) {
-    LoggerService.info('ActionBar: no actions declared, rendering nothing', { screenId });
+    LoggerService.info(`${FILE_NAME}: ActionBar: no actions declared, rendering nothing`, { screenId });
     return null;
   }
 
@@ -33,7 +35,7 @@ export function ActionBar({ screenId, actions, onAction }: ActionBarProps): Reac
           key={action}
           flex={1}
           onPress={() => {
-            LoggerService.info('ActionBar: action pressed', { screenId, action });
+            LoggerService.info(`${FILE_NAME}: ActionBar: action pressed`, { screenId, action });
             onAction?.(action);
           }}
         >

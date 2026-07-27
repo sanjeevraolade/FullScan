@@ -7,6 +7,6 @@ module.exports = {
     ),
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@gluestack-ui|@gluestack-style|@legendapp|@expo|i18next|react-i18next)/)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@react-navigation|react-native-screens|react-native-safe-area-context|react-native-gesture-handler|@gluestack-ui|@gluestack-style|@legendapp|@expo|i18next|react-i18next)/)',
   ],
 };

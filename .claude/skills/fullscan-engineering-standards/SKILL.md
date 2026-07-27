@@ -59,7 +59,20 @@ Functional components only, typed props, single responsibility, `React.memo()` f
 
 ## Logging
 
-`Logger.info() / .warn() / .error()` — never `console.log`. Never log tokens, passwords, or personal data.
+`LoggerService.info() / .warn() / .error()` — never `console.log`. Never log tokens, passwords, biometric data, or personal data (Aadhaar/PAN included).
+
+Every file that logs declares a module-level `FILE_NAME` constant (the file's own basename, or its path relative to `src/` when the basename alone is ambiguous — e.g. multiple `index.ts` files) and prefixes every log message with it, so a log line always traces back to its source file:
+```ts
+const FILE_NAME = 'runtime-engine.ts';
+// ...
+LoggerService.info(`${FILE_NAME}: VerificationRuntimeEngine.initialize: starting`);
+LoggerService.warn(`${FILE_NAME}: ConfigurationEngine.getScreen: screen not found`, { screenId });
+```
+Exception: when a log call passes a shared message constant (e.g. `WORKFLOW_ENGINE_SKELETON_MESSAGE`) that a test asserts verbatim via `toHaveBeenCalledWith(...)`, log the constant unprefixed — don't break the constant's existing contract just to add the prefix.
+
+Every function/method/component in the codebase gets at least one log call tracing that it ran (entry, or entry+exit for anything with a branch or an async step) — including presentational components with no branching logic. This is safe to do liberally because logging is globally toggleable (see below): `LoggerService.setEnabled(false)` silences every call site at runtime with no code changes, so verbosity is never a reason to skip instrumenting a file. The only files that stay uninstrumented are ones with no executable code at all — pure `.types.ts`/`.interface.ts`/`.constants.ts` files and barrel `index.ts` re-exports; there is no function body to log inside.
+
+`LoggerService.setEnabled(enabled: boolean)` / `.isEnabled()` (`src/infrastructure/logger/logger.ts`) is the single global switch — call it once (e.g. from a debug menu, a remote-config flag, or bootstrap) to turn all logging on/off at runtime without touching any call site.
 
 ## Performance
 
