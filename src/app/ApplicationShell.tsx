@@ -4,7 +4,6 @@ import type { ReactElement } from 'react';
 import { LoggerService } from '@/infrastructure/logger';
 import { RootNavigator } from '@/navigation';
 
-import { useRuntimeEngine } from './ApplicationContext';
 import { AppSafeArea } from './AppSafeArea';
 
 const FILE_NAME = 'ApplicationShell.tsx';
@@ -16,12 +15,11 @@ const FILE_NAME = 'ApplicationShell.tsx';
  * src/navigation/root-navigator.tsx for why it's the only route so far.
  */
 export function ApplicationShell(): ReactElement {
-  const runtimeEngine = useRuntimeEngine();
   LoggerService.info(`${FILE_NAME}: ApplicationShell: rendering root navigator`);
 
   return (
     <AppSafeArea>
-      <RootNavigator runtimeEngine={runtimeEngine} />
+      <RootNavigator />
     </AppSafeArea>
   );
 }

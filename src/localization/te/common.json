@@ -1,21 +1,6 @@
 {
-  "screen": {
-    "runtimePreview": {
-      "title": "రన్‌టైమ్ ప్రివ్యూ"
-    },
-    "login": {
-      "title": "లాగిన్"
-    }
-  },
-  "runtimePreview": {
-    "helloMessage": "హలో రన్‌టైమ్"
-  },
-  "section": {
-    "login": {
-      "credentials": "ఆధారాలు"
-    }
-  },
   "login": {
+    "title": "లాగిన్",
     "welcome": "FullScanకి స్వాగతం",
     "fields": {
       "username": "వినియోగదారు పేరు",
@@ -29,8 +14,5 @@
   },
   "validation": {
     "required": "ఈ ఫీల్డ్ తప్పనిసరి"
-  },
-  "error": {
-    "screenNotFound": "ఈ స్క్రీన్ అందుబాటులో లేదు. దయచేసి మీ నిర్వాహకుడిని సంప్రదించండి."
   }
 }

@@ -9,17 +9,17 @@ describe('LocalizationEngine', () => {
     await LocalizationEngine.initialize();
 
     expect(LocalizationEngine.getLanguage()).toBe('en');
-    expect(LocalizationEngine.resolve('screen.runtimePreview.title')).toBe('Runtime Preview');
-    expect(LocalizationEngine.resolve('runtimePreview.helloMessage')).toBe('Hello Runtime');
+    expect(LocalizationEngine.resolve('login.title')).toBe('Login');
+    expect(LocalizationEngine.resolve('login.welcome')).toBe('Welcome to FullScan');
   });
 
   it('resolves Hindi and Telugu translations for the same keys', async () => {
     await LocalizationEngine.initialize('hi');
-    expect(LocalizationEngine.resolve('runtimePreview.helloMessage')).toBe('नमस्ते रनटाइम');
+    expect(LocalizationEngine.resolve('login.fields.username')).toBe('उपयोगकर्ता नाम');
 
     await LocalizationEngine.setLanguage('te');
     expect(LocalizationEngine.getLanguage()).toBe('te');
-    expect(LocalizationEngine.resolve('runtimePreview.helloMessage')).toBe('హలో రన్‌టైమ్');
+    expect(LocalizationEngine.resolve('login.fields.username')).toBe('వినియోగదారు పేరు');
   });
 
   it('falls back to the raw key when a translation is missing', async () => {

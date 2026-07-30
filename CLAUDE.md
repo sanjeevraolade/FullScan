@@ -3,40 +3,39 @@
 FullScan is an enterprise React Native app used by Field Executives to perform physical background
 verification of candidates, capturing tamper-proof GPS, camera, and biometric evidence.
 
-**This is not a normal screens-and-API app.** FullScan is a **configuration-driven, offline-first,
-server-driven-UI Runtime Platform**. The backend sends configuration (screens, widgets, workflows,
-validation rules); the mobile app is a runtime that renders and executes it. Business behaviour should
-evolve through configuration, not source code changes. Every implementation decision should strengthen
-the platform, not just solve the immediate feature.
+FullScan is an **offline-first, screen-based** React Native app. Each screen is an ordinary React
+component owned by its feature and registered on a navigator — there is **no configuration-driven
+rendering runtime, no server-driven UI, and no widget registry**. That approach was explored and
+deliberately dropped; do not reintroduce it.
 
-Full architecture/business docs live under `docs/` (Governance, Vision, Business, Architecture, Runtime,
-Contracts, Observability) — read them for anything this file doesn't cover. Domain-specific rules with
-worked examples live in `.claude/skills/` (see below) and load automatically when relevant.
+Business/domain docs live under `docs/` — read them for domain rules this file doesn't cover, but note
+that everything in `docs/04-Runtime/`, `docs/06-Contracts/` and the `.claude/skills/fullscan-*engine*`,
+`fullscan-dynamic-form`, `fullscan-widget-development`, `fullscan-runtime-engine` and
+`fullscan-configuration-engine` skills still describes the abandoned runtime design and is **stale**.
 
 ## Current status (read before assuming anything is implemented)
 
-The documentation and architecture are complete; **implementation has barely started**. `src/` is almost
-entirely empty folders — most files that exist are placeholders. Do not assume any runtime engine, widget,
-or feature exists just because its folder is present; check first.
+**Implementation has barely started.** `src/` is mostly empty folders — most files that exist are
+placeholders. Do not assume a feature exists just because its folder is present; check first.
 
-Current sprint goal ("Hello Runtime"): prove `Configuration → Runtime Engine → Widget Registry → Renderer
-→ Widgets` by rendering the **Login screen entirely from runtime configuration**. Out of scope for this
-sprint: authentication, networking, business logic.
+What works today: startup (`bootstrap` → theme + localization + splash), a `NavigationContainer` +
+native-stack with `Login` as its only route, and a hand-written `LoginScreen` with React Hook Form
+validation. Not built yet: authentication itself, networking, storage, business logic.
 
 ## Tech stack
 
-| Category | Choice |
-|---|---|
-| Framework | React Native (bare workflow), TypeScript strict |
-| UI | **Gluestack UI** — use it for all components, never raw RN primitives (`View`, `Text`, `TouchableOpacity`) unless no Gluestack equivalent exists |
-| Navigation | React Navigation (native-stack, drawer) |
-| State | Zustand (global app state) + Redux Saga (side effects) |
-| Storage | MMKV (non-sensitive), platform Keychain/Keystore (secrets) |
-| Networking | Axios, behind Repository pattern |
-| Forms | React Hook Form |
-| Localization | react-i18next — English, Hindi, Telugu |
-| Camera | Vision Camera (capture only, gallery picker prohibited) |
-| Testing | Jest, React Native Testing Library, Detox |
+| Category     | Choice                                                                                                                                           |
+| ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Framework    | React Native (bare workflow), TypeScript strict                                                                                                  |
+| UI           | **Gluestack UI** — use it for all components, never raw RN primitives (`View`, `Text`, `TouchableOpacity`) unless no Gluestack equivalent exists |
+| Navigation   | React Navigation (native-stack, drawer)                                                                                                          |
+| State        | Zustand (global app state) + Redux Saga (side effects)                                                                                           |
+| Storage      | MMKV (non-sensitive), platform Keychain/Keystore (secrets)                                                                                       |
+| Networking   | Axios, behind Repository pattern                                                                                                                 |
+| Forms        | React Hook Form                                                                                                                                  |
+| Localization | react-i18next — English, Hindi, Telugu                                                                                                           |
+| Camera       | Vision Camera (capture only, gallery picker prohibited)                                                                                          |
+| Testing      | Jest, React Native Testing Library, Detox                                                                                                        |
 
 Path alias: `@/*` → `src/*` (defined in `babel.config.js` module-resolver). Note: `tsconfig.json` also
 lists `@assets`, `@components`, `@screens`, `@navigation` aliases that don't correspond to real folders —
@@ -45,61 +44,53 @@ don't rely on them.
 ## Layered architecture (frozen)
 
 ```
-Application → Bootstrap → Navigation → Runtime → Features → Repositories → Infrastructure
+Application → Bootstrap → Navigation → Features → Repositories → Infrastructure
 ```
 
-Dependencies flow downward only. A lower layer must never import from a higher one. Screens/widgets never
-call APIs or execute workflows directly — everything routes through the Runtime.
+Dependencies flow downward only. A lower layer must never import from a higher one. Screens never call
+APIs directly — backend I/O goes through a repository.
 
 ## Repository structure (frozen — do not add new top-level `src/` folders without a real reason)
 
-| Folder | Owns | Never contains |
-|---|---|---|
-| `app/` | Providers, navigation composition, application shell | Business logic |
-| `bootstrap/` | Startup sequencing — initializing services before the app becomes usable | Business logic |
-| `contracts/` | Shared TypeScript contracts/interfaces | Implementation |
-| `core/` | `constants/`, `errors/`, `events/`, `types/`, `utils/` — generic reusable code | Business logic |
-| `domain/` | Business entities and business rules, independent of UI/infra | UI, transport code |
-| `features/` | Business functionality (authentication, verification, reports, dashboard, settings...) consuming the Runtime | Direct API calls, own screens' business rules |
-| `infrastructure/` | Device/platform capability implementations: storage, camera, networking, GPS, logger, permissions, notifications, biometrics, encryption | Business logic |
-| `navigation/` | Screen registration and typed routes | Business/workflow decisions |
-| `repositories/` | Hide API/DTO details, return **Domain Models only** | Raw DTOs exposed to callers |
-| `runtime/` | The platform core — `configuration/`, `engine/`, `registry/`, `renderer/`, `validation/`, `workflow/` | Feature-specific/business-specific code |
-| `shared/` | Reusable UI components, formatters, validators, layouts, icons, animations | Business logic |
-| `store/` | App-wide state only: session, theme, configuration, localization | Business entities |
-| `theme/` | Design tokens: colors, typography, spacing, radius | Hardcoded values used elsewhere |
-| `widgets/` | Reusable runtime-rendered building blocks (text, camera, gps, signature, timeline, map, attachment, barcode, qr...) | Business logic, direct API/workflow calls |
+| Folder            | Owns                                                                                                                                          | Never contains                     |
+| ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------- |
+| `app/`            | Providers, navigation composition, application shell                                                                                          | Business logic                     |
+| `bootstrap/`      | Startup sequencing — initializing services before the app becomes usable                                                                      | Business logic                     |
+| `core/`           | `constants/`, `errors/`, `events/`, `types/`, `utils/` — generic reusable code                                                                | Business logic                     |
+| `domain/`         | Business entities and business rules, independent of UI/infra                                                                                 | UI, transport code                 |
+| `features/`       | Business functionality (authentication, verification, reports, dashboard, settings...) — each feature owns its `screens/`, `hooks/`, `types/` | Direct API calls                   |
+| `infrastructure/` | Device/platform capability implementations: storage, camera, networking, GPS, logger, permissions, notifications, biometrics, encryption      | Business logic                     |
+| `navigation/`     | Screen registration and typed routes                                                                                                          | Business decisions, screen content |
+| `repositories/`   | Hide API/DTO details, return **Domain Models only**                                                                                           | Raw DTOs exposed to callers        |
+| `shared/`         | Reusable UI components (`components/`), formatters, validators, layouts, icons, animations                                                    | Business logic                     |
+| `store/`          | App-wide state only: session, theme, localization                                                                                             | Business entities                  |
+| `theme/`          | Design tokens: colors, typography, spacing, radius                                                                                            | Hardcoded values used elsewhere    |
 
-## The Runtime (the heart of the platform)
+## Cross-cutting services
 
-Ten engines, each with exactly one responsibility. Full detail per engine is in the matching
-`.claude/skills/fullscan-*` skill — load the relevant one before implementing.
+Not engines and not a runtime — plain singletons initialized by `src/bootstrap/`:
 
-| Engine | Owns |
-|---|---|
-| Verification Runtime Engine | App orchestration: startup, engine coordination, runtime context init |
-| Workflow Engine | Workflow execution/state, navigation *decisions* (app workflows like onboarding, and business workflows like candidate verification) |
-| Dynamic Form Engine | Turning screen configuration into a rendered screen: layout, section, widget composition, binding |
-| Widget Registry | Widget discovery/resolution — widgets register themselves, nothing instantiates them directly |
-| Validation Engine | All business/field/workflow/attachment/GPS/security validation |
-| Configuration Engine | Downloading, versioning, validating, caching, and activating runtime configuration |
-| Attachment Engine | Evidence lifecycle: camera capture, metadata, watermark, local persistence |
-| Synchronization Engine | The *only* thing allowed to upload business data — offline queue, retry, conflict handling |
-| Localization Engine | Language resolution and runtime language switching (en/hi/te) |
-| Theme Engine | Design tokens, light/dark/system theme, runtime theme switching |
+| Service                                       | Owns                                         |
+| --------------------------------------------- | -------------------------------------------- |
+| `LoggerService` (`src/infrastructure/logger`) | All logging; globally toggleable             |
+| `LocalizationEngine` (`src/localization`)     | i18next setup, language switching (en/hi/te) |
+| `ThemeEngine` (`src/theme`)                   | Design tokens, light/dark/system theme       |
+
+Camera/evidence capture, offline sync queue, secure storage and permissions are unbuilt — when they are
+built they belong in `src/infrastructure/` (device capability) plus the owning feature.
 
 ## Non-negotiable rules
 
-- **Never hardcode** business screens, forms, workflows, validation rules, attachment types, user-visible
-  strings, or colors/spacing/typography. If it can be configuration, it must be configuration.
-- **Never bypass a Runtime Engine.** No API calls from screens/widgets, no business validation in UI, no
-  direct uploads outside the Synchronization Engine, no widget instantiation outside the Widget Registry.
+- **Never hardcode** user-visible strings or colors/spacing/typography — localization keys and theme
+  tokens only. Screens, forms and validation rules _are_ written in code, deliberately.
+- **Screens stay presentational.** Form/screen state goes in a feature hook, backend I/O in a repository,
+  business rules in `src/domain/`. No API calls from a screen component.
 - **Offline-first is mandatory.** Every feature keeps working without network where technically possible;
   evidence is always persisted locally before sync.
 - **Camera-only evidence.** Gallery/file picker is prohibited for business evidence. Every capture needs
   GPS, timestamp, and a watermark (minimum: latitude, longitude, capture date, capture time).
-- **Gluestack UI only** for components; **Theme Engine only** for styling; **localization keys only** for
-  user-visible text (never hardcoded strings).
+- **Gluestack UI only** for components; **Theme Engine tokens only** for styling; **localization keys
+  only** for user-visible text (never hardcoded strings).
 - **TypeScript strict**, no `any`, no unchecked type assertions.
 - **No `console.log`** — use the LoggerService, and never log tokens, passwords, biometric data, or PII
   (Aadhaar/PAN numbers included). Every function/method/component gets at least one log call, every
@@ -115,8 +106,8 @@ Ten engines, each with exactly one responsibility. Full detail per engine is in 
   `UPPER_SNAKE_CASE`. Booleans read positively (`isValid`, `hasPermission`, not `invalid`/`flag`).
 - Functional components only, small and focused (~300 lines is a soft ceiling before splitting).
 - Prefer composition over inheritance; SOLID; DRY; early returns over nested conditionals.
-- Reuse before creating: before writing new code, check whether an existing widget, hook, service, or
-  configuration option already solves it.
+- Reuse before creating: before writing new code, check whether an existing shared component, hook or
+  service already solves it.
 - Every feature should ship with tests (unit + component, integration where relevant) covering the happy
   path, edge cases, offline behaviour, and errors — not just the happy path.
 - Accessibility (screen readers, dynamic font sizes, touch targets) is mandatory, not optional.
@@ -124,13 +115,13 @@ Ten engines, each with exactly one responsibility. Full detail per engine is in 
 
 ## Specialized subagents
 
-Role-specific subagents live in `.claude/agents/`: `solution-architect`, `runtime-engineer`,
-`mobile-engineer`, `integration-engineer`, `qa-engineer`, `reviewer`. Use them for focused work in their
-domain (e.g. architecture trade-off review, runtime engine design, test planning) rather than doing
-everything as a generalist.
+Role-specific subagents live in `.claude/agents/`: `solution-architect`, `mobile-engineer`,
+`integration-engineer`, `qa-engineer`, `reviewer`. Use them for focused work in their domain rather than
+doing everything as a generalist. `runtime-engineer` is obsolete.
 
 ## Slash commands
 
-`.claude/commands/` has scaffolding commands: `/create-feature`, `/create-screen`, `/create-widget`,
-`/create-runtime-engine`, `/create-api`, `/create-repository`, `/create-state`. Each generates the
-standard artifact set for its layer and reminds you which skill/engine ownership rules apply.
+`.claude/commands/` has scaffolding commands: `/create-feature`, `/create-screen`, `/create-api`,
+`/create-repository`, `/create-state`. They still contain runtime-era instructions — ignore any step that
+tells you to render from configuration or register a widget. `/create-widget` and
+`/create-runtime-engine` are obsolete.

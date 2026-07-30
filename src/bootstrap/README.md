@@ -19,13 +19,9 @@ Logger
     ↓
 Storage
     ↓
-Configuration
-    ↓
 Theme
     ↓
 Localization
-    ↓
-Runtime
     ↓
 Application Ready
 ```
@@ -38,9 +34,9 @@ Application Ready
 
 ## Current implementation
 
-`runBootstrap()` (`BootstrapService.ts`) runs a `BootstrapPipeline` of two steps: `runtime` (creates a
-`VerificationRuntimeEngine`, calls `initialize()` — which itself sequences Configuration → Theme →
-Localization → Widget Registry — then registers the built-in widgets) and `splash` (hides the native
-splash screen once the runtime is ready). `Storage` has no step yet — nothing needs persisting until a
-real feature does. A failed step short-circuits the pipeline and returns `{ success: false, ... }` instead
-of leaving the app half-initialized; `src/app/ApplicationProvider.tsx` is the caller.
+`runBootstrap()` (`BootstrapService.ts`) runs a `BootstrapPipeline` of three steps: `theme`
+(`ThemeEngine.initialize()`), `localization` (`LocalizationEngine.initialize()`, which sets up i18next)
+and `splash` (hides the native splash screen once the app can render). `Storage` has no step yet —
+nothing needs persisting until a real feature does. A failed step short-circuits the pipeline and returns
+`{ success: false, ... }` instead of leaving the app half-initialized; `src/app/ApplicationProvider.tsx`
+is the caller.

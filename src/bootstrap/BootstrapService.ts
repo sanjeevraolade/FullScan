@@ -1,7 +1,7 @@
-import { hideSplashScreen } from '@/infrastructure/splash';
 import { LoggerService } from '@/infrastructure/logger';
-import { VerificationRuntimeEngine } from '@/runtime/engine';
-import { registerBuiltInWidgets } from '@/widgets';
+import { hideSplashScreen } from '@/infrastructure/splash';
+import { LocalizationEngine } from '@/localization';
+import { ThemeEngine } from '@/theme';
 
 import type { BootstrapContext } from './BootstrapContext';
 import { BootstrapPipeline } from './BootstrapPipeline';
@@ -13,19 +13,31 @@ const FILE_NAME = 'BootstrapService.ts';
 /**
  * Concrete startup pipeline (src/bootstrap/README.md):
  * Logger (already live, no init needed) -> Storage (not implemented yet,
- * nothing to persist in this pass) -> Configuration -> Theme -> Localization
- * -> Widget Registry (all four folded into VerificationRuntimeEngine.initialize())
- * -> Application Ready (splash hidden).
+ * nothing to persist in this pass) -> Theme -> Localization -> Application
+ * Ready (splash hidden). Screens are plain React components, so nothing
+ * needs registering before the first screen can render.
  */
-const initializeRuntimeStep: BootstrapStep = {
-  name: 'runtime',
+const initializeThemeStep: BootstrapStep = {
+  name: 'theme',
   async execute(context: BootstrapContext): Promise<void> {
-    LoggerService.info(`${FILE_NAME}: initializeRuntimeStep.execute: starting`);
-    const runtimeEngine = new VerificationRuntimeEngine();
-    await runtimeEngine.initialize();
-    registerBuiltInWidgets(runtimeEngine.getWidgetRegistry());
-    context.runtimeEngine = runtimeEngine;
-    LoggerService.info(`${FILE_NAME}: initializeRuntimeStep.execute: completed`);
+    LoggerService.info(`${FILE_NAME}: initializeThemeStep.execute: starting`);
+    ThemeEngine.initialize();
+    context.themeMode = ThemeEngine.getMode();
+    LoggerService.info(`${FILE_NAME}: initializeThemeStep.execute: completed`, {
+      themeMode: context.themeMode,
+    });
+  },
+};
+
+const initializeLocalizationStep: BootstrapStep = {
+  name: 'localization',
+  async execute(context: BootstrapContext): Promise<void> {
+    LoggerService.info(`${FILE_NAME}: initializeLocalizationStep.execute: starting`);
+    await LocalizationEngine.initialize();
+    context.language = LocalizationEngine.getLanguage();
+    LoggerService.info(`${FILE_NAME}: initializeLocalizationStep.execute: completed`, {
+      language: context.language,
+    });
   },
 };
 
@@ -40,7 +52,11 @@ const hideSplashStep: BootstrapStep = {
 
 export async function runBootstrap(): Promise<BootstrapResult> {
   LoggerService.info(`${FILE_NAME}: runBootstrap: starting`);
-  const pipeline = new BootstrapPipeline([initializeRuntimeStep, hideSplashStep]);
+  const pipeline = new BootstrapPipeline([
+    initializeThemeStep,
+    initializeLocalizationStep,
+    hideSplashStep,
+  ]);
   const result = await pipeline.run();
   LoggerService.info(`${FILE_NAME}: runBootstrap: finished`, { success: result.success });
   return result;
