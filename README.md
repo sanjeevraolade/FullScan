@@ -85,3 +85,10 @@ GEO_FENCE_RADIUS_METERS=200
 ## License
 
 Private — All rights reserved.
+
+
+
+## Generating splash
+npx react-native generate-bootsplash assets/images/logo.png \
+  --platforms=android,ios \
+  --background=#ffffff

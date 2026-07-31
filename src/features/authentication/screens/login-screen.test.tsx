@@ -1,16 +1,23 @@
 import React from 'react';
-import { fireEvent, render, screen } from '@testing-library/react-native';
+import { NavigationContainer } from '@react-navigation/native';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
 
 import { LoginScreen } from './login-screen';
 
-/** `render` and `fireEvent` are async in React Native Testing Library 14. */
+/**
+ * `render` and `fireEvent` are async in React Native Testing Library 14.
+ * Wrapped in `NavigationContainer` because `useLoginForm` navigates to the
+ * case list on successful login and needs a navigation context to do so.
+ */
 async function renderLoginScreen(): Promise<void> {
   await render(
     <ThemeProvider>
-      <LoginScreen />
+      <NavigationContainer>
+        <LoginScreen />
+      </NavigationContainer>
     </ThemeProvider>,
   );
 }
@@ -35,10 +42,26 @@ describe('LoginScreen', () => {
     expect(screen.getByTestId('login-submit-button')).toBeTruthy();
   });
 
+  it('disables submit until both required fields are filled, then enables it', async () => {
+    await renderLoginScreen();
+
+    expect(screen.getByTestId('login-submit-button')).toBeDisabled();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    expect(screen.getByTestId('login-submit-button')).toBeDisabled();
+
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    expect(screen.getByTestId('login-submit-button')).toBeEnabled();
+  });
+
   it('blocks submit and shows a required error for each empty mandatory field', async () => {
     await renderLoginScreen();
 
-    await fireEvent.press(screen.getByTestId('login-submit-button'));
+    // The submit button is disabled while required fields are empty, so it
+    // cannot be pressed to trigger this validation — submit the same way a
+    // user reaching "done" on the keyboard from an empty password field
+    // would, which isn't gated by the button's disabled state.
+    await fireEvent(screen.getByTestId('password-input'), 'submitEditing');
 
     expect(screen.getByTestId('username-error')).toBeTruthy();
     expect(screen.getByTestId('password-error')).toBeTruthy();
@@ -50,7 +73,7 @@ describe('LoginScreen', () => {
   it('clears validation errors once the mandatory fields are filled in', async () => {
     await renderLoginScreen();
 
-    await fireEvent.press(screen.getByTestId('login-submit-button'));
+    await fireEvent(screen.getByTestId('password-input'), 'submitEditing');
     expect(screen.getByTestId('username-error')).toBeTruthy();
 
     await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
@@ -59,6 +82,9 @@ describe('LoginScreen', () => {
 
     expect(screen.queryByTestId('username-error')).toBeNull();
     expect(screen.queryByTestId('password-error')).toBeNull();
+
+    // Let the (stubbed) login call settle so its timer doesn't outlive the test.
+    await waitFor(() => expect(screen.queryByTestId('login-submit-spinner')).toBeNull());
   });
 
   it('keeps the entered value in the field it belongs to', async () => {
@@ -68,6 +94,28 @@ describe('LoginScreen', () => {
 
     expect(screen.getByTestId('username-input').props['value']).toBe('field.executive');
     expect(screen.getByTestId('password-input').props['value']).toBe('');
+  });
+
+  it('toggles password visibility when the show/hide affordance is pressed', async () => {
+    await renderLoginScreen();
+
+    expect(screen.getByTestId('password-input').props['secureTextEntry']).toBe(true);
+
+    await fireEvent.press(screen.getByTestId('password-toggle-visibility'));
+    expect(screen.getByTestId('password-input').props['secureTextEntry']).toBe(false);
+
+    await fireEvent.press(screen.getByTestId('password-toggle-visibility'));
+    expect(screen.getByTestId('password-input').props['secureTextEntry']).toBe(true);
+  });
+
+  it('renders the app version and copyright footer', async () => {
+    await renderLoginScreen();
+
+    expect(screen.getByTestId('login-footer-version')).toHaveTextContent('Version 1.0.0');
+    const currentYear = new Date().getFullYear().toString();
+    expect(screen.getByTestId('login-footer-copyright')).toHaveTextContent(
+      `© ${currentYear} FullScan. All rights reserved.`,
+    );
   });
 
   it('renders the same screen in the active language', async () => {

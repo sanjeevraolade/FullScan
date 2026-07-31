@@ -4,6 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { LoginScreen } from '@/features/authentication';
+import { CaseDetailsScreen, CaseListScreen } from '@/features/cases';
 import { LoggerService } from '@/infrastructure/logger';
 
 import { ROUTE_NAMES } from './routes';
@@ -14,9 +15,8 @@ const Stack = createNativeStackNavigator<RootStackParamList>();
 
 /**
  * Route registration only — each screen is a normal React component that
- * owns its own content and decides where it navigates next. Login is the
- * only registered route so far; further screens get registered here as
- * their features are built.
+ * owns its own content and decides where it navigates next. Screens get
+ * registered here as their features are built.
  */
 export function RootNavigator(): ReactElement {
   LoggerService.info(`${FILE_NAME}: RootNavigator: rendering`, {
@@ -27,6 +27,8 @@ export function RootNavigator(): ReactElement {
     <NavigationContainer>
       <Stack.Navigator initialRouteName={ROUTE_NAMES.LOGIN} screenOptions={{ headerShown: false }}>
         <Stack.Screen name={ROUTE_NAMES.LOGIN} component={LoginScreen} />
+        <Stack.Screen name={ROUTE_NAMES.CASE_LIST} component={CaseListScreen} />
+        <Stack.Screen name={ROUTE_NAMES.CASE_DETAILS} component={CaseDetailsScreen} />
       </Stack.Navigator>
     </NavigationContainer>
   );

@@ -1,18 +1,69 @@
 {
+  "common": {
+    "appName": "FullScan"
+  },
   "login": {
     "title": "लॉगिन",
     "welcome": "FullScan में आपका स्वागत है",
+    "logoAlt": "FullScan लोगो",
     "fields": {
       "username": "उपयोगकर्ता नाम",
       "password": "पासवर्ड",
       "rememberMe": "मुझे याद रखें",
-      "employeeId": "कर्मचारी आईडी (वैकल्पिक)"
+      "employeeId": "कर्मचारी आईडी (वैकल्पिक)",
+      "showPassword": "पासवर्ड दिखाएं",
+      "hidePassword": "पासवर्ड छुपाएं"
     },
     "actions": {
-      "submit": "लॉगिन करें"
+      "submit": "लॉगिन करें",
+      "submitting": "लॉगिन हो रहा है"
+    },
+    "footer": {
+      "version": "संस्करण {{version}}",
+      "copyright": "© {{year}} FullScan. सर्वाधिकार सुरक्षित।"
+    },
+    "errors": {
+      "invalidCredentials": "उपयोगकर्ता नाम या पासवर्ड गलत है। कृपया पुनः प्रयास करें।",
+      "network": "कनेक्ट करने में असमर्थ। कृपया अपना इंटरनेट कनेक्शन जांचें और पुनः प्रयास करें।",
+      "serverUnavailable": "FullScan अस्थायी रूप से अनुपलब्ध है। कृपया बाद में पुनः प्रयास करें।"
     }
   },
   "validation": {
     "required": "यह फ़ील्ड आवश्यक है"
+  },
+  "caseList": {
+    "header": {
+      "loadingName": "लोड हो रहा है...",
+      "searchLabel": "केस खोजें",
+      "filterLabel": "केस फ़िल्टर करें",
+      "searchPlaceholder": "केस, उम्मीदवार या क्लाइंट से खोजें",
+      "filterComingSoon": "फ़िल्टर जल्द ही उपलब्ध होंगे।"
+    },
+    "tabs": {
+      "new": "नया",
+      "pending": "लंबित",
+      "beyondTat": "टीएटी के बाद",
+      "completed": "पूर्ण"
+    },
+    "card": {
+      "caseRef": "केस संदर्भ: {{caseRef}}",
+      "client": "क्लाइंट: {{clientName}}"
+    },
+    "actions": {
+      "accept": "स्वीकार करें",
+      "call": "कॉल करें",
+      "callComingSoon": "छिपी हुई कॉलिंग जल्द ही उपलब्ध होगी।",
+      "retry": "पुनः प्रयास करें"
+    },
+    "loading": "केस लोड हो रहे हैं...",
+    "empty": "इस श्रेणी में कोई केस नहीं है।",
+    "errors": {
+      "network": "केस लोड नहीं हो सके। अपना कनेक्शन जांचें और पुनः प्रयास करें।"
+    }
+  },
+  "caseDetails": {
+    "back": "वापस",
+    "title": "केस संदर्भ: {{caseRef}}",
+    "comingSoon": "इस केस के लिए पूर्ण सत्यापन प्रक्रिया जल्द ही उपलब्ध होगी।"
   }
 }
