@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(/private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/46a0826f-09a3-48f5-a3a9-94790c34023a/scratchpad/tap.sh 590 1186)",
+      "Bash(osascript -e ' *)",
+      "Bash(echo \"---tsc exit $?---\")"
+    ]
+  }
+}

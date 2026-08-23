@@ -5,13 +5,12 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { ThemeEngine } from '@/theme';
 import type { CaseBucket } from '@/domain/case';
 
 import { CASE_LIST_BUCKETS } from '../hooks/use-case-list';
+import { Tabs, TabsTab, TabsTabList, TabsTabTitle } from '@gluestack-ui/themed';
 
 const FILE_NAME = 'case-bucket-tabs.tsx';
-const TAB_BORDER_RADIUS = 999;
 
 const BUCKET_LABEL_KEYS: Record<CaseBucket, string> = {
   new: 'caseList.tabs.new',
@@ -20,74 +19,35 @@ const BUCKET_LABEL_KEYS: Record<CaseBucket, string> = {
   completed: 'caseList.tabs.completed',
 };
 
-/**
- * Deliberately plain React Native styling, not Gluestack's styled
- * Pressable/Box: two rounds of fixes targeting Gluestack's `sx`/pseudo-state
- * resolution (`:hover`/`:active` variants colliding with a conditionally
- * switched `bg` prop) didn't stop the *selected* tab from ballooning and
- * overlapping its neighbors. Sidestepping that resolution path entirely
- * removes the bug class outright — plain View/Text/Pressable have no such
- * machinery. Colors still come from the same Gluestack config tokens (no
- * new hex literals), just read directly instead of through a styled prop.
- */
-const styles = StyleSheet.create({
-  scrollContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    gap: 8,
-  },
-  tab: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: TAB_BORDER_RADIUS,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '500',
-  },
-});
-
-interface TabColors {
-  readonly selectedBg: string;
-  readonly unselectedBg: string;
-  readonly selectedText: string;
-  readonly unselectedText: string;
-}
-
-function resolveTabColors(): TabColors {
-  const isDark = ThemeEngine.getResolvedMode() === 'dark';
-  return {
-    selectedBg: config.tokens.colors.primary500,
-    unselectedBg: isDark ? config.tokens.colors.backgroundDark800 : config.tokens.colors.backgroundLight100,
-    selectedText: isDark ? config.tokens.colors.textDark0 : config.tokens.colors.textLight0,
-    unselectedText: isDark ? config.tokens.colors.textDark300 : config.tokens.colors.textLight700,
-  };
-}
-
 export interface CaseBucketTabsProps {
   readonly selectedBucket: CaseBucket;
   readonly bucketCounts: Record<CaseBucket, number>;
   readonly onSelectBucket: (bucket: CaseBucket) => void;
 }
 
-/** Horizontal segmented control for New / Pending / Beyond TAT / Completed. */
+/**
+ * Segmented control for New / Pending / Beyond TAT / Completed, built on
+ * Gluestack's `Tabs` primitive (a plain `View`-based `TabsTabList`, not a
+ * `ScrollView`). Selection is driven entirely by `selectedBucket` /
+ * `onSelectBucket`: `Tabs`' own active-tab tracking is positional
+ * ("tab-0".."tab-3") and only seeds itself once on mount, so it isn't a
+ * source of truth here — `Tabs`/`TabsTab` are used purely as the
+ * pressable/layout primitives, with selected styling computed from the
+ * `selectedBucket` prop on every render.
+ */
 export function CaseBucketTabs({
   selectedBucket,
   bucketCounts,
   onSelectBucket,
 }: CaseBucketTabsProps): ReactElement {
   const { t } = useTranslation();
-  const colors = resolveTabColors();
 
   return (
-    <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-      <View style={styles.scrollContent}>
+    <Tabs>
+      <TabsTabList flexDirection="row" w="$full" px="$4" py="$2" gap="$2" accessibilityRole="tablist">
         {CASE_LIST_BUCKETS.map((bucket) => {
           const isSelected = bucket === selectedBucket;
+          const label = t(BUCKET_LABEL_KEYS[bucket]);
 
           const handlePress = (): void => {
             LoggerService.info(`${FILE_NAME}: CaseBucketTabs.handlePress: tab pressed`, { bucket });
@@ -95,22 +55,36 @@ export function CaseBucketTabs({
           };
 
           return (
-            <Pressable
+            <TabsTab
               key={bucket}
               onPress={handlePress}
-              style={[styles.tab, { backgroundColor: isSelected ? colors.selectedBg : colors.unselectedBg }]}
+              flex={1}
+              h="$9"
+              alignItems="center"
+              justifyContent="center"
+              px="$2"
+              rounded="$full"
+              bg={isSelected ? '$primary500' : '$backgroundLight100'}
+              sx={{ _dark: { bg: isSelected ? '$primary500' : '$backgroundDark800' } }}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={t(BUCKET_LABEL_KEYS[bucket])}
+              accessibilityLabel={label}
               testID={`case-bucket-tab-${bucket}`}
             >
-              <Text style={[styles.tabText, { color: isSelected ? colors.selectedText : colors.unselectedText }]}>
-                {t(BUCKET_LABEL_KEYS[bucket])} ({bucketCounts[bucket]})
-              </Text>
-            </Pressable>
+              <TabsTabTitle
+                fontSize="$sm"
+                fontWeight="$medium"
+                numberOfLines={1}
+                adjustsFontSizeToFit
+                color={isSelected ? '$textLight0' : '$textLight700'}
+                sx={{ _dark: { color: isSelected ? '$textDark0' : '$textDark300' } }}
+              >
+                {label} ({bucketCounts[bucket]})
+              </TabsTabTitle>
+            </TabsTab>
           );
         })}
-      </View>
-    </ScrollView>
+      </TabsTabList>
+    </Tabs>
   );
 }
