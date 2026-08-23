@@ -1,16 +1,20 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import * as caseRepository from '@/repositories/case-repository';
-import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
+import { useSessionStore } from '@/store/session';
 import type { Case } from '@/domain/case';
 import type { FieldExecutive } from '@/domain/field-executive';
 
 import { useCaseList } from './use-case-list';
 
 jest.mock('@/repositories/case-repository');
-jest.mock('@/repositories/field-executive-repository');
 
-const mockFieldExecutive: FieldExecutive = { id: 'fe-001', name: 'Amit Verma', role: 'Field Agent' };
+const mockFieldExecutive: FieldExecutive = {
+  id: 'fe-001',
+  name: 'Amit Verma',
+  email: 'amit.verma@fullscan.example',
+  role: 'Field Agent',
+};
 
 function buildCase(overrides: Partial<Case>): Case {
   return {
@@ -29,7 +33,11 @@ function buildCase(overrides: Partial<Case>): Case {
 describe('useCaseList', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue(mockFieldExecutive);
+    useSessionStore.setState({ fieldExecutive: mockFieldExecutive });
+  });
+
+  afterEach(() => {
+    useSessionStore.setState({ fieldExecutive: null });
   });
 
   it('loads the field executive and cases, grouping counts by bucket', async () => {

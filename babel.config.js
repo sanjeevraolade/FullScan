@@ -14,5 +14,8 @@ module.exports = {
         },
       },
     ],
+    // Required by react-native-reanimated (pulled in transitively by the
+    // Drawer navigator's gesture layer) — must stay last in this array.
+    'react-native-worklets/plugin',
   ],
 };

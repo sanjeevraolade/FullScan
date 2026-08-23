@@ -31,7 +31,21 @@
   "validation": {
     "required": "ఈ ఫీల్డ్ తప్పనిసరి"
   },
+  "drawer": {
+    "items": {
+      "caseList": "కేసు జాబితా",
+      "profile": "ప్రొఫైల్",
+      "settings": "సెట్టింగ్‌లు",
+      "comingSoon": "ఈ విభాగం త్వరలో అందుబాటులోకి వస్తుంది."
+    },
+    "actions": {
+      "logout": "లాగ్ అవుట్"
+    }
+  },
   "caseList": {
+    "navBar": {
+      "menuLabel": "మెనూ తెరవండి"
+    },
     "header": {
       "loadingName": "లోడ్ అవుతోంది...",
       "searchLabel": "కేసులను శోధించండి",

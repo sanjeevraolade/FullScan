@@ -5,6 +5,7 @@
  */
 export const ROUTE_NAMES = {
   LOGIN: 'Login',
+  MAIN: 'Main',
   CASE_LIST: 'CaseList',
   CASE_DETAILS: 'CaseDetails',
 } as const;
@@ -24,6 +25,11 @@ export interface CaseDetailsRouteParams {
 
 export type RootStackParamList = {
   [ROUTE_NAMES.LOGIN]: undefined;
-  [ROUTE_NAMES.CASE_LIST]: undefined;
+  [ROUTE_NAMES.MAIN]: undefined;
   [ROUTE_NAMES.CASE_DETAILS]: CaseDetailsRouteParams;
+};
+
+/** Screens reachable from the drawer, nested under the root stack's Main route. */
+export type DrawerParamList = {
+  [ROUTE_NAMES.CASE_LIST]: undefined;
 };

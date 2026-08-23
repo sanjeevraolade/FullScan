@@ -31,7 +31,21 @@
   "validation": {
     "required": "यह फ़ील्ड आवश्यक है"
   },
+  "drawer": {
+    "items": {
+      "caseList": "केस सूची",
+      "profile": "प्रोफ़ाइल",
+      "settings": "सेटिंग्स",
+      "comingSoon": "यह सेक्शन जल्द ही उपलब्ध होगा।"
+    },
+    "actions": {
+      "logout": "लॉगआउट"
+    }
+  },
   "caseList": {
+    "navBar": {
+      "menuLabel": "मेनू खोलें"
+    },
     "header": {
       "loadingName": "लोड हो रहा है...",
       "searchLabel": "केस खोजें",

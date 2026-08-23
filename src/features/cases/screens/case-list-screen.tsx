@@ -2,6 +2,8 @@ import React, { useState } from 'react';
 import type { ReactElement } from 'react';
 import { FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
+import type { CompositeNavigationProp } from '@react-navigation/native';
+import type { DrawerNavigationProp } from '@react-navigation/drawer';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Alert,
@@ -20,7 +22,7 @@ import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { ROUTE_NAMES } from '@/navigation/routes';
-import type { RootStackParamList } from '@/navigation/routes';
+import type { DrawerParamList, RootStackParamList } from '@/navigation/routes';
 import type { Case, CaseBucket } from '@/domain/case';
 
 import { CaseBucketTabs } from '../components/case-bucket-tabs';
@@ -30,6 +32,17 @@ import { CaseListNavBar } from '../components/case-list-nav-bar';
 import { useCaseList } from '../hooks/use-case-list';
 
 const FILE_NAME = 'case-list-screen.tsx';
+
+/**
+ * Case List is a Drawer screen (see app-drawer-navigator.tsx) nested inside
+ * the root stack's "Main" route, so navigating to Case Details — a sibling
+ * of Main on the root stack, not a drawer screen — needs both navigators'
+ * navigation props composed together.
+ */
+type CaseListNavigationProp = CompositeNavigationProp<
+  DrawerNavigationProp<DrawerParamList, typeof ROUTE_NAMES.CASE_LIST>,
+  NativeStackNavigationProp<RootStackParamList>
+>;
 
 function isAcceptableBucket(bucket: CaseBucket): boolean {
   return bucket === 'new';
@@ -47,7 +60,7 @@ function isCallableBucket(bucket: CaseBucket): boolean {
  */
 export function CaseListScreen(): ReactElement {
   const { t } = useTranslation();
-  const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
+  const navigation = useNavigation<CaseListNavigationProp>();
   const {
     fieldExecutive,
     selectedBucket,
@@ -139,14 +152,14 @@ export function CaseListScreen(): ReactElement {
   return (
     <Box flex={1}>
       <CaseListNavBar />
-      <CaseListHeader
+      {/* <CaseListHeader
         fieldExecutive={fieldExecutive}
         isSearchVisible={isSearchVisible}
         onToggleSearch={handleToggleSearch}
         searchQuery={searchQuery}
         onSearchQueryChange={setSearchQuery}
         onFilterPress={handleFilterPress}
-      />
+      /> */}
 
       <CaseBucketTabs selectedBucket={selectedBucket} bucketCounts={bucketCounts} onSelectBucket={selectBucket} />
 
@@ -163,7 +176,7 @@ export function CaseListScreen(): ReactElement {
         data={visibleCases}
         keyExtractor={(item) => item.id}
         renderItem={renderCase}
-        contentContainerStyle={{ padding: 16, gap: 12, flexGrow: 1 }}
+        contentContainerStyle={{ paddingTop: 16, gap: 12, flexGrow: 1 }}
         refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
         ListEmptyComponent={
           <Box flex={1} justifyContent="center" alignItems="center" py="$10">

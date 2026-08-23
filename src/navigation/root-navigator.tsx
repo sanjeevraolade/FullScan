@@ -4,9 +4,10 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { LoginScreen } from '@/features/authentication';
-import { CaseDetailsScreen, CaseListScreen } from '@/features/cases';
+import { CaseDetailsScreen } from '@/features/cases';
 import { LoggerService } from '@/infrastructure/logger';
 
+import { AppDrawerNavigator } from './app-drawer-navigator';
 import { ROUTE_NAMES } from './routes';
 import type { RootStackParamList } from './routes';
 
@@ -27,8 +28,8 @@ export function RootNavigator(): ReactElement {
     <NavigationContainer>
       <Stack.Navigator initialRouteName={ROUTE_NAMES.LOGIN} screenOptions={{ headerShown: false }}>
         <Stack.Screen name={ROUTE_NAMES.LOGIN} component={LoginScreen} />
-        <Stack.Screen name={ROUTE_NAMES.CASE_LIST} component={CaseListScreen} />
-        <Stack.Screen name={ROUTE_NAMES.CASE_DETAILS} component={CaseDetailsScreen} />
+        <Stack.Screen name={ROUTE_NAMES.MAIN} component={AppDrawerNavigator} />
+        <Stack.Screen name={ROUTE_NAMES.CASE_DETAILS} component={CaseDetailsScreen} options={{ headerShown: true }} />
       </Stack.Navigator>
     </NavigationContainer>
   );

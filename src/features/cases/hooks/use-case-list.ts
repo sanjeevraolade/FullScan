@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { acceptCase as requestAcceptCase, fetchCases } from '@/repositories/case-repository';
-import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
+import { useSessionStore } from '@/store/session';
 import type { Case, CaseBucket } from '@/domain/case';
 import type { FieldExecutive } from '@/domain/field-executive';
 
@@ -50,12 +50,14 @@ function countByBucket(cases: Case[]): Record<CaseBucket, number> {
 }
 
 /**
- * Owns the case-list landing page's data: fetching the field executive
- * profile + assigned cases, tab/search filtering, and the Accept action.
- * Screens read from this hook only — no networking happens in the screen.
+ * Owns the case-list landing page's data: the assigned cases (tab/search
+ * filtering, the Accept action) plus the field executive identity read from
+ * the session store — already populated at login, so it isn't re-fetched
+ * here. Screens read from this hook only — no networking happens in the
+ * screen.
  */
 export function useCaseList(): UseCaseListResult {
-  const [fieldExecutive, setFieldExecutive] = useState<FieldExecutive | null>(null);
+  const fieldExecutive = useSessionStore((state) => state.fieldExecutive);
   const [cases, setCases] = useState<Case[]>([]);
   const [selectedBucket, setSelectedBucket] = useState<CaseBucket>('new');
   const [searchQuery, setSearchQuery] = useState('');
@@ -74,11 +76,7 @@ export function useCaseList(): UseCaseListResult {
     setLoadError(null);
 
     try {
-      const [nextFieldExecutive, nextCases] = await Promise.all([
-        fetchCurrentFieldExecutive(),
-        fetchCases(),
-      ]);
-      setFieldExecutive(nextFieldExecutive);
+      const nextCases = await fetchCases();
       setCases(nextCases);
       LoggerService.info(`${FILE_NAME}: loadCaseList: loaded`, { count: nextCases.length });
     } catch (error: unknown) {

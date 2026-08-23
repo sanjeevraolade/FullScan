@@ -1,8 +1,15 @@
 import React from 'react';
 import type { ReactElement } from 'react';
-import { HStack, Image, Text } from '@gluestack-ui/themed';
+import { useNavigation } from '@react-navigation/native';
+import type { DrawerNavigationProp } from '@react-navigation/drawer';
+import { HStack, Icon, Image, MenuIcon, Pressable, Text } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
+import { ROUTE_NAMES } from '@/navigation/routes';
+import type { DrawerParamList } from '@/navigation/routes';
+
+const FILE_NAME = 'case-list-nav-bar.tsx';
 const LOGO_SIZE = 28;
 
 /**
@@ -13,9 +20,25 @@ const LOGO_SIZE = 28;
  */
 export function CaseListNavBar(): ReactElement {
   const { t } = useTranslation();
+  const navigation = useNavigation<DrawerNavigationProp<DrawerParamList, typeof ROUTE_NAMES.CASE_LIST>>();
+
+  LoggerService.info(`${FILE_NAME}: CaseListNavBar: rendering`);
+
+  const handleMenuPress = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseListNavBar.handleMenuPress: opening drawer`);
+    navigation.openDrawer();
+  };
 
   return (
     <HStack bg="$secondary800" alignItems="center" space="sm" px="$4" py="$3" testID="case-list-nav-bar">
+      <Pressable
+        onPress={handleMenuPress}
+        accessibilityRole="button"
+        accessibilityLabel={t('caseList.navBar.menuLabel')}
+        testID="case-list-menu-button"
+      >
+        <Icon as={MenuIcon} size="lg" color="$textDark0" />
+      </Pressable>
       <Image
         source={require('@/shared/assets/images/icon_72.png')}
         alt={t('login.logoAlt')}

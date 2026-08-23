@@ -31,7 +31,21 @@
   "validation": {
     "required": "This field is required"
   },
+  "drawer": {
+    "items": {
+      "caseList": "Case List",
+      "profile": "Profile",
+      "settings": "Settings",
+      "comingSoon": "This section is coming soon."
+    },
+    "actions": {
+      "logout": "Logout"
+    }
+  },
   "caseList": {
+    "navBar": {
+      "menuLabel": "Open menu"
+    },
     "header": {
       "loadingName": "Loading...",
       "searchLabel": "Search cases",

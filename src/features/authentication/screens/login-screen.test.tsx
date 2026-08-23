@@ -4,8 +4,11 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
+import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
 
 import { LoginScreen } from './login-screen';
+
+jest.mock('@/repositories/field-executive-repository');
 
 /**
  * `render` and `fireEvent` are async in React Native Testing Library 14.
@@ -25,6 +28,12 @@ async function renderLoginScreen(): Promise<void> {
 describe('LoginScreen', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
+    jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue({
+      id: 'fe-001',
+      name: 'Amit Verma',
+      email: 'amit.verma@fullscan.example',
+      role: 'Field Agent',
+    });
   });
 
   afterEach(() => {
