@@ -4,7 +4,7 @@ import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 
 import { LoginScreen } from '@/features/authentication';
-import { CaseDetailsScreen } from '@/features/cases';
+import { CaseCameraScreen, CaseDetailsScreen, CasePhotoViewerScreen } from '@/features/cases';
 import { LoggerService } from '@/infrastructure/logger';
 
 import { AppDrawerNavigator } from './app-drawer-navigator';
@@ -30,6 +30,12 @@ export function RootNavigator(): ReactElement {
         <Stack.Screen name={ROUTE_NAMES.LOGIN} component={LoginScreen} />
         <Stack.Screen name={ROUTE_NAMES.MAIN} component={AppDrawerNavigator} />
         <Stack.Screen name={ROUTE_NAMES.CASE_DETAILS} component={CaseDetailsScreen} options={{ headerShown: true }} />
+        <Stack.Screen name={ROUTE_NAMES.CASE_CAMERA} component={CaseCameraScreen} options={{ headerShown: false }} />
+        <Stack.Screen
+          name={ROUTE_NAMES.CASE_PHOTO_VIEWER}
+          component={CasePhotoViewerScreen}
+          options={{ headerShown: false }}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );

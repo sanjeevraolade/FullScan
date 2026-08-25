@@ -18,6 +18,6 @@ module.exports = {
     ),
   },
   transformIgnorePatterns: [
-    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@react-navigation|react-native-screens|react-native-safe-area-context|react-native-gesture-handler|react-native-drawer-layout|react-native-reanimated|react-native-worklets|@gluestack-ui|@gluestack-style|@legendapp|@expo|i18next|react-i18next)/)',
+    'node_modules/(?!((jest-)?react-native|@react-native(-community)?|@react-navigation|react-native-screens|react-native-safe-area-context|react-native-gesture-handler|react-native-drawer-layout|react-native-reanimated|react-native-worklets|react-native-vision-camera|react-native-nitro-image|react-native-nitro-modules|react-native-view-shot|@gluestack-ui|@gluestack-style|@legendapp|@expo|i18next|react-i18next)/)',
   ],
 };

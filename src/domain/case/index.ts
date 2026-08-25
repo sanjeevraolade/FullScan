@@ -1,4 +1,5 @@
 export type { Case, CaseBucket } from './case.entity';
+export type { CapturedPhotoEvidence } from './case-photo-evidence.entity';
 export type {
   AddressType,
   CaseDetail,

@@ -83,6 +83,13 @@
       ],
       "@config/*": [
         "src/config/*"
+      ],
+      // Its package.json "react-native" export condition points at raw,
+      // unbuilt .tsx that doesn't satisfy our strict flags — Metro still
+      // bundles that file; this only redirects type-checking to its
+      // pre-built .d.ts.
+      "react-native-view-shot": [
+        "node_modules/react-native-view-shot/lib/index.d.ts"
       ]
     },
 

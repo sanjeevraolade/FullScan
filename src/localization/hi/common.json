@@ -155,7 +155,42 @@
       "title": "फ़ोटो साक्ष्य कैप्चर (केवल कैमरा)",
       "tagLabel": "फ़ोटो टैग दस्तावेज़ चुनें",
       "openCamera": "जियोटैग्ड वॉटरमार्क कैमरा खोलें",
-      "cameraComingSoon": "जियोटैग्ड कैमरा कैप्चर जल्द ही उपलब्ध होगा।"
+      "cameraComingSoon": "जियोटैग्ड कैमरा कैप्चर जल्द ही उपलब्ध होगा।",
+      "addAnother": "एक और फ़ोटो कैप्चर करें",
+      "capturedLabel": "कैप्चर की गई फ़ोटो ({{count}})",
+      "viewLabel": "फ़ोटो देखें",
+      "deleteLabel": "फ़ोटो हटाएं",
+      "deleteDialogTitle": "इस फ़ोटो को हटाएं?",
+      "deleteDialogMessage": "यह साक्ष्य फ़ोटो इस सबमिशन से स्थायी रूप से हटा दी जाएगी।",
+      "deleteConfirm": "हटाएं",
+      "deleteCancel": "रद्द करें",
+      "viewerClose": "बंद करें"
+    },
+    "camera": {
+      "liveLabel": "लाइव कैमरा स्ट्रीम",
+      "galleryDisabled": "गैलरी अपलोड अक्षम है",
+      "viewfinderHint": "मकान/दरवाज़े का नंबर व्यूफ़ाइंडर के अंदर संरेखित करें",
+      "geoCoordinates": "जियो-निर्देशांक: अक्षांश {{latitude}} | देशांतर {{longitude}}",
+      "timestamp": "समय: {{value}}",
+      "mockGpsClear": "मॉक जीपीएस: क्लियर | सटीकता: {{accuracy}} मी",
+      "mockGpsDetected": "मॉक जीपीएस: पाया गया | सटीकता: {{accuracy}} मी",
+      "acquiringLocation": "जीपीएस सिग्नल प्राप्त किया जा रहा है…",
+      "cancel": "रद्द करें",
+      "capture": "फ़ोटो कैप्चर करें",
+      "done": "पूर्ण ({{count}})",
+      "sessionThumbnailLabel": "इस सत्र में कैप्चर की गई",
+      "cameraPermissionDenied": "साक्ष्य कैप्चर करने के लिए कैमरा अनुमति आवश्यक है।",
+      "grantPermission": "कैमरा एक्सेस दें",
+      "loadingDevice": "कैमरा तैयार किया जा रहा है…",
+      "locationError": {
+        "permissionDenied": "जियोटैगिंग के लिए स्थान अनुमति आवश्यक है।",
+        "unavailable": "आपका स्थान निर्धारित नहीं हो सका। किसी खुले क्षेत्र में जाकर पुनः प्रयास करें।"
+      },
+      "captureError": {
+        "cameraNotReady": "कैमरा अभी तैयार नहीं है। जीपीएस सिग्नल मिलने तक प्रतीक्षा करें और पुनः प्रयास करें।",
+        "mockLocationDetected": "मॉक लोकेशन पाई गई — असली लोकेशन सेवा चालू होने तक कैप्चर अक्षम है।",
+        "captureFailed": "फ़ोटो कैप्चर करने में विफल। कृपया पुनः प्रयास करें।"
+      }
     }
   }
 }

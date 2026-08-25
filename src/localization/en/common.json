@@ -56,7 +56,7 @@
     "tabs": {
       "new": "New",
       "pending": "Pending",
-      "beyondTat": "Beyond TAT",
+      "beyondTat": "TAT",
       "completed": "Completed"
     },
     "card": {
@@ -155,7 +155,42 @@
       "title": "Photo Evidence Capture (Camera Only)",
       "tagLabel": "Select Photo Tag Document",
       "openCamera": "Open Geotagged Watermark Camera",
-      "cameraComingSoon": "Geotagged camera capture is coming soon."
+      "cameraComingSoon": "Geotagged camera capture is coming soon.",
+      "addAnother": "Capture Another Photo",
+      "capturedLabel": "Captured Photos ({{count}})",
+      "viewLabel": "View photo",
+      "deleteLabel": "Delete photo",
+      "deleteDialogTitle": "Delete this photo?",
+      "deleteDialogMessage": "This evidence photo will be permanently removed from this submission.",
+      "deleteConfirm": "Delete",
+      "deleteCancel": "Cancel",
+      "viewerClose": "Close"
+    },
+    "camera": {
+      "liveLabel": "LIVE CAMERA STREAM",
+      "galleryDisabled": "Gallery Upload Disabled",
+      "viewfinderHint": "Align house/door number inside viewfinder",
+      "geoCoordinates": "Geo-Coordinates: Lat {{latitude}} | Long {{longitude}}",
+      "timestamp": "Timestamp: {{value}}",
+      "mockGpsClear": "Mock GPS: CLEAR | Accuracy: {{accuracy}}m",
+      "mockGpsDetected": "Mock GPS: DETECTED | Accuracy: {{accuracy}}m",
+      "acquiringLocation": "Acquiring GPS fix…",
+      "cancel": "Cancel",
+      "capture": "Capture Photo",
+      "done": "Done ({{count}})",
+      "sessionThumbnailLabel": "Captured this session",
+      "cameraPermissionDenied": "Camera permission is required to capture evidence.",
+      "grantPermission": "Grant Camera Access",
+      "loadingDevice": "Preparing camera…",
+      "locationError": {
+        "permissionDenied": "Location permission is required for geotagging.",
+        "unavailable": "Unable to determine your location. Move to an open area and try again."
+      },
+      "captureError": {
+        "cameraNotReady": "Camera isn't ready yet. Wait for a GPS fix and try again.",
+        "mockLocationDetected": "Mock location detected — capture is disabled until location services are genuine.",
+        "captureFailed": "Failed to capture photo. Please try again."
+      }
     }
   }
 }

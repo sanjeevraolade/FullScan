@@ -1,4 +1,4 @@
-import React, { useLayoutEffect, useState } from 'react';
+import React, { useLayoutEffect, useMemo, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import type { RouteProp } from '@react-navigation/native';
@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
+import type { CapturedPhotoEvidence } from '@/domain/case';
 
 import { CaseInfoSection } from '../components/case-info-section';
 import { CaseInstructionsSection } from '../components/case-instructions-section';
@@ -52,6 +53,17 @@ export function CaseDetailsScreen(): ReactElement {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<CaseDetailsRoute>();
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
+  // Params — not local state — are the source of truth for captured photos:
+  // CaseCamera always hands back the complete set (see `CaseDetailsRouteParams`
+  // doc), so there's nothing here that could go stale or reset independently.
+  const capturedPhotos = useMemo<readonly CapturedPhotoEvidence[]>(
+    () =>
+      (params.capturedPhotos ?? []).map(({ capturedAtIso, ...rest }) => ({
+        ...rest,
+        capturedAt: new Date(capturedAtIso),
+      })),
+    [params.capturedPhotos],
+  );
   const {
     caseDetail,
     referenceData,
@@ -124,8 +136,22 @@ export function CaseDetailsScreen(): ReactElement {
   };
 
   const handleOpenCamera = (): void => {
-    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleOpenCamera: camera capture not implemented yet`);
-    setNoticeKey('caseDetails.photo.cameraComingSoon');
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleOpenCamera: opening geotagged camera`, {
+      caseId: params.caseId,
+      photoTagCode: selectedPhotoTag,
+    });
+    navigation.navigate(ROUTE_NAMES.CASE_CAMERA, {
+      caseId: params.caseId,
+      photoTagCode: selectedPhotoTag,
+      existingPhotos: params.capturedPhotos ?? [],
+    });
+  };
+
+  const handleDeletePhoto = (filePath: string): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleDeletePhoto: removing captured photo`);
+    navigation.setParams({
+      capturedPhotos: (params.capturedPhotos ?? []).filter((photo) => photo.filePath !== filePath),
+    });
   };
 
   const handleSubmit = (): void => {
@@ -227,6 +253,8 @@ export function CaseDetailsScreen(): ReactElement {
           selectedPhotoTag={selectedPhotoTag}
           onSelectPhotoTag={selectPhotoTag}
           onOpenCamera={handleOpenCamera}
+          capturedPhotos={capturedPhotos}
+          onDeletePhoto={handleDeletePhoto}
         />
 
         {submitError ? (
