@@ -62,7 +62,6 @@ export function CaseListScreen(): ReactElement {
   const { t } = useTranslation();
   const navigation = useNavigation<CaseListNavigationProp>();
   const {
-    fieldExecutive,
     selectedBucket,
     selectBucket,
     bucketCounts,
@@ -122,7 +121,7 @@ export function CaseListScreen(): ReactElement {
   if (isLoading) {
     return (
       <Box flex={1}>
-        <CaseListNavBar />
+        <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
         <Box flex={1} justifyContent="center" alignItems="center">
           <Spinner size="large" accessibilityLabel={t('caseList.loading')} testID="case-list-loading-spinner" />
         </Box>
@@ -133,7 +132,7 @@ export function CaseListScreen(): ReactElement {
   if (loadError) {
     return (
       <Box flex={1}>
-        <CaseListNavBar />
+        <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
         <Box flex={1} justifyContent="center" alignItems="center" p="$5">
           <VStack space="md" alignItems="center">
             <Alert action="error" testID="case-list-error-alert">
@@ -151,15 +150,8 @@ export function CaseListScreen(): ReactElement {
 
   return (
     <Box flex={1}>
-      <CaseListNavBar />
-      {/* <CaseListHeader
-        fieldExecutive={fieldExecutive}
-        isSearchVisible={isSearchVisible}
-        onToggleSearch={handleToggleSearch}
-        searchQuery={searchQuery}
-        onSearchQueryChange={setSearchQuery}
-        onFilterPress={handleFilterPress}
-      /> */}
+      <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
+      <CaseListHeader isSearchVisible={isSearchVisible} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
 
       <CaseBucketTabs selectedBucket={selectedBucket} bucketCounts={bucketCounts} onSelectBucket={selectBucket} />
 

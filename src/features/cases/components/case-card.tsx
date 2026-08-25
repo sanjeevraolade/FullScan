@@ -1,9 +1,10 @@
 import React from 'react';
 import type { ReactElement } from 'react';
-import { Button, ButtonIcon, ButtonSpinner, ButtonText, HStack, PhoneIcon, Pressable, Text, VStack } from '@gluestack-ui/themed';
+import { Button, ButtonIcon, ButtonSpinner, ButtonText, HStack, Icon, PhoneIcon, Pressable, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
+import { BriefcaseIcon, MapPinIcon, PersonIcon } from '@/shared/components';
 import type { Case } from '@/domain/case';
 
 const FILE_NAME = 'case-card.tsx';
@@ -51,50 +52,59 @@ export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onC
       accessibilityLabel={t('caseList.card.caseRef', { caseRef: caseItem.caseRef })}
       testID={`case-card-${caseItem.id}`}
     >
-      <VStack space="xs">
-        <Text size="xs" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }}>
-          {t('caseList.card.caseRef', { caseRef: caseItem.caseRef })}
-        </Text>
-        <Text size="sm" color="$textLight600" sx={{ _dark: { color: '$textDark300' } }}>
-          {t('caseList.card.client', { clientName: caseItem.clientName })}
-        </Text>
-        <Text size="md" fontWeight="$semibold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
-          {caseItem.candidateName}
-        </Text>
-        <Text size="sm" color="$textLight600" sx={{ _dark: { color: '$textDark300' } }}>
-          {caseItem.address}
-        </Text>
-
-        {onAccept || onCall ? (
-          <HStack justifyContent="flex-end" mt="$2">
-            {onAccept ? (
-              <Button
-                action="positive"
-                size="sm"
-                onPress={handleAccept}
-                isDisabled={isAccepting}
-                accessibilityLabel={t('caseList.actions.accept')}
-                testID={`case-card-accept-${caseItem.id}`}
-              >
-                {isAccepting ? <ButtonSpinner mr="$2" /> : null}
-                <ButtonText>{t('caseList.actions.accept')}</ButtonText>
-              </Button>
-            ) : null}
-            {onCall ? (
-              <Button
-                action="positive"
-                size="sm"
-                onPress={handleCall}
-                accessibilityLabel={t('caseList.actions.call')}
-                testID={`case-card-call-${caseItem.id}`}
-              >
-                <ButtonIcon as={PhoneIcon} mr="$2" />
-                <ButtonText>{t('caseList.actions.call')}</ButtonText>
-              </Button>
-            ) : null}
+      <HStack space="sm" justifyContent="space-between" alignItems="center">
+        <VStack space="xs" flex={1}>
+          <Text size="sm" fontWeight="$bold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
+            {t('caseList.card.caseRef', { caseRef: caseItem.caseRef })}
+          </Text>
+          <HStack space="xs" alignItems="center">
+            <Icon as={BriefcaseIcon} size="xs" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }} />
+            <Text size="sm" color="$textLight600" sx={{ _dark: { color: '$textDark300' } }}>
+              {t('caseList.card.client', { clientName: caseItem.clientName })}
+            </Text>
           </HStack>
+          <HStack space="xs" alignItems="center">
+            <Icon as={PersonIcon} size="xs" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }} />
+            <Text size="sm" color="$textLight600" sx={{ _dark: { color: '$textDark300' } }}>
+              {t('caseList.card.candidate', { candidateName: caseItem.candidateName })}
+            </Text>
+          </HStack>
+          <HStack space="xs" alignItems="flex-start">
+            <Icon as={MapPinIcon} size="xs" color="$textLight500" mt="$1" sx={{ _dark: { color: '$textDark400' } }} />
+            <Text size="sm" color="$textLight600" flex={1} sx={{ _dark: { color: '$textDark300' } }}>
+              {caseItem.address}
+            </Text>
+          </HStack>
+        </VStack>
+
+        {onAccept ? (
+          <Button
+            action="positive"
+            size="sm"
+            borderRadius="$full"
+            onPress={handleAccept}
+            isDisabled={isAccepting}
+            accessibilityLabel={t('caseList.actions.accept')}
+            testID={`case-card-accept-${caseItem.id}`}
+          >
+            {isAccepting ? <ButtonSpinner mr="$2" /> : null}
+            <ButtonText>{t('caseList.actions.accept')}</ButtonText>
+          </Button>
         ) : null}
-      </VStack>
+        {onCall ? (
+          <Button
+            action="positive"
+            size="sm"
+            borderRadius="$full"
+            onPress={handleCall}
+            accessibilityLabel={t('caseList.actions.call')}
+            testID={`case-card-call-${caseItem.id}`}
+          >
+            <ButtonIcon as={PhoneIcon} mr="$2" />
+            <ButtonText>{t('caseList.actions.call')}</ButtonText>
+          </Button>
+        ) : null}
+      </HStack>
     </Pressable>
   );
 }

@@ -61,7 +61,8 @@
     },
     "card": {
       "caseRef": "Case Ref: {{caseRef}}",
-      "client": "Client: {{clientName}}"
+      "client": "Client: {{clientName}}",
+      "candidate": "Candidate: {{candidateName}}"
     },
     "actions": {
       "accept": "Accept",

@@ -61,7 +61,8 @@
     },
     "card": {
       "caseRef": "केस संदर्भ: {{caseRef}}",
-      "client": "क्लाइंट: {{clientName}}"
+      "client": "क्लाइंट: {{clientName}}",
+      "candidate": "उम्मीदवार: {{candidateName}}"
     },
     "actions": {
       "accept": "स्वीकार करें",

@@ -17,6 +17,14 @@ const BUCKET_LABEL_KEYS: Record<CaseBucket, string> = {
   completed: 'caseList.tabs.completed',
 };
 
+/** Each bucket keeps a consistent semantic colour: filled when selected, a light tint of the same colour otherwise. */
+const BUCKET_COLOR_TOKENS: Record<CaseBucket, { selectedBg: string; unselectedBg: string; selectedText: string; unselectedText: string }> = {
+  new: { selectedBg: '$primary500', unselectedBg: '$primary50', selectedText: '$textLight0', unselectedText: '$primary500' },
+  pending: { selectedBg: '$warning500', unselectedBg: '$warning50', selectedText: '$textLight0', unselectedText: '$warning500' },
+  beyondTat: { selectedBg: '$error500', unselectedBg: '$error50', selectedText: '$textLight0', unselectedText: '$error500' },
+  completed: { selectedBg: '$success500', unselectedBg: '$success50', selectedText: '$textLight0', unselectedText: '$success500' },
+};
+
 export interface CaseBucketTabsProps {
   readonly selectedBucket: CaseBucket;
   readonly bucketCounts: Record<CaseBucket, number>;
@@ -46,6 +54,7 @@ export function CaseBucketTabs({
         {CASE_LIST_BUCKETS.map((bucket) => {
           const isSelected = bucket === selectedBucket;
           const label = t(BUCKET_LABEL_KEYS[bucket]);
+          const colors = BUCKET_COLOR_TOKENS[bucket];
 
           const handlePress = (): void => {
             LoggerService.info(`${FILE_NAME}: CaseBucketTabs.handlePress: tab pressed`, { bucket });
@@ -62,8 +71,7 @@ export function CaseBucketTabs({
               justifyContent="center"
               px="$2"
               rounded="$full"
-              bg={isSelected ? '$primary500' : '$backgroundLight100'}
-              sx={{ _dark: { bg: isSelected ? '$primary500' : '$backgroundDark800' } }}
+              bg={isSelected ? colors.selectedBg : colors.unselectedBg}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
               accessibilityLabel={label}
@@ -71,11 +79,10 @@ export function CaseBucketTabs({
             >
               <TabsTabTitle
                 fontSize="$sm"
-                fontWeight="$medium"
+                fontWeight="$semibold"
                 numberOfLines={1}
                 adjustsFontSizeToFit
-                color={isSelected ? '$textLight0' : '$textLight700'}
-                sx={{ _dark: { color: isSelected ? '$textDark0' : '$textDark300' } }}
+                color={isSelected ? colors.selectedText : colors.unselectedText}
               >
                 {label} ({bucketCounts[bucket]})
               </TabsTabTitle>

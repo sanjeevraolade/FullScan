@@ -61,7 +61,8 @@
     },
     "card": {
       "caseRef": "కేసు రెఫ్: {{caseRef}}",
-      "client": "క్లయింట్: {{clientName}}"
+      "client": "క్లయింట్: {{clientName}}",
+      "candidate": "అభ్యర్థి: {{candidateName}}"
     },
     "actions": {
       "accept": "అంగీకరించండి",
