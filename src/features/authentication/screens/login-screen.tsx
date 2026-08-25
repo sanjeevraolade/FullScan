@@ -25,6 +25,7 @@ import {
 import { Controller } from 'react-hook-form';
 import { useTranslation } from 'react-i18next';
 import { Keyboard, Platform } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 
 import { getAppVersion } from '@/infrastructure/device';
 import { LoggerService } from '@/infrastructure/logger';
@@ -60,141 +61,143 @@ export function LoginScreen(): ReactElement {
   };
 
   return (
-    <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} flex={1}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
-        <Pressable flex={1} accessible={false} onPress={dismissKeyboard}>
-          <Box flex={1} p="$5" justifyContent="space-around">
-            <VStack space="lg">
-              <Image
-                source={require('@/shared/assets/images/icon_72.png')}
-                alt={t('login.logoAlt')}
-                accessibilityLabel={t('login.logoAlt')}
-                resizeMode="contain"
-                width={LOGO_SIZE}
-                height={LOGO_SIZE}
-                alignSelf="center"
-              />
+    <SafeAreaView style={{ flex: 1 }} edges={['top']}>
+      <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} flex={1}>
+        <ScrollView contentContainerStyle={{ flexGrow: 1 }} keyboardShouldPersistTaps="handled">
+          <Pressable flex={1} accessible={false} onPress={dismissKeyboard}>
+            <Box flex={1} p="$5" justifyContent="space-around">
+              <VStack space="lg">
+                <Image
+                  source={require('@/shared/assets/images/icon_72.png')}
+                  alt={t('login.logoAlt')}
+                  accessibilityLabel={t('login.logoAlt')}
+                  resizeMode="contain"
+                  width={LOGO_SIZE}
+                  height={LOGO_SIZE}
+                  alignSelf="center"
+                />
 
-              <VStack space="xs">
-                <Heading size="xl">{t('login.title')}</Heading>
-                <Text size="sm">{t('login.welcome')}</Text>
-              </VStack>
+                <VStack space="xs">
+                  <Heading size="xl">{t('login.title')}</Heading>
+                  <Text size="sm">{t('login.welcome')}</Text>
+                </VStack>
 
-              <Controller
-                control={control}
-                name="username"
-                rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <FormTextField
-                    fieldId="username"
-                    labelKey="login.fields.username"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    errorKey={errors.username?.message}
-                    isRequired
-                    returnKeyType="next"
-                    onSubmitEditing={focusPasswordField}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="username"
+                  rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <FormTextField
+                      fieldId="username"
+                      labelKey="login.fields.username"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      errorKey={errors.username?.message}
+                      isRequired
+                      returnKeyType="next"
+                      onSubmitEditing={focusPasswordField}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="password"
-                rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <FormTextField
-                    ref={passwordInputRef}
-                    fieldId="password"
-                    labelKey="login.fields.password"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    errorKey={errors.password?.message}
-                    isRequired
-                    isSecure
-                    returnKeyType="done"
-                    onSubmitEditing={submitLogin}
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="password"
+                  rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <FormTextField
+                      ref={passwordInputRef}
+                      fieldId="password"
+                      labelKey="login.fields.password"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      errorKey={errors.password?.message}
+                      isRequired
+                      isSecure
+                      returnKeyType="done"
+                      onSubmitEditing={submitLogin}
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="employeeId"
-                render={({ field: { value, onChange, onBlur } }) => (
-                  <FormTextField
-                    fieldId="employeeId"
-                    labelKey="login.fields.employeeId"
-                    value={value}
-                    onChangeText={onChange}
-                    onBlur={onBlur}
-                    errorKey={errors.employeeId?.message}
-                    returnKeyType="done"
-                  />
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="employeeId"
+                  render={({ field: { value, onChange, onBlur } }) => (
+                    <FormTextField
+                      fieldId="employeeId"
+                      labelKey="login.fields.employeeId"
+                      value={value}
+                      onChangeText={onChange}
+                      onBlur={onBlur}
+                      errorKey={errors.employeeId?.message}
+                      returnKeyType="done"
+                    />
+                  )}
+                />
 
-              <Controller
-                control={control}
-                name="rememberMe"
-                render={({ field: { value, onChange } }) => (
-                  <Checkbox
-                    value="rememberMe"
-                    isChecked={value}
-                    onChange={(nextIsChecked: boolean) => {
-                      LoggerService.info(`${FILE_NAME}: LoginScreen: rememberMe toggled`, {
-                        isChecked: nextIsChecked,
-                      });
-                      onChange(nextIsChecked);
-                    }}
-                    accessibilityLabel={t('login.fields.rememberMe')}
-                    testID="rememberMe-checkbox"
-                  >
-                    <CheckboxIndicator mr="$2">
-                      <CheckboxIcon as={CheckIcon} />
-                    </CheckboxIndicator>
-                    <CheckboxLabel>{t('login.fields.rememberMe')}</CheckboxLabel>
-                  </Checkbox>
-                )}
-              />
+                <Controller
+                  control={control}
+                  name="rememberMe"
+                  render={({ field: { value, onChange } }) => (
+                    <Checkbox
+                      value="rememberMe"
+                      isChecked={value}
+                      onChange={(nextIsChecked: boolean) => {
+                        LoggerService.info(`${FILE_NAME}: LoginScreen: rememberMe toggled`, {
+                          isChecked: nextIsChecked,
+                        });
+                        onChange(nextIsChecked);
+                      }}
+                      accessibilityLabel={t('login.fields.rememberMe')}
+                      testID="rememberMe-checkbox"
+                    >
+                      <CheckboxIndicator mr="$2">
+                        <CheckboxIcon as={CheckIcon} />
+                      </CheckboxIndicator>
+                      <CheckboxLabel>{t('login.fields.rememberMe')}</CheckboxLabel>
+                    </Checkbox>
+                  )}
+                />
 
-              {loginError ? (
-                <Alert action="error" testID="login-error-alert">
-                  <AlertIcon as={AlertCircleIcon} mr="$2" />
-                  <AlertText>{t(`login.errors.${loginError}`)}</AlertText>
-                </Alert>
-              ) : null}
-
-              <Button
-                onPress={submitLogin}
-                isDisabled={isSubmitting || !canSubmit}
-                accessibilityLabel={t('login.actions.submit')}
-                testID="login-submit-button"
-              >
-                {isSubmitting ? (
-                  <ButtonSpinner
-                    mr="$2"
-                    accessibilityLabel={t('login.actions.submitting')}
-                    testID="login-submit-spinner"
-                  />
+                {loginError ? (
+                  <Alert action="error" testID="login-error-alert">
+                    <AlertIcon as={AlertCircleIcon} mr="$2" />
+                    <AlertText>{t(`login.errors.${loginError}`)}</AlertText>
+                  </Alert>
                 ) : null}
-                <ButtonText>{t('login.actions.submit')}</ButtonText>
-              </Button>
 
-              <VStack space="xs" alignItems="center">
-                <Text size="xs" testID="login-footer-version">
-                  {t('login.footer.version', { version: appVersion })}
-                </Text>
-                <Text size="xs" testID="login-footer-copyright">
-                  {t('login.footer.copyright', { year: copyrightYear })}
-                </Text>
+                <Button
+                  onPress={submitLogin}
+                  isDisabled={isSubmitting || !canSubmit}
+                  accessibilityLabel={t('login.actions.submit')}
+                  testID="login-submit-button"
+                >
+                  {isSubmitting ? (
+                    <ButtonSpinner
+                      mr="$2"
+                      accessibilityLabel={t('login.actions.submitting')}
+                      testID="login-submit-spinner"
+                    />
+                  ) : null}
+                  <ButtonText>{t('login.actions.submit')}</ButtonText>
+                </Button>
+
+                <VStack space="xs" alignItems="center">
+                  <Text size="xs" testID="login-footer-version">
+                    {t('login.footer.version', { version: appVersion })}
+                  </Text>
+                  <Text size="xs" testID="login-footer-copyright">
+                    {t('login.footer.copyright', { year: copyrightYear })}
+                  </Text>
+                </VStack>
               </VStack>
-            </VStack>
-          </Box>
-        </Pressable>
-      </ScrollView>
-    </KeyboardAvoidingView>
+            </Box>
+          </Pressable>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }

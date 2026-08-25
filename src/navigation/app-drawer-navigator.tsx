@@ -23,7 +23,7 @@ export function AppDrawerNavigator(): ReactElement {
   return (
     <Drawer.Navigator
       initialRouteName={ROUTE_NAMES.CASE_LIST}
-      screenOptions={{ headerShown: false }}
+      screenOptions={{ headerShown: true }}
       drawerContent={(props) => <AppDrawerContent {...props} />}
     >
       <Drawer.Screen name={ROUTE_NAMES.CASE_LIST} component={CaseListScreen} />

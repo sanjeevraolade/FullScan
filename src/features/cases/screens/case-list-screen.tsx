@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { FlatList } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
@@ -13,7 +13,13 @@ import {
   Box,
   Button,
   ButtonText,
+  HStack,
+  Icon,
+  Image,
+  MenuIcon,
+  Pressable,
   RefreshControl,
+  SearchIcon,
   Spinner,
   Text,
   VStack,
@@ -23,13 +29,15 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { DrawerParamList, RootStackParamList } from '@/navigation/routes';
+import { FilterIcon } from '@/shared/components';
 import type { Case, CaseBucket } from '@/domain/case';
 
 import { CaseBucketTabs } from '../components/case-bucket-tabs';
 import { CaseCard } from '../components/case-card';
 import { CaseListHeader } from '../components/case-list-header';
-import { CaseListNavBar } from '../components/case-list-nav-bar';
 import { useCaseList } from '../hooks/use-case-list';
+
+const LOGO_SIZE = 28;
 
 const FILE_NAME = 'case-list-screen.tsx';
 
@@ -96,6 +104,11 @@ export function CaseListScreen(): ReactElement {
     setNoticeKey('caseList.actions.callComingSoon');
   };
 
+  const handleMenuPress = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseListScreen.handleMenuPress: opening drawer`);
+    navigation.openDrawer();
+  };
+
   const handleCasePress = (caseItem: Case): void => {
     LoggerService.info(`${FILE_NAME}: CaseListScreen.handleCasePress: opening case details`, {
       caseId: caseItem.id,
@@ -118,39 +131,81 @@ export function CaseListScreen(): ReactElement {
     />
   );
 
+  useLayoutEffect(() => {
+    navigation.setOptions({
+      headerTitleAlign: 'left',
+      headerLeft: () => (
+        <Pressable
+          onPress={handleMenuPress}
+          accessibilityRole="button"
+          accessibilityLabel={t('caseList.navBar.menuLabel')}
+          testID="case-list-menu-button"
+        >
+          <Icon as={MenuIcon} size="lg" color="$textLight700" sx={{ _dark: { color: '$textDark300' } }} ml="$4" />
+        </Pressable>
+      ),
+      headerTitle: () => (
+        <HStack space="sm" alignItems="center">
+          <Image
+            source={require('@/shared/assets/images/icon_72.png')}
+            alt={t('login.logoAlt')}
+            accessibilityLabel={t('login.logoAlt')}
+            resizeMode="contain"
+            width={LOGO_SIZE}
+            height={LOGO_SIZE}
+          />
+          <Text size="lg" fontWeight="$bold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
+            {t('common.appName')}
+          </Text>
+        </HStack>
+      ),
+      headerRight: () => (
+        <HStack space="lg" alignItems="center" mr="$4">
+          <Pressable
+            onPress={handleToggleSearch}
+            accessibilityLabel={t('caseList.header.searchLabel')}
+            testID="case-list-search-toggle"
+          >
+            <Icon as={SearchIcon} size="lg" color="$textLight700" sx={{ _dark: { color: '$textDark300' } }} />
+          </Pressable>
+          <Pressable
+            onPress={handleFilterPress}
+            accessibilityLabel={t('caseList.header.filterLabel')}
+            testID="case-list-filter-button"
+          >
+            <Icon as={FilterIcon} size="lg" color="$textLight700" sx={{ _dark: { color: '$textDark300' } }} />
+          </Pressable>
+        </HStack>
+      ),
+    });
+  }, [navigation, t]);
+
   if (isLoading) {
     return (
-      <Box flex={1}>
-        <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
-        <Box flex={1} justifyContent="center" alignItems="center">
-          <Spinner size="large" accessibilityLabel={t('caseList.loading')} testID="case-list-loading-spinner" />
-        </Box>
+      <Box flex={1} justifyContent="center" alignItems="center">
+        <Spinner size="large" accessibilityLabel={t('caseList.loading')} testID="case-list-loading-spinner" />
       </Box>
     );
   }
 
   if (loadError) {
     return (
-      <Box flex={1}>
-        <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
-        <Box flex={1} justifyContent="center" alignItems="center" p="$5">
-          <VStack space="md" alignItems="center">
-            <Alert action="error" testID="case-list-error-alert">
-              <AlertIcon as={AlertCircleIcon} mr="$2" />
-              <AlertText>{t(`caseList.errors.${loadError}`)}</AlertText>
-            </Alert>
-            <Button onPress={refresh} accessibilityLabel={t('caseList.actions.retry')} testID="case-list-retry-button">
-              <ButtonText>{t('caseList.actions.retry')}</ButtonText>
-            </Button>
-          </VStack>
-        </Box>
+      <Box flex={1} justifyContent="center" alignItems="center" p="$5">
+        <VStack space="md" alignItems="center">
+          <Alert action="error" testID="case-list-error-alert">
+            <AlertIcon as={AlertCircleIcon} mr="$2" />
+            <AlertText>{t(`caseList.errors.${loadError}`)}</AlertText>
+          </Alert>
+          <Button onPress={refresh} accessibilityLabel={t('caseList.actions.retry')} testID="case-list-retry-button">
+            <ButtonText>{t('caseList.actions.retry')}</ButtonText>
+          </Button>
+        </VStack>
       </Box>
     );
   }
 
   return (
     <Box flex={1}>
-      <CaseListNavBar onToggleSearch={handleToggleSearch} onFilterPress={handleFilterPress} />
       <CaseListHeader isSearchVisible={isSearchVisible} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
 
       <CaseBucketTabs selectedBucket={selectedBucket} bucketCounts={bucketCounts} onSelectBucket={selectBucket} />
