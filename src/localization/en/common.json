@@ -68,7 +68,8 @@
       "accept": "Accept",
       "call": "Call",
       "callComingSoon": "Masked calling is coming soon.",
-      "retry": "Retry"
+      "retry": "Retry",
+      "viewFormDetails": "View Form Details"
     },
     "loading": "Loading cases...",
     "empty": "No cases in this bucket.",
@@ -77,8 +78,84 @@
     }
   },
   "caseDetails": {
-    "back": "Back",
     "title": "Case Ref: {{caseRef}}",
-    "comingSoon": "The full verification workflow for this case is coming soon."
+    "loading": "Loading case...",
+    "submit": "Submit Verification Report",
+    "errors": {
+      "network": "Unable to load this case. Check your connection and try again.",
+      "submitFailed": "Unable to submit the verification report. Check your connection and try again."
+    },
+    "info": {
+      "title": "Case Information",
+      "sla": "SLA: {{tatDue}}",
+      "candidateName": "Candidate Name",
+      "fatherOrSpouseName": "Father's / Spouse Name",
+      "employerName": "Employer Name",
+      "verificationType": "Verification Type",
+      "client": "Client / Package"
+    },
+    "location": {
+      "title": "Location Address",
+      "coordinates": "Lat: {{latitude}} | Long: {{longitude}}",
+      "tapHint": "Tap location to trigger map route & distance check",
+      "getDirections": "Get Directions",
+      "gpsMatch": "GPS Match: {{distance}}",
+      "gpsAlert": "GPS Alert: {{distance}}",
+      "distanceMeters": "{{distance}}m from address",
+      "directionsComingSoon": "Turn-by-turn directions are coming soon."
+    },
+    "call": {
+      "title": "Masked Phone Actions",
+      "privacyLock": "100% Privacy Lock",
+      "description": "Actual numbers are never visible to prevent misuse of candidate contact details. Tap buttons to initiate masked relay calls.",
+      "primaryLabel": "Primary Phone",
+      "secondaryLabel": "Secondary Phone",
+      "callPrimary": "Call Primary",
+      "callSecondary": "Call Secondary",
+      "comingSoon": "Masked calling is coming soon."
+    },
+    "instructions": {
+      "title": "Instructions & Field Notes",
+      "clientInstructions": "Client Instructions (SOP):",
+      "fieldExecutiveNotes": "Special Field Executive Notes:"
+    },
+    "outcome": {
+      "title": "Select Verification Status Outcome",
+      "statusLabel": "Verification Status",
+      "utvTitle": "UTV Options (Unable To Verify)",
+      "utvReasonLabel": "Reason",
+      "utvRemarksLabel": "Remarks",
+      "utvRemarksPlaceholder": "Capture detailed UTV remarks...",
+      "insufficientTitle": "Insufficient Options",
+      "insufficientReasonLabel": "Reason",
+      "insufficientRemarksLabel": "Remarks",
+      "insufficientRemarksPlaceholder": "Capture insufficient reason remarks..."
+    },
+    "residence": {
+      "title": "Verified Residence & Respondent Details",
+      "residenceTypeLabel": "Type of Residence",
+      "residenceTypeOptions": {
+        "owned": "Owned",
+        "rented": "Rented",
+        "hostel": "Hostel"
+      },
+      "addressTypeLabel": "Type of Address",
+      "addressTypeOptions": {
+        "present": "Present",
+        "permanent": "Permanent"
+      },
+      "respondentNameLabel": "Respondent Name",
+      "respondentRelationLabel": "Relationship with Candidate",
+      "signatureLabel": "Respondent Signature",
+      "signatureCapture": "Tap to Capture Signature on Screen",
+      "signatureCaptured": "Signature Captured (Tap to Edit)",
+      "signatureComingSoon": "On-screen signature capture is coming soon."
+    },
+    "photo": {
+      "title": "Photo Evidence Capture (Camera Only)",
+      "tagLabel": "Select Photo Tag Document",
+      "openCamera": "Open Geotagged Watermark Camera",
+      "cameraComingSoon": "Geotagged camera capture is coming soon."
+    }
   }
 }

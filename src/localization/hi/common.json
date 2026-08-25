@@ -68,7 +68,8 @@
       "accept": "स्वीकार करें",
       "call": "कॉल करें",
       "callComingSoon": "छिपी हुई कॉलिंग जल्द ही उपलब्ध होगी।",
-      "retry": "पुनः प्रयास करें"
+      "retry": "पुनः प्रयास करें",
+      "viewFormDetails": "फ़ॉर्म विवरण देखें"
     },
     "loading": "केस लोड हो रहे हैं...",
     "empty": "इस श्रेणी में कोई केस नहीं है।",
@@ -77,8 +78,84 @@
     }
   },
   "caseDetails": {
-    "back": "वापस",
     "title": "केस संदर्भ: {{caseRef}}",
-    "comingSoon": "इस केस के लिए पूर्ण सत्यापन प्रक्रिया जल्द ही उपलब्ध होगी।"
+    "loading": "केस लोड हो रहा है...",
+    "submit": "सत्यापन रिपोर्ट सबमिट करें",
+    "errors": {
+      "network": "यह केस लोड नहीं हो सका। अपना कनेक्शन जांचें और पुनः प्रयास करें।",
+      "submitFailed": "सत्यापन रिपोर्ट सबमिट नहीं हो सकी। अपना कनेक्शन जांचें और पुनः प्रयास करें।"
+    },
+    "info": {
+      "title": "केस जानकारी",
+      "sla": "एसएलए: {{tatDue}}",
+      "candidateName": "उम्मीदवार का नाम",
+      "fatherOrSpouseName": "पिता / पति का नाम",
+      "employerName": "नियोक्ता का नाम",
+      "verificationType": "सत्यापन प्रकार",
+      "client": "क्लाइंट / पैकेज"
+    },
+    "location": {
+      "title": "स्थान का पता",
+      "coordinates": "अक्षांश: {{latitude}} | देशांतर: {{longitude}}",
+      "tapHint": "मानचित्र मार्ग और दूरी जांच के लिए स्थान पर टैप करें",
+      "getDirections": "दिशा-निर्देश प्राप्त करें",
+      "gpsMatch": "जीपीएस मेल: {{distance}}",
+      "gpsAlert": "जीपीएस चेतावनी: {{distance}}",
+      "distanceMeters": "पते से {{distance}} मीटर दूर",
+      "directionsComingSoon": "टर्न-बाय-टर्न दिशा-निर्देश जल्द ही उपलब्ध होंगे।"
+    },
+    "call": {
+      "title": "छिपे हुए फ़ोन विकल्प",
+      "privacyLock": "100% गोपनीयता लॉक",
+      "description": "उम्मीदवार के संपर्क विवरण के दुरुपयोग को रोकने के लिए वास्तविक नंबर कभी नहीं दिखाए जाते। छिपी हुई रिले कॉल शुरू करने के लिए बटन दबाएं।",
+      "primaryLabel": "प्राथमिक फ़ोन",
+      "secondaryLabel": "द्वितीयक फ़ोन",
+      "callPrimary": "प्राथमिक को कॉल करें",
+      "callSecondary": "द्वितीयक को कॉल करें",
+      "comingSoon": "छिपी हुई कॉलिंग जल्द ही उपलब्ध होगी।"
+    },
+    "instructions": {
+      "title": "निर्देश और फ़ील्ड नोट्स",
+      "clientInstructions": "क्लाइंट निर्देश (एसओपी):",
+      "fieldExecutiveNotes": "विशेष फ़ील्ड एग्जीक्यूटिव नोट्स:"
+    },
+    "outcome": {
+      "title": "सत्यापन स्थिति परिणाम चुनें",
+      "statusLabel": "सत्यापन स्थिति",
+      "utvTitle": "यूटीवी विकल्प (सत्यापित करने में असमर्थ)",
+      "utvReasonLabel": "कारण",
+      "utvRemarksLabel": "टिप्पणी",
+      "utvRemarksPlaceholder": "विस्तृत यूटीवी टिप्पणी दर्ज करें...",
+      "insufficientTitle": "अपर्याप्त विकल्प",
+      "insufficientReasonLabel": "कारण",
+      "insufficientRemarksLabel": "टिप्पणी",
+      "insufficientRemarksPlaceholder": "अपर्याप्त कारण की टिप्पणी दर्ज करें..."
+    },
+    "residence": {
+      "title": "सत्यापित निवास और उत्तरदाता विवरण",
+      "residenceTypeLabel": "निवास का प्रकार",
+      "residenceTypeOptions": {
+        "owned": "स्वयं का",
+        "rented": "किराए का",
+        "hostel": "छात्रावास"
+      },
+      "addressTypeLabel": "पते का प्रकार",
+      "addressTypeOptions": {
+        "present": "वर्तमान",
+        "permanent": "स्थायी"
+      },
+      "respondentNameLabel": "उत्तरदाता का नाम",
+      "respondentRelationLabel": "उम्मीदवार से संबंध",
+      "signatureLabel": "उत्तरदाता के हस्ताक्षर",
+      "signatureCapture": "स्क्रीन पर हस्ताक्षर करने के लिए टैप करें",
+      "signatureCaptured": "हस्ताक्षर कैप्चर किए गए (संपादित करने के लिए टैप करें)",
+      "signatureComingSoon": "स्क्रीन पर हस्ताक्षर कैप्चर जल्द ही उपलब्ध होगा।"
+    },
+    "photo": {
+      "title": "फ़ोटो साक्ष्य कैप्चर (केवल कैमरा)",
+      "tagLabel": "फ़ोटो टैग दस्तावेज़ चुनें",
+      "openCamera": "जियोटैग्ड वॉटरमार्क कैमरा खोलें",
+      "cameraComingSoon": "जियोटैग्ड कैमरा कैप्चर जल्द ही उपलब्ध होगा।"
+    }
   }
 }

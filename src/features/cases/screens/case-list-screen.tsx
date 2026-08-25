@@ -113,12 +113,7 @@ export function CaseListScreen(): ReactElement {
     LoggerService.info(`${FILE_NAME}: CaseListScreen.handleCasePress: opening case details`, {
       caseId: caseItem.id,
     });
-    navigation.navigate(ROUTE_NAMES.CASE_DETAILS, {
-      caseId: caseItem.id,
-      caseRef: caseItem.caseRef,
-      candidateName: caseItem.candidateName,
-      clientName: caseItem.clientName,
-    });
+    navigation.navigate(ROUTE_NAMES.CASE_DETAILS, { caseId: caseItem.id });
   };
 
   const renderCase = ({ item }: { item: Case }): ReactElement => (

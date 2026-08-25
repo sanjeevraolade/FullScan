@@ -5,10 +5,12 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
 import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
+import * as referenceDataRepository from '@/repositories/reference-data-repository';
 
 import { LoginScreen } from './login-screen';
 
 jest.mock('@/repositories/field-executive-repository');
+jest.mock('@/repositories/reference-data-repository');
 
 /**
  * `render` and `fireEvent` are async in React Native Testing Library 14.
@@ -33,6 +35,12 @@ describe('LoginScreen', () => {
       name: 'Amit Verma',
       email: 'amit.verma@fullscan.example',
       role: 'Field Agent',
+    });
+    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue({
+      verificationTypeStatuses: [],
+      utvOptions: [],
+      insuffOptions: [],
+      photoTypes: [],
     });
   });
 

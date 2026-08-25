@@ -7,9 +7,11 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import { LoggerService } from '@/infrastructure/logger';
 import { login } from '@/repositories/authentication-repository';
 import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
+import { fetchReferenceData } from '@/repositories/reference-data-repository';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import { useSessionStore } from '@/store/session';
+import { useReferenceDataStore } from '@/store/reference-data';
 
 import type { LoginErrorKey, LoginFormValues } from '../types/login-form.types';
 
@@ -86,8 +88,12 @@ export function useLoginForm(): UseLoginFormResult {
         setLoginError(null);
         try {
           await login({ username: values.username, password: values.password });
-          const fieldExecutive = await fetchCurrentFieldExecutive();
+          const [fieldExecutive, referenceData] = await Promise.all([
+            fetchCurrentFieldExecutive(),
+            fetchReferenceData(),
+          ]);
           useSessionStore.getState().setFieldExecutive(fieldExecutive);
+          useReferenceDataStore.getState().setReferenceData(referenceData);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);
           /* 
           Navigation.replace is used here instead of navigate to prevent the user from going back to the login screen after a successful login. This ensures that the login screen is removed from the navigation stack, providing a better user experience.

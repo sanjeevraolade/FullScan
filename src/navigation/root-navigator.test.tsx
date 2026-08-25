@@ -5,11 +5,13 @@ import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
 import * as caseRepository from '@/repositories/case-repository';
 import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
+import * as referenceDataRepository from '@/repositories/reference-data-repository';
 
 import { RootNavigator } from './root-navigator';
 
 jest.mock('@/repositories/field-executive-repository');
 jest.mock('@/repositories/case-repository');
+jest.mock('@/repositories/reference-data-repository');
 
 async function loginAndOpenDrawer(): Promise<void> {
   await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
@@ -30,6 +32,12 @@ describe('RootNavigator', () => {
       role: 'Field Agent',
     });
     jest.mocked(caseRepository.fetchCases).mockResolvedValue([]);
+    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue({
+      verificationTypeStatuses: [],
+      utvOptions: [],
+      insuffOptions: [],
+      photoTypes: [],
+    });
   });
 
   afterEach(() => {

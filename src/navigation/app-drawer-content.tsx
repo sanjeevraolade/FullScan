@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import { LogoutIcon } from '@/shared/components';
 import { useSessionStore } from '@/store/session';
+import { useReferenceDataStore } from '@/store/reference-data';
 
 import { ROUTE_NAMES } from './routes';
 import type { RootStackParamList } from './routes';
@@ -49,6 +50,7 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
   const { t } = useTranslation();
   const fieldExecutive = useSessionStore((state) => state.fieldExecutive);
   const clearSession = useSessionStore((state) => state.clearSession);
+  const clearReferenceData = useReferenceDataStore((state) => state.clearReferenceData);
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
 
   LoggerService.info(`${FILE_NAME}: AppDrawerContent: rendering`);
@@ -76,6 +78,7 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
   const handleLogoutPress = (): void => {
     LoggerService.info(`${FILE_NAME}: AppDrawerContent.handleLogoutPress: logging out`);
     clearSession();
+    clearReferenceData();
     // `.replace()` rather than `.reset()` — swaps "Main" for "Login" at the
     // same stack index so a subsequent back-button press can't return to an
     // authenticated screen post-logout, without needing a full state reset.
