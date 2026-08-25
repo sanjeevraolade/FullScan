@@ -34,15 +34,7 @@ export function CaseDetailsScreen(): ReactElement {
 
   return (
     <Box flex={1}>
-      <HStack alignItems="center" space="sm" px="$4" pt="$4" pb="$2">
-        <Pressable
-          onPress={handleBackPress}
-          accessibilityRole="button"
-          accessibilityLabel={t('caseDetails.back')}
-          testID="case-details-back-button"
-        >
-          <Icon as={ArrowLeftIcon} size="lg" color="$textLight700" sx={{ _dark: { color: '$textDark300' } }} />
-        </Pressable>
+      <HStack alignItems="center" space="sm" px="$4" pt="$4" pb="$2">       
         <Text size="md" fontWeight="$semibold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
           {t('caseDetails.title', { caseRef: params.caseRef })}
         </Text>

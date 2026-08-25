@@ -1,7 +1,5 @@
 import React from 'react';
 import type { ReactElement } from 'react';
-import { config } from '@gluestack-ui/config';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
