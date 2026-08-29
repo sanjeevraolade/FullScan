@@ -16,5 +16,8 @@ export function getReferenceData(): ReferenceData {
     utvOptions: mapOptions(referenceDataDao.findDropdownOptionsByCategory('utv_option')),
     insuffOptions: mapOptions(referenceDataDao.findDropdownOptionsByCategory('insuff_option')),
     photoTypes: mapOptions(referenceDataDao.findDropdownOptionsByCategory('photo_type')),
+    componentStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('component_status')),
+    actionStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('action_status')),
+    profileStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('profile_status')),
   };
 }

@@ -1,10 +1,17 @@
 import * as caseDao from '../db/case.dao.js';
 import { AppError } from '../utils/app-error.js';
-import type { CaseDetail, CaseRow, CaseSummary, VerificationOutcomeInput } from '../types/case.types.js';
+import type {
+  CaseComponentRow,
+  CaseDetail,
+  CaseSummary,
+  CostRequested,
+  VerificationOutcomeInput,
+} from '../types/case.types.js';
 
-function mapCase(row: CaseRow): CaseSummary {
+function mapSummary(row: CaseComponentRow): CaseSummary {
   return {
     id: row.id,
+    caseId: row.case_id,
     caseRef: row.case_ref,
     clientName: row.client_name,
     candidateName: row.candidate_name,
@@ -15,9 +22,24 @@ function mapCase(row: CaseRow): CaseSummary {
   };
 }
 
-function mapCaseDetail(row: CaseRow): CaseDetail {
+function mapCostRequested(row: CaseComponentRow): CostRequested | null {
+  return row.cost_currency && row.cost_amount !== null
+    ? { currency: row.cost_currency, amount: row.cost_amount }
+    : null;
+}
+
+function mapDetail(row: CaseComponentRow): CaseDetail {
+  const siblings = caseDao.findSiblingComponents(row.case_id, row.id).map((sibling) => ({
+    id: sibling.id,
+    verificationType: sibling.verification_type,
+    addressType: sibling.address_type,
+    componentStatus: sibling.component_status,
+    bucket: sibling.bucket,
+  }));
+
   return {
     id: row.id,
+    caseId: row.case_id,
     caseRef: row.case_ref,
     bucket: row.bucket,
     tatDueAt: row.tat_due_at,
@@ -27,6 +49,8 @@ function mapCaseDetail(row: CaseRow): CaseDetail {
     verificationType: row.verification_type,
     clientName: row.client_name,
     address: row.address,
+    addressType: row.address_type,
+    residenceType: row.residence_type,
     gpsCheck: {
       targetLatitude: row.target_latitude,
       targetLongitude: row.target_longitude,
@@ -42,71 +66,85 @@ function mapCaseDetail(row: CaseRow): CaseDetail {
       row.respondent_name && row.respondent_relation
         ? { name: row.respondent_name, relation: row.respondent_relation }
         : null,
+    componentStatus: row.component_status,
+    actionStatus: row.action_status,
+    profileStatus: row.profile_status,
+    costRequested: mapCostRequested(row),
+    insuffRaisedAt: row.insuff_raised_date,
+    insuffClearedAt: row.insuff_cleared_date,
+    addlDocRequestedAt: row.addl_doc_requested_date,
+    addlDocClearedAt: row.addl_doc_cleared_date,
+    costApprovalRequestedAt: row.cost_approval_requested_date,
+    costApprovedAt: row.cost_approved_date,
+    costRejectedAt: row.cost_rejected_date,
+    siblingComponents: siblings,
   };
 }
 
-const MIN_RANDOM_NEW_CASES = 3;
-const MAX_RANDOM_NEW_CASES = 10;
+const MIN_RANDOM_NEW_COMPONENTS = 3;
+const MAX_RANDOM_NEW_COMPONENTS = 10;
 
 /**
- * Returns the current field executive's actually-assigned cases (pending,
- * beyond TAT, completed) plus a fresh random draw from the whole 'new'
- * bucket pool — the New tab simulates a live incoming-case feed, so it is
- * re-randomized on every request rather than reflecting a fixed assignment.
- * The app groups by bucket and computes tab counts client-side
+ * Returns the current field executive's actually-assigned components
+ * (pending, beyond TAT, completed) plus a fresh random draw from the whole
+ * 'new' bucket pool — the New tab simulates a live incoming-case feed, so it
+ * is re-randomized on every request rather than reflecting a fixed
+ * assignment. The app groups by bucket and computes tab counts client-side
  * (offline-first: fetch once, cache, filter locally).
  */
 export function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): CaseSummary[] {
   const assignedRows = caseDao
-    .findCasesByFieldExecutive(fieldExecutiveId)
+    .findComponentsByFieldExecutive(fieldExecutiveId)
     .filter((row) => row.bucket !== 'new');
 
   const randomNewCount =
-    MIN_RANDOM_NEW_CASES + Math.floor(Math.random() * (MAX_RANDOM_NEW_CASES - MIN_RANDOM_NEW_CASES + 1));
-  const randomNewRows = caseDao.findRandomNewCases(randomNewCount);
+    MIN_RANDOM_NEW_COMPONENTS +
+    Math.floor(Math.random() * (MAX_RANDOM_NEW_COMPONENTS - MIN_RANDOM_NEW_COMPONENTS + 1));
+  const randomNewRows = caseDao.findRandomNewComponents(randomNewCount);
 
-  return [...randomNewRows, ...assignedRows].map(mapCase);
+  return [...randomNewRows, ...assignedRows].map(mapSummary);
 }
 
 /**
- * Moves a case from the New bucket to Pending/In Progress, and assigns it to
- * the accepting field executive — 'new' cases are randomly drawn from the
- * whole pool per request, so acceptance is what actually claims ownership.
+ * Moves a component from the New bucket to Pending/In Progress, and assigns
+ * it to the accepting field executive — 'new' components are randomly drawn
+ * from the whole pool per request, so acceptance is what actually claims
+ * ownership.
  */
-export function acceptCase(caseId: string, fieldExecutiveId: string): CaseSummary {
-  const existing = caseDao.findCaseById(caseId);
+export function acceptCase(componentId: string, fieldExecutiveId: string): CaseSummary {
+  const existing = caseDao.findComponentById(componentId);
 
   if (!existing) {
-    throw new AppError(404, `Case not found: ${caseId}`);
+    throw new AppError(404, `Case component not found: ${componentId}`);
   }
 
   if (existing.bucket !== 'new') {
-    throw new AppError(409, `Case ${caseId} is not in the New bucket`);
+    throw new AppError(409, `Case component ${componentId} is not in the New bucket`);
   }
 
-  const updated = caseDao.updateCaseBucket(caseId, 'pending', fieldExecutiveId);
-  return mapCase(updated);
+  const updated = caseDao.updateComponentBucket(componentId, 'pending', fieldExecutiveId);
+  return mapSummary(updated);
 }
 
 /** Full Case Details payload for the verification workflow screen. */
-export function getCaseDetail(caseId: string): CaseDetail {
-  const existing = caseDao.findCaseById(caseId);
+export function getCaseDetail(componentId: string): CaseDetail {
+  const existing = caseDao.findComponentById(componentId);
 
   if (!existing) {
-    throw new AppError(404, `Case not found: ${caseId}`);
+    throw new AppError(404, `Case component not found: ${componentId}`);
   }
 
-  return mapCaseDetail(existing);
+  return mapDetail(existing);
 }
 
-/** Records the field executive's verification outcome and moves the case to Completed. */
-export function submitVerificationOutcome(caseId: string, outcome: VerificationOutcomeInput): CaseSummary {
-  const existing = caseDao.findCaseById(caseId);
+/** Records the field executive's verification outcome and moves the component to Completed. */
+export function submitVerificationOutcome(componentId: string, outcome: VerificationOutcomeInput): CaseSummary {
+  const existing = caseDao.findComponentById(componentId);
 
   if (!existing) {
-    throw new AppError(404, `Case not found: ${caseId}`);
+    throw new AppError(404, `Case component not found: ${componentId}`);
   }
 
-  const updated = caseDao.updateCaseVerificationOutcome(caseId, outcome);
-  return mapCase(updated);
+  const updated = caseDao.updateComponentVerificationOutcome(componentId, outcome);
+  return mapSummary(updated);
 }
