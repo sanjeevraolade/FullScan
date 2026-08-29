@@ -1,0 +1,31 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+
+import { logger } from './utils/logger.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { authenticate } from './middleware/authenticate.js';
+import { authRoutes } from './routes/auth.routes.js';
+import { uiConfigRoutes } from './routes/ui-config.routes.js';
+import { referenceDataRoutes } from './routes/reference-data.routes.js';
+import { caseRoutes } from './routes/case.routes.js';
+import { meRoutes } from './routes/field-executive.routes.js';
+
+export const app = express();
+
+// Security & parsing
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(pinoHttp({ logger }));
+
+// Routes
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/ui-config', uiConfigRoutes);
+app.use('/api/v1/reference-data', referenceDataRoutes);
+app.use('/api/v1/cases', authenticate, caseRoutes);
+app.use('/api/v1/me', authenticate, meRoutes);
+
+// Error handler (must be last)
+app.use(errorHandler);
