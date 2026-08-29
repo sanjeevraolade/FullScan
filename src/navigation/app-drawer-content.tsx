@@ -25,6 +25,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
+import { logout } from '@/repositories/authentication-repository';
 import { LogoutIcon } from '@/shared/components';
 import { useSessionStore } from '@/store/session';
 import { useReferenceDataStore } from '@/store/reference-data';
@@ -77,6 +78,9 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
 
   const handleLogoutPress = (): void => {
     LoggerService.info(`${FILE_NAME}: AppDrawerContent.handleLogoutPress: logging out`);
+    // Session hygiene: the persisted token is cleared alongside in-memory
+    // state so it can't be replayed after logout.
+    void logout();
     clearSession();
     clearReferenceData();
     // `.replace()` rather than `.reset()` — swaps "Main" for "Login" at the

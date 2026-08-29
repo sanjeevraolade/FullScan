@@ -3,6 +3,7 @@ import type { AxiosError, AxiosInstance } from 'axios';
 import { Platform } from 'react-native';
 
 import { LoggerService } from '@/infrastructure/logger';
+import { TokenStorageService } from '@/infrastructure/storage';
 
 const FILE_NAME = 'infrastructure/networking/api-client.ts';
 const REQUEST_TIMEOUT_MS = 15000;
@@ -28,10 +29,16 @@ export const apiClient: AxiosInstance = axios.create({
   timeout: REQUEST_TIMEOUT_MS,
 });
 
-apiClient.interceptors.request.use((request) => {
+apiClient.interceptors.request.use(async (request) => {
+  const token = await TokenStorageService.getToken();
+  if (token) {
+    request.headers.set('Authorization', `Bearer ${token}`);
+  }
+
   LoggerService.info(`${FILE_NAME}: apiClient: request`, {
     method: request.method,
     url: request.url,
+    isAuthenticated: Boolean(token),
   });
   return request;
 });

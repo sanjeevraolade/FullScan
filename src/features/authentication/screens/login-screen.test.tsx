@@ -4,11 +4,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
+import * as authenticationRepository from '@/repositories/authentication-repository';
 import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
 import * as referenceDataRepository from '@/repositories/reference-data-repository';
 
 import { LoginScreen } from './login-screen';
 
+jest.mock('@/repositories/authentication-repository');
 jest.mock('@/repositories/field-executive-repository');
 jest.mock('@/repositories/reference-data-repository');
 
@@ -30,6 +32,7 @@ async function renderLoginScreen(): Promise<void> {
 describe('LoginScreen', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
+    jest.mocked(authenticationRepository.login).mockResolvedValue(undefined);
     jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue({
       id: 'fe-001',
       name: 'Amit Verma',
@@ -41,6 +44,9 @@ describe('LoginScreen', () => {
       utvOptions: [],
       insuffOptions: [],
       photoTypes: [],
+      componentStatuses: [],
+      actionStatuses: [],
+      profileStatuses: [],
     });
   });
 
@@ -100,8 +106,57 @@ describe('LoginScreen', () => {
     expect(screen.queryByTestId('username-error')).toBeNull();
     expect(screen.queryByTestId('password-error')).toBeNull();
 
-    // Let the (stubbed) login call settle so its timer doesn't outlive the test.
+    // Let the login call settle so its promise doesn't outlive the test.
     await waitFor(() => expect(screen.queryByTestId('login-submit-spinner')).toBeNull());
+  });
+
+  it('shows the invalid-credentials error when the server rejects the login with 401', async () => {
+    jest
+      .mocked(authenticationRepository.login)
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 401 } });
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'wrong-password');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('login-error-alert')).toHaveTextContent(
+        'Incorrect username or password. Please try again.',
+      ),
+    );
+  });
+
+  it('shows the server-unavailable error when the backend returns a 5xx status', async () => {
+    jest
+      .mocked(authenticationRepository.login)
+      .mockRejectedValueOnce({ isAxiosError: true, response: { status: 503 } });
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('login-error-alert')).toHaveTextContent(
+        'FullScan is temporarily unavailable. Please try again later.',
+      ),
+    );
+  });
+
+  it('shows the network error when the request fails without a response', async () => {
+    jest.mocked(authenticationRepository.login).mockRejectedValueOnce({ isAxiosError: true, response: undefined });
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('login-error-alert')).toHaveTextContent(
+        'Unable to connect. Check your internet connection and try again.',
+      ),
+    );
   });
 
   it('keeps the entered value in the field it belongs to', async () => {

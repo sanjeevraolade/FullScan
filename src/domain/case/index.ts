@@ -3,9 +3,11 @@ export type { CapturedPhotoEvidence } from './case-photo-evidence.entity';
 export type {
   AddressType,
   CaseDetail,
+  CostRequested,
   GpsCheck,
   Respondent,
   ResidenceType,
+  SiblingComponent,
   VerificationOutcomeSubmission,
 } from './case-detail.entity';
 export {

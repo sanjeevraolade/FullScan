@@ -3,12 +3,14 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
+import * as authenticationRepository from '@/repositories/authentication-repository';
 import * as caseRepository from '@/repositories/case-repository';
 import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
 import * as referenceDataRepository from '@/repositories/reference-data-repository';
 
 import { RootNavigator } from './root-navigator';
 
+jest.mock('@/repositories/authentication-repository');
 jest.mock('@/repositories/field-executive-repository');
 jest.mock('@/repositories/case-repository');
 jest.mock('@/repositories/reference-data-repository');
@@ -25,6 +27,8 @@ async function loginAndOpenDrawer(): Promise<void> {
 describe('RootNavigator', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
+    jest.mocked(authenticationRepository.login).mockResolvedValue(undefined);
+    jest.mocked(authenticationRepository.logout).mockResolvedValue(undefined);
     jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue({
       id: 'fe-001',
       name: 'Amit Verma',
@@ -37,6 +41,9 @@ describe('RootNavigator', () => {
       utvOptions: [],
       insuffOptions: [],
       photoTypes: [],
+      componentStatuses: [],
+      actionStatuses: [],
+      profileStatuses: [],
     });
   });
 

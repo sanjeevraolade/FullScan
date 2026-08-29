@@ -19,6 +19,7 @@ const mockFieldExecutive: FieldExecutive = {
 function buildCase(overrides: Partial<Case>): Case {
   return {
     id: 'case-1',
+    caseId: 'case-parent-1',
     caseRef: 'FS-2026-00001',
     clientName: 'ABC Pvt Ltd',
     candidateName: 'Rahul Sharma',

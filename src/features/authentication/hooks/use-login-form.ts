@@ -3,6 +3,7 @@ import { useForm, useWatch } from 'react-hook-form';
 import type { Control, FieldErrors } from 'react-hook-form';
 import { useNavigation } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
+import axios from 'axios';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { login } from '@/repositories/authentication-repository';
@@ -43,21 +44,26 @@ export interface UseLoginFormResult {
 }
 
 /**
- * Maps an unknown thrown value to one of the login screen's error keys. The
- * placeholder repository never actually throws, so this path isn't
- * exercised today — it exists so the real repository can replace the stub
- * without any change here.
+ * Maps a thrown login failure to one of the login screen's error keys.
+ * Never surfaces the raw error (which may echo backend response bodies) to
+ * the UI — only the mapped key.
  */
 function resolveLoginErrorKey(error: unknown): LoginErrorKey {
-  const reason = error instanceof Error ? error.message : 'unknown error';
-  LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping login failure`, { reason });
+  if (axios.isAxiosError(error)) {
+    const status = error.response?.status;
+    const errorKey: LoginErrorKey =
+      status === 401 ? 'invalidCredentials' : status !== undefined && status >= 500 ? 'serverUnavailable' : 'network';
+    LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping login failure`, { status, errorKey });
+    return errorKey;
+  }
+  LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping non-axios login failure`, { errorKey: 'network' });
   return 'network';
 }
 
 /**
  * Owns Login form state, field validation and submission. Authentication
- * itself is delegated to the (currently stubbed) authentication repository —
- * this hook never talks to the network directly.
+ * itself is delegated to the authentication repository — this hook never
+ * talks to the network directly.
  */
 export function useLoginForm(): UseLoginFormResult {
   LoggerService.info(`${FILE_NAME}: useLoginForm: initializing login form`);

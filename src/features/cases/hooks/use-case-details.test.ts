@@ -24,11 +24,15 @@ const mockReferenceData: ReferenceData = {
     { code: 'house_photo_1', label: 'House Photo 1' },
     { code: 'door_number', label: 'Door Number' },
   ],
+  componentStatuses: [{ code: 'component_accepted', label: 'Component Accepted' }],
+  actionStatuses: [{ code: 'accepted', label: 'Accept/Approve' }],
+  profileStatuses: [{ code: 'wip', label: 'WIP' }],
 };
 
 function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
   return {
     id: 'case-1',
+    caseId: 'case-parent-1',
     caseRef: 'FS-2026-00001',
     bucket: 'pending',
     tatDueAt: new Date('2026-08-30T00:00:00.000Z'),
@@ -38,6 +42,8 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
     verificationType: 'Address',
     clientName: 'ABC Pvt Ltd',
     address: 'Flat 204, Madhapur, Hyderabad',
+    addressType: 'present',
+    residenceType: 'rented',
     gpsCheck: { targetLatitude: 17.4452, targetLongitude: 78.3821, distanceMeters: 18, isWithinRange: true },
     maskedPrimaryPhone: '+91-XXXXX-00001',
     maskedSecondaryPhone: '+91-XXXXX-00002',
@@ -45,6 +51,18 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
     fieldExecutiveNotes: 'Gated community.',
     selectedVerificationStatus: null,
     respondent: null,
+    componentStatus: 'component_accepted',
+    actionStatus: null,
+    profileStatus: 'wip',
+    costRequested: null,
+    insuffRaisedAt: null,
+    insuffClearedAt: null,
+    addlDocRequestedAt: null,
+    addlDocClearedAt: null,
+    costApprovalRequestedAt: null,
+    costApprovedAt: null,
+    costRejectedAt: null,
+    siblingComponents: [],
     ...overrides,
   };
 }
@@ -52,6 +70,7 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
 function buildCase(overrides: Partial<Case> = {}): Case {
   return {
     id: 'case-1',
+    caseId: 'case-parent-1',
     caseRef: 'FS-2026-00001',
     clientName: 'ABC Pvt Ltd',
     candidateName: 'Rahul Sharma',
