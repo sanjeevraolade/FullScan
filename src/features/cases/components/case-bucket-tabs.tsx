@@ -70,7 +70,7 @@ export function CaseBucketTabs({
               alignItems="center"
               justifyContent="center"
               px="$2"
-              rounded="$full"
+              rounded="$md"
               bg={isSelected ? colors.selectedBg : colors.unselectedBg}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}

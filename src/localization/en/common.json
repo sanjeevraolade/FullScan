@@ -147,14 +147,14 @@
       "respondentNameLabel": "Respondent Name",
       "respondentRelationLabel": "Relationship with Candidate",
       "signatureLabel": "Respondent Signature",
-      "signatureCapture": "Tap to Capture Signature on Screen",
+      "signatureCapture": "Capture Signature",
       "signatureCaptured": "Signature Captured (Tap to Edit)",
       "signatureComingSoon": "On-screen signature capture is coming soon."
     },
     "photo": {
       "title": "Photo Evidence Capture (Camera Only)",
       "tagLabel": "Select Photo Tag Document",
-      "openCamera": "Open Geotagged Watermark Camera",
+      "openCamera": "Geotagged Camera",
       "cameraComingSoon": "Geotagged camera capture is coming soon.",
       "addAnother": "Capture Another Photo",
       "capturedLabel": "Captured Photos ({{count}})",

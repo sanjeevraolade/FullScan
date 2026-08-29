@@ -147,8 +147,8 @@
       "respondentNameLabel": "రెస్పాండెంట్ పేరు",
       "respondentRelationLabel": "అభ్యర్థితో సంబంధం",
       "signatureLabel": "రెస్పాండెంట్ సంతకం",
-      "signatureCapture": "స్క్రీన్‌పై సంతకం చేయడానికి నొక్కండి",
-      "signatureCaptured": "సంతకం క్యాప్చర్ చేయబడింది (సవరించడానికి నొక్కండి)",
+      "signatureCapture": "సంతకం చేయండి",
+      "signatureCaptured": "సంతకం చేయబడింది (సవరించడానికి నొక్కండి)",
       "signatureComingSoon": "స్క్రీన్‌పై సంతకం క్యాప్చర్ త్వరలో అందుబాటులోకి వస్తుంది."
     },
     "photo": {
