@@ -26,6 +26,25 @@
       "invalidCredentials": "Incorrect username or password. Please try again.",
       "network": "Unable to connect. Check your internet connection and try again.",
       "serverUnavailable": "FullScan is temporarily unavailable. Please try again later."
+    },
+    "biometric": {
+      "enroll": {
+        "title": "Enable biometric login?",
+        "body": "Use Face ID or fingerprint to log in faster next time. Your credentials stay securely on this device.",
+        "accept": "Enable",
+        "skip": "Not now",
+        "verifyPromptTitle": "Confirm to enable biometric login"
+      },
+      "login": {
+        "promptTitle": "Log in to FullScan",
+        "faceIdLabel": "Log in with Face ID",
+        "fingerprintLabel": "Log in with fingerprint"
+      },
+      "errors": {
+        "authenticationFailed": "Biometric verification failed. Please log in with your username and password.",
+        "network": "Unable to connect. Check your internet connection and try again.",
+        "serverUnavailable": "FullScan is temporarily unavailable. Please try again later."
+      }
     }
   },
   "validation": {

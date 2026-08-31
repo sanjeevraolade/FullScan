@@ -35,6 +35,8 @@
 	</dict>
 	<key>NSCameraUsageDescription</key>
 	<string>FullScan needs camera access to capture geotagged verification evidence.</string>
+	<key>NSFaceIDUsageDescription</key>
+	<string>FullScan uses Face ID to let you log in securely without typing your password.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>FullScan needs your location to geotag verification evidence photos.</string>
 	<key>RCTNewArchEnabled</key>

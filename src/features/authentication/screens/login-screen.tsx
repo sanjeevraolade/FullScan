@@ -3,10 +3,17 @@ import type { ReactElement } from 'react';
 import {
   Alert,
   AlertCircleIcon,
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogBody,
+  AlertDialogContent,
+  AlertDialogFooter,
+  AlertDialogHeader,
   AlertIcon,
   AlertText,
   Box,
   Button,
+  ButtonIcon,
   ButtonSpinner,
   ButtonText,
   Checkbox,
@@ -30,8 +37,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { getAppVersion } from '@/infrastructure/device';
 import { LoggerService } from '@/infrastructure/logger';
 import { FormTextField, type FormTextFieldHandle } from '@/shared/components';
+import { FaceIdIcon } from '@/shared/components/icons/face-id-icon';
+import { FingerprintIcon } from '@/shared/components/icons/fingerprint-icon';
 
 import { useLoginForm, VALIDATION_REQUIRED_MESSAGE_KEY } from '../hooks/use-login-form';
+import { useBiometricLogin } from '../hooks/use-biometric-login';
 
 const FILE_NAME = 'login-screen.tsx';
 const LOGO_SIZE = 96;
@@ -49,7 +59,24 @@ function dismissKeyboard(): void {
  */
 export function LoginScreen(): ReactElement {
   const { t } = useTranslation();
-  const { control, errors, isSubmitting, canSubmit, loginError, submitLogin } = useLoginForm();
+  const {
+    control,
+    errors,
+    isSubmitting,
+    canSubmit,
+    loginError,
+    submitLogin,
+    isBiometricEnrollmentPromptVisible,
+    confirmBiometricEnrollment,
+    skipBiometricEnrollment,
+  } = useLoginForm();
+  const {
+    isAvailable: isBiometricLoginAvailable,
+    biometryType,
+    isAuthenticating: isBiometricAuthenticating,
+    biometricLoginError,
+    loginWithBiometrics,
+  } = useBiometricLogin();
   const passwordInputRef = useRef<FormTextFieldHandle>(null);
   const appVersion = getAppVersion();
   const copyrightYear = new Date().getFullYear();
@@ -185,6 +212,44 @@ export function LoginScreen(): ReactElement {
                   <ButtonText>{t('login.actions.submit')}</ButtonText>
                 </Button>
 
+                {isBiometricLoginAvailable ? (
+                  <Button
+                    variant="outline"
+                    action="secondary"
+                    onPress={loginWithBiometrics}
+                    isDisabled={isBiometricAuthenticating}
+                    accessibilityLabel={t(
+                      biometryType === 'faceId'
+                        ? 'login.biometric.login.faceIdLabel'
+                        : 'login.biometric.login.fingerprintLabel',
+                    )}
+                    testID="biometric-login-button"
+                  >
+                    {isBiometricAuthenticating ? (
+                      <ButtonSpinner mr="$2" testID="biometric-login-spinner" />
+                    ) : (
+                      <ButtonIcon
+                        as={biometryType === 'faceId' ? FaceIdIcon : FingerprintIcon}
+                        mr="$2"
+                      />
+                    )}
+                    <ButtonText>
+                      {t(
+                        biometryType === 'faceId'
+                          ? 'login.biometric.login.faceIdLabel'
+                          : 'login.biometric.login.fingerprintLabel',
+                      )}
+                    </ButtonText>
+                  </Button>
+                ) : null}
+
+                {biometricLoginError ? (
+                  <Alert action="error" testID="biometric-login-error-alert">
+                    <AlertIcon as={AlertCircleIcon} mr="$2" />
+                    <AlertText>{t(`login.biometric.errors.${biometricLoginError}`)}</AlertText>
+                  </Alert>
+                ) : null}
+
                 <VStack space="xs" alignItems="center">
                   <Text size="xs" testID="login-footer-version">
                     {t('login.footer.version', { version: appVersion })}
@@ -198,6 +263,34 @@ export function LoginScreen(): ReactElement {
           </Pressable>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <AlertDialog isOpen={isBiometricEnrollmentPromptVisible} onClose={skipBiometricEnrollment}>
+        <AlertDialogBackdrop />
+        <AlertDialogContent testID="biometric-enrollment-dialog">
+          <AlertDialogHeader>
+            <Heading size="md">{t('login.biometric.enroll.title')}</Heading>
+          </AlertDialogHeader>
+          <AlertDialogBody>
+            <Text size="sm">{t('login.biometric.enroll.body')}</Text>
+          </AlertDialogBody>
+          <AlertDialogFooter style={{ gap: 8 }}>
+            <Button
+              variant="outline"
+              action="secondary"
+              onPress={skipBiometricEnrollment}
+              testID="biometric-enrollment-skip"
+            >
+              <ButtonText>{t('login.biometric.enroll.skip')}</ButtonText>
+            </Button>
+            <Button
+              onPress={() => void confirmBiometricEnrollment()}
+              testID="biometric-enrollment-accept"
+            >
+              <ButtonText>{t('login.biometric.enroll.accept')}</ButtonText>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </SafeAreaView>
   );
 }

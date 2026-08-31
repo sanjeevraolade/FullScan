@@ -6,6 +6,7 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import axios from 'axios';
 
 import { LoggerService } from '@/infrastructure/logger';
+import { TokenStorageService } from '@/infrastructure/storage';
 import { login } from '@/repositories/authentication-repository';
 import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
 import { fetchReferenceData } from '@/repositories/reference-data-repository';
@@ -15,6 +16,7 @@ import { useSessionStore } from '@/store/session';
 import { useReferenceDataStore } from '@/store/reference-data';
 
 import type { LoginErrorKey, LoginFormValues } from '../types/login-form.types';
+import { useBiometricEnrollment } from './use-biometric-enrollment';
 
 const FILE_NAME = 'use-login-form.ts';
 
@@ -41,6 +43,10 @@ export interface UseLoginFormResult {
   /** Localization key for the current login failure, or null when there isn't one. */
   readonly loginError: LoginErrorKey | null;
   submitLogin(): void;
+  /** True while the post-login "enable biometric login?" consent dialog should be shown. */
+  readonly isBiometricEnrollmentPromptVisible: boolean;
+  confirmBiometricEnrollment(): Promise<void>;
+  skipBiometricEnrollment(): void;
 }
 
 /**
@@ -52,11 +58,20 @@ function resolveLoginErrorKey(error: unknown): LoginErrorKey {
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     const errorKey: LoginErrorKey =
-      status === 401 ? 'invalidCredentials' : status !== undefined && status >= 500 ? 'serverUnavailable' : 'network';
-    LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping login failure`, { status, errorKey });
+      status === 401
+        ? 'invalidCredentials'
+        : status !== undefined && status >= 500
+        ? 'serverUnavailable'
+        : 'network';
+    LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping login failure`, {
+      status,
+      errorKey,
+    });
     return errorKey;
   }
-  LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping non-axios login failure`, { errorKey: 'network' });
+  LoggerService.warn(`${FILE_NAME}: resolveLoginErrorKey: mapping non-axios login failure`, {
+    errorKey: 'network',
+  });
   return 'network';
 }
 
@@ -77,6 +92,13 @@ export function useLoginForm(): UseLoginFormResult {
 
   const [loginError, setLoginError] = useState<LoginErrorKey | null>(null);
 
+  const {
+    isPromptVisible: isBiometricEnrollmentPromptVisible,
+    evaluateEligibility: evaluateBiometricEnrollmentEligibility,
+    confirmEnrollment: confirmBiometricEnrollment,
+    skipEnrollment: skipBiometricEnrollment,
+  } = useBiometricEnrollment(() => navigation.replace(ROUTE_NAMES.MAIN));
+
   const username = useWatch({ control, name: 'username' });
   const password = useWatch({ control, name: 'password' });
   const canSubmit = username.trim().length > 0 && password.trim().length > 0;
@@ -94,14 +116,29 @@ export function useLoginForm(): UseLoginFormResult {
         setLoginError(null);
         try {
           await login({ username: values.username, password: values.password });
-          const [fieldExecutive, referenceData] = await Promise.all([
+          const [token, fieldExecutive, referenceData] = await Promise.all([
+            TokenStorageService.getToken(),
             fetchCurrentFieldExecutive(),
             fetchReferenceData(),
           ]);
           useSessionStore.getState().setFieldExecutive(fieldExecutive);
           useReferenceDataStore.getState().setReferenceData(referenceData);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);
-          /* 
+
+          const willPromptBiometricEnrollment =
+            token !== null &&
+            (await evaluateBiometricEnrollmentEligibility({
+              username: values.username,
+              password: values.password,
+              token,
+            }));
+          if (willPromptBiometricEnrollment) {
+            // The enrollment dialog now owns navigation once the user
+            // enables or skips it — see `useBiometricEnrollment`'s `onSettled`.
+            return;
+          }
+
+          /*
           Navigation.replace is used here instead of navigate to prevent the user from going back to the login screen after a successful login. This ensures that the login screen is removed from the navigation stack, providing a better user experience.
           */
           navigation.replace(ROUTE_NAMES.MAIN);
@@ -117,7 +154,17 @@ export function useLoginForm(): UseLoginFormResult {
         });
       },
     )();
-  }, [handleSubmit, navigation]);
+  }, [handleSubmit, navigation, evaluateBiometricEnrollmentEligibility]);
 
-  return { control, errors, isSubmitting, canSubmit, loginError, submitLogin };
+  return {
+    control,
+    errors,
+    isSubmitting,
+    canSubmit,
+    loginError,
+    submitLogin,
+    isBiometricEnrollmentPromptVisible,
+    confirmBiometricEnrollment,
+    skipBiometricEnrollment,
+  };
 }
