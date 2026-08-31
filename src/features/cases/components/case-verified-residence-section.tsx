@@ -23,6 +23,7 @@ export interface CaseVerifiedResidenceSectionProps {
   readonly onRespondentRelationChange: (relation: string) => void;
   readonly isSignatureCaptured: boolean;
   readonly onCaptureSignature: () => void;
+  readonly isReadOnly?: boolean;
 }
 
 /** Section 6 — shown only for a "Verified Clear" outcome with a matching GPS check. */
@@ -37,6 +38,7 @@ export function CaseVerifiedResidenceSection({
   onRespondentRelationChange,
   isSignatureCaptured,
   onCaptureSignature,
+  isReadOnly = false,
 }: CaseVerifiedResidenceSectionProps): ReactElement {
   const { t } = useTranslation();
 
@@ -80,6 +82,7 @@ export function CaseVerifiedResidenceSection({
                 label: t(`caseDetails.residence.residenceTypeOptions.${type}`),
                 value: type,
               }))}
+              isDisabled={isReadOnly}
             />
           </Box>
           <Box flex={1}>
@@ -92,6 +95,7 @@ export function CaseVerifiedResidenceSection({
                 label: t(`caseDetails.residence.addressTypeOptions.${type}`),
                 value: type,
               }))}
+              isDisabled={isReadOnly}
             />
           </Box>
         </HStack>
@@ -101,6 +105,7 @@ export function CaseVerifiedResidenceSection({
           labelKey="caseDetails.residence.respondentNameLabel"
           value={respondentName}
           onChangeText={onRespondentNameChange}
+          isDisabled={isReadOnly}
         />
 
         <FormTextField
@@ -108,6 +113,7 @@ export function CaseVerifiedResidenceSection({
           labelKey="caseDetails.residence.respondentRelationLabel"
           value={respondentRelation}
           onChangeText={onRespondentRelationChange}
+          isDisabled={isReadOnly}
         />
 
         <VStack space="xs">
@@ -118,6 +124,7 @@ export function CaseVerifiedResidenceSection({
             bg="$backgroundDark900"
             borderRadius="$xl"
             onPress={handleCaptureSignature}
+            isDisabled={isReadOnly}
             accessibilityLabel={t(
               isSignatureCaptured ? 'caseDetails.residence.signatureCaptured' : 'caseDetails.residence.signatureCapture',
             )}

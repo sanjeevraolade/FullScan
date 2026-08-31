@@ -33,6 +33,7 @@ export interface FormSelectFieldProps {
   readonly options: readonly FormSelectOption[];
   readonly onValueChange: (value: string) => void;
   readonly placeholder?: string;
+  readonly isDisabled?: boolean;
 }
 
 /**
@@ -48,6 +49,7 @@ export function FormSelectField({
   options,
   onValueChange,
   placeholder,
+  isDisabled = false,
 }: FormSelectFieldProps): ReactElement {
   const handleValueChange = (nextValue: string): void => {
     LoggerService.info(`${FILE_NAME}: FormSelectField.handleValueChange: value changed`, { fieldId });
@@ -55,12 +57,12 @@ export function FormSelectField({
   };
 
   return (
-    <FormControl>
+    <FormControl isDisabled={isDisabled}>
       <FormControlLabel>
         <FormControlLabelText>{label}</FormControlLabelText>
       </FormControlLabel>
-      <Select selectedValue={value} onValueChange={handleValueChange}>
-        <SelectTrigger variant="outline" size="sm" testID={`${fieldId}-select`}>
+      <Select selectedValue={value} onValueChange={handleValueChange} isDisabled={isDisabled}>
+        <SelectTrigger variant="outline" size="sm" testID={`${fieldId}-select`} opacity={isDisabled ? 0.6 : 1}>
           <SelectInput placeholder={placeholder} accessibilityLabel={label} flex={1} />
           <SelectIcon as={ChevronDownIcon} mr="$3" />
         </SelectTrigger>

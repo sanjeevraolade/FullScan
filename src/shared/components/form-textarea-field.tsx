@@ -12,6 +12,7 @@ export interface FormTextareaFieldProps {
   readonly value: string;
   readonly onChangeText: (value: string) => void;
   readonly placeholder?: string;
+  readonly isDisabled?: boolean;
 }
 
 /** Labelled multi-line remarks field — the Textarea counterpart to `FormTextField`. */
@@ -21,6 +22,7 @@ export function FormTextareaField({
   value,
   onChangeText,
   placeholder,
+  isDisabled = false,
 }: FormTextareaFieldProps): ReactElement {
   const handleChangeText = (nextValue: string): void => {
     LoggerService.info(`${FILE_NAME}: FormTextareaField.handleChangeText: value changed`, { fieldId });
@@ -28,17 +30,18 @@ export function FormTextareaField({
   };
 
   return (
-    <FormControl>
+    <FormControl isDisabled={isDisabled}>
       <FormControlLabel>
         <FormControlLabelText>{label}</FormControlLabelText>
       </FormControlLabel>
-      <Textarea size="sm">
+      <Textarea size="sm" opacity={isDisabled ? 0.6 : 1}>
         <TextareaInput
           value={value}
           onChangeText={handleChangeText}
           placeholder={placeholder}
           accessibilityLabel={label}
           testID={`${fieldId}-textarea`}
+          editable={!isDisabled}
         />
       </Textarea>
     </FormControl>

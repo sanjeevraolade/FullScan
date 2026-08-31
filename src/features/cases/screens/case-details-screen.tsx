@@ -6,6 +6,13 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Alert,
   AlertCircleIcon,
+  AlertDialog,
+  AlertDialogBackdrop,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogCloseButton,
+  AlertDialogBody,
+  AlertDialogFooter,
   AlertIcon,
   AlertText,
   Badge,
@@ -14,6 +21,8 @@ import {
   Button,
   ButtonSpinner,
   ButtonText,
+  CloseIcon,
+  Heading,
   ScrollView,
   Spinner,
   VStack,
@@ -53,6 +62,7 @@ export function CaseDetailsScreen(): ReactElement {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<CaseDetailsRoute>();
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
+  const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
   // Params — not local state — are the source of truth for captured photos:
   // CaseCamera always hands back the complete set (see `CaseDetailsRouteParams`
   // doc), so there's nothing here that could go stale or reset independently.
@@ -70,6 +80,10 @@ export function CaseDetailsScreen(): ReactElement {
     isLoading,
     loadError,
     refresh,
+    isReadOnly,
+    isNewCase,
+    shouldShowDetailFormSections,
+    acceptCase: acceptCaseAction,
     verificationStatus,
     selectVerificationStatus,
     isUtvSectionVisible,
@@ -154,6 +168,26 @@ export function CaseDetailsScreen(): ReactElement {
     });
   };
 
+  const handleAcceptPress = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleAcceptPress: showing confirmation dialog`, {
+      caseId: params.caseId,
+    });
+    setShowAcceptConfirmation(true);
+  };
+
+  const handleAcceptConfirmed = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleAcceptConfirmed: accept confirmed`, {
+      caseId: params.caseId,
+    });
+    setShowAcceptConfirmation(false);
+    acceptCaseAction(() => {
+      LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleAcceptConfirmed: refreshing case after acceptance`, {
+        caseId: params.caseId,
+      });
+      refresh();
+    });
+  };
+
   const handleSubmit = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submit pressed`, { caseId: params.caseId });
     submit(() => {
@@ -203,59 +237,70 @@ export function CaseDetailsScreen(): ReactElement {
           onGetDirections={handleGetDirections}
         />
 
-        <CaseMaskedCallSection
-          maskedPrimaryPhone={caseDetail.maskedPrimaryPhone}
-          maskedSecondaryPhone={caseDetail.maskedSecondaryPhone}
-          onCallPrimary={handleCallPrimary}
-          onCallSecondary={handleCallSecondary}
-        />
+        {!isNewCase ? (
+          <>
+            <CaseMaskedCallSection
+              maskedPrimaryPhone={caseDetail.maskedPrimaryPhone}
+              maskedSecondaryPhone={caseDetail.maskedSecondaryPhone}
+              onCallPrimary={handleCallPrimary}
+              onCallSecondary={handleCallSecondary}
+            />
 
-        <CaseInstructionsSection
-          clientInstructions={caseDetail.clientInstructions}
-          fieldExecutiveNotes={caseDetail.fieldExecutiveNotes}
-        />
-
-        <CaseVerificationOutcomeSection
-          statusOptions={referenceData?.verificationTypeStatuses ?? []}
-          verificationStatus={verificationStatus}
-          onSelectStatus={selectVerificationStatus}
-          isUtvSectionVisible={isUtvSectionVisible}
-          utvReasonOptions={referenceData?.utvOptions ?? []}
-          utvReason={utvReason}
-          onSelectUtvReason={selectUtvReason}
-          utvRemarks={utvRemarks}
-          onUtvRemarksChange={setUtvRemarks}
-          isInsufficientSectionVisible={isInsufficientSectionVisible}
-          insufficientReasonOptions={referenceData?.insuffOptions ?? []}
-          insufficientReason={insufficientReason}
-          onSelectInsufficientReason={selectInsufficientReason}
-          insufficientRemarks={insufficientRemarks}
-          onInsufficientRemarksChange={setInsufficientRemarks}
-        />
-
-        {isVerifiedResidenceSectionVisible ? (
-          <CaseVerifiedResidenceSection
-            residenceType={residenceType}
-            onSelectResidenceType={selectResidenceType}
-            addressType={addressType}
-            onSelectAddressType={selectAddressType}
-            respondentName={respondentName}
-            onRespondentNameChange={setRespondentName}
-            respondentRelation={respondentRelation}
-            onRespondentRelationChange={setRespondentRelation}
-            isSignatureCaptured={isSignatureCaptured}
-            onCaptureSignature={handleCaptureSignature}
-          />
+            <CaseInstructionsSection
+              clientInstructions={caseDetail.clientInstructions}
+              fieldExecutiveNotes={caseDetail.fieldExecutiveNotes}
+            />
+          </>
         ) : null}
 
-        <CasePhotoEvidenceSection
-          photoTagOptions={referenceData?.photoTypes ?? []}
-          selectedPhotoTag={selectedPhotoTag}
-          onSelectPhotoTag={selectPhotoTag}
-          onOpenCamera={handleOpenCamera}
-          capturedPhotos={capturedPhotos}
-          onDeletePhoto={handleDeletePhoto}
-        />
+        {shouldShowDetailFormSections ? (
+          <>
+            <CaseVerificationOutcomeSection
+              statusOptions={referenceData?.verificationTypeStatuses ?? []}
+              verificationStatus={verificationStatus}
+              onSelectStatus={selectVerificationStatus}
+              isUtvSectionVisible={isUtvSectionVisible}
+              utvReasonOptions={referenceData?.utvOptions ?? []}
+              utvReason={utvReason}
+              onSelectUtvReason={selectUtvReason}
+              utvRemarks={utvRemarks}
+              onUtvRemarksChange={setUtvRemarks}
+              isInsufficientSectionVisible={isInsufficientSectionVisible}
+              insufficientReasonOptions={referenceData?.insuffOptions ?? []}
+              insufficientReason={insufficientReason}
+              onSelectInsufficientReason={selectInsufficientReason}
+              insufficientRemarks={insufficientRemarks}
+              onInsufficientRemarksChange={setInsufficientRemarks}
+              isReadOnly={isReadOnly}
+            />
+
+            {isVerifiedResidenceSectionVisible ? (
+              <CaseVerifiedResidenceSection
+                residenceType={residenceType}
+                onSelectResidenceType={selectResidenceType}
+                addressType={addressType}
+                onSelectAddressType={selectAddressType}
+                respondentName={respondentName}
+                onRespondentNameChange={setRespondentName}
+                respondentRelation={respondentRelation}
+                onRespondentRelationChange={setRespondentRelation}
+                isSignatureCaptured={isSignatureCaptured}
+                onCaptureSignature={handleCaptureSignature}
+                isReadOnly={isReadOnly}
+              />
+            ) : null}
+
+            <CasePhotoEvidenceSection
+              photoTagOptions={referenceData?.photoTypes ?? []}
+              selectedPhotoTag={selectedPhotoTag}
+              onSelectPhotoTag={selectPhotoTag}
+              onOpenCamera={handleOpenCamera}
+              capturedPhotos={capturedPhotos}
+              onDeletePhoto={handleDeletePhoto}
+              isReadOnly={isReadOnly}
+            />
+          </>
+        ) : null}
 
         {submitError ? (
           <Alert action="error" testID="case-details-submit-error">
@@ -264,19 +309,80 @@ export function CaseDetailsScreen(): ReactElement {
           </Alert>
         ) : null}
 
-        <Button
-          action="positive"
-          size="lg"
-          borderRadius="$xl"
-          onPress={handleSubmit}
-          isDisabled={isSubmitting}
-          accessibilityLabel={t('caseDetails.submit')}
-          testID="case-details-submit-button"
-        >
-          {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
-          <ButtonText>{t('caseDetails.submit')}</ButtonText>
-        </Button>
+        {isNewCase ? (
+          <Button
+            action="positive"
+            size="lg"
+            borderRadius="$xl"
+            onPress={handleAcceptPress}
+            isDisabled={isSubmitting}
+            accessibilityLabel={t('caseList.actions.accept')}
+            testID="case-details-accept-button"
+          >
+            {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
+            <ButtonText>{t('caseList.actions.accept')}</ButtonText>
+          </Button>
+        ) : isReadOnly ? (
+          <Alert action="info" testID="case-details-read-only-notice">
+            <AlertIcon as={AlertCircleIcon} mr="$2" />
+            <AlertText>{t('caseDetails.readOnly.message')}</AlertText>
+          </Alert>
+        ) : (
+          <Button
+            action="positive"
+            size="lg"
+            borderRadius="$xl"
+            onPress={handleSubmit}
+            isDisabled={isSubmitting}
+            accessibilityLabel={t('caseDetails.submit')}
+            testID="case-details-submit-button"
+          >
+            {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
+            <ButtonText>{t('caseDetails.submit')}</ButtonText>
+          </Button>
+        )}
       </VStack>
+
+      <AlertDialog
+        isOpen={showAcceptConfirmation}
+        onClose={() => setShowAcceptConfirmation(false)}
+        testID="case-details-accept-confirmation-dialog"
+      >
+        <AlertDialogBackdrop />
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <Heading size="lg" fontWeight="$bold">
+              {t('caseList.actions.accept')}
+            </Heading>
+            <AlertDialogCloseButton onPress={() => setShowAcceptConfirmation(false)}>
+              <CloseIcon />
+            </AlertDialogCloseButton>
+          </AlertDialogHeader>
+          <AlertDialogBody mt="$3" mb="$4">
+            <AlertText>{t('caseDetails.acceptConfirmation.message')}</AlertText>
+          </AlertDialogBody>
+          <AlertDialogFooter>
+            <Button
+              variant="outline"
+              action="secondary"
+              mr="$3"
+              onPress={() => setShowAcceptConfirmation(false)}
+              testID="case-details-accept-cancel-button"
+            >
+              <ButtonText>{t('caseList.actions.cancel')}</ButtonText>
+            </Button>
+            <Button
+              action="positive"
+              onPress={handleAcceptConfirmed}
+              isDisabled={isSubmitting}
+              testID="case-details-accept-confirm-button"
+            >
+              {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
+              <ButtonText>{t('caseList.actions.accept')}</ButtonText>
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </ScrollView>
   );
 }

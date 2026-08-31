@@ -34,6 +34,7 @@ export interface CasePhotoGalleryProps {
   readonly photos: readonly CapturedPhotoEvidence[];
   readonly photoTagOptions: readonly DropdownOption[];
   readonly onDeletePhoto: (filePath: string) => void;
+  readonly isReadOnly?: boolean;
 }
 
 /**
@@ -44,7 +45,7 @@ export interface CasePhotoGalleryProps {
  * `CaseDetailsScreen`, this component just displays them and asks to delete
  * one.
  */
-export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto }: CasePhotoGalleryProps): ReactElement {
+export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isReadOnly = false }: CasePhotoGalleryProps): ReactElement {
   const { t } = useTranslation();
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [photoPendingDeletion, setPhotoPendingDeletion] = useState<CapturedPhotoEvidence | null>(null);
@@ -110,6 +111,7 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto }: Cas
 
                 <Pressable
                   onPress={() => handleRequestDelete(photo)}
+                  disabled={isReadOnly}
                   position="absolute"
                   top={-10}
                   right={-10}
@@ -122,6 +124,7 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto }: Cas
                   h={28}
                   justifyContent="center"
                   alignItems="center"
+                  opacity={isReadOnly ? 0.4 : 1}
                   accessibilityLabel={t('caseDetails.photo.deleteLabel')}
                   testID={`case-photo-delete-${photo.filePath}`}
                 >

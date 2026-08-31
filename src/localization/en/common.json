@@ -85,6 +85,7 @@
     },
     "actions": {
       "accept": "Accept",
+      "cancel": "Cancel",
       "call": "Call",
       "callComingSoon": "Masked calling is coming soon.",
       "retry": "Retry",
@@ -104,6 +105,14 @@
       "network": "Unable to load this case. Check your connection and try again.",
       "submitFailed": "Unable to submit the verification report. Check your connection and try again."
     },
+    "readOnly": {
+      "message": "This case is read-only and cannot be edited.",
+      "newCase": "New cases are view-only until they are accepted.",
+      "completedCase": "Completed cases are read-only."
+    },
+    "acceptConfirmation": {
+      "message": "Are you sure you want to accept this case? Once accepted, you will be able to view and edit all case details."
+    },
     "info": {
       "title": "Case Information",
       "sla": "SLA: {{tatDue}}",
@@ -116,8 +125,8 @@
     "location": {
       "title": "Location Address",
       "coordinates": "Lat: {{latitude}} | Long: {{longitude}}",
-      "tapHint": "Tap location to trigger map route & distance check",
-      "getDirections": "Get Directions",
+      "tapHint": "",
+      "getDirections": "Directions  >",
       "gpsMatch": "GPS Match: {{distance}}",
       "gpsAlert": "GPS Alert: {{distance}}",
       "distanceMeters": "{{distance}}m from address",

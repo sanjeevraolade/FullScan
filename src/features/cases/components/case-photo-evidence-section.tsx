@@ -19,6 +19,7 @@ export interface CasePhotoEvidenceSectionProps {
   readonly onOpenCamera: () => void;
   readonly capturedPhotos: readonly CapturedPhotoEvidence[];
   readonly onDeletePhoto: (filePath: string) => void;
+  readonly isReadOnly?: boolean;
 }
 
 /** Section 7 — camera-only geotagged evidence capture (gallery upload is never offered). */
@@ -29,6 +30,7 @@ export function CasePhotoEvidenceSection({
   onOpenCamera,
   capturedPhotos,
   onDeletePhoto,
+  isReadOnly = false,
 }: CasePhotoEvidenceSectionProps): ReactElement {
   const { t } = useTranslation();
 
@@ -64,6 +66,7 @@ export function CasePhotoEvidenceSection({
           value={selectedPhotoTag}
           onValueChange={onSelectPhotoTag}
           options={photoTagOptions.map((tag) => ({ label: tag.label, value: tag.code }))}
+          isDisabled={isReadOnly}
         />
 
         {photosForSelectedTag.length > 0 ? (
@@ -71,6 +74,7 @@ export function CasePhotoEvidenceSection({
             photos={photosForSelectedTag}
             photoTagOptions={photoTagOptions}
             onDeletePhoto={onDeletePhoto}
+            isReadOnly={isReadOnly}
           />
         ) : null}
 
@@ -78,6 +82,7 @@ export function CasePhotoEvidenceSection({
           size="lg"
           borderRadius="$xl"
           onPress={handleOpenCamera}
+          isDisabled={isReadOnly}
           accessibilityLabel={t(
             photosForSelectedTag.length > 0 ? 'caseDetails.photo.addAnother' : 'caseDetails.photo.openCamera',
           )}

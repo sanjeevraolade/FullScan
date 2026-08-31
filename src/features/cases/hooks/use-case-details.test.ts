@@ -199,4 +199,48 @@ describe('useCaseDetails', () => {
     expect(onSubmitted).not.toHaveBeenCalled();
     expect(result.current.submitError).toBe('network');
   });
+
+  it('identifies a new bucket case and hides detail form sections', async () => {
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
+
+    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isNewCase).toBe(true);
+    expect(result.current.shouldShowDetailFormSections).toBe(false);
+    expect(result.current.isReadOnly).toBe(false);
+  });
+
+  it('marks a pending bucket case as editable with all sections visible', async () => {
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'pending' }));
+
+    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isNewCase).toBe(false);
+    expect(result.current.shouldShowDetailFormSections).toBe(true);
+    expect(result.current.isReadOnly).toBe(false);
+  });
+
+  it('marks a beyondTat bucket case as editable with all sections visible', async () => {
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'beyondTat' }));
+
+    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isNewCase).toBe(false);
+    expect(result.current.shouldShowDetailFormSections).toBe(true);
+    expect(result.current.isReadOnly).toBe(false);
+  });
+
+  it('marks a completed bucket case as read-only with all sections visible', async () => {
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
+
+    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+    expect(result.current.isNewCase).toBe(false);
+    expect(result.current.shouldShowDetailFormSections).toBe(true);
+    expect(result.current.isReadOnly).toBe(true);
+  });
 });

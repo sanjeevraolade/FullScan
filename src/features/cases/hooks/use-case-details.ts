@@ -1,7 +1,7 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { fetchCaseDetail, submitVerificationOutcome } from '@/repositories/case-repository';
+import { acceptCase as acceptCaseApi, fetchCaseDetail, submitVerificationOutcome } from '@/repositories/case-repository';
 import {
   VERIFICATION_STATUS_INSUFFICIENT,
   VERIFICATION_STATUS_UTV,
@@ -10,6 +10,11 @@ import {
 import type { AddressType, CaseDetail, ResidenceType } from '@/domain/case';
 import { useReferenceDataStore } from '@/store/reference-data';
 import type { ReferenceData } from '@/domain/reference-data';
+import {
+  isReadOnlyCaseBucket,
+  isNewCaseBucket,
+  shouldShowDetailFormSections,
+} from '../utils/case-access-control';
 
 const FILE_NAME = 'use-case-details.ts';
 
@@ -25,6 +30,10 @@ export interface UseCaseDetailsResult {
   readonly isLoading: boolean;
   readonly loadError: CaseDetailsLoadErrorKey | null;
   readonly refresh: () => void;
+  readonly isReadOnly: boolean;
+  readonly isNewCase: boolean;
+  readonly shouldShowDetailFormSections: boolean;
+  readonly acceptCase: (onAccepted: () => void) => void;
 
   readonly verificationStatus: string;
   readonly selectVerificationStatus: (status: string) => void;
@@ -147,6 +156,46 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     setSelectedPhotoTag(tag);
   }, []);
 
+  const isReadOnly = useMemo(
+    () => (caseDetail ? isReadOnlyCaseBucket(caseDetail.bucket) : false),
+    [caseDetail],
+  );
+
+  const isNewCaseValue = useMemo(
+    () => (caseDetail ? isNewCaseBucket(caseDetail.bucket) : false),
+    [caseDetail],
+  );
+
+  const shouldShowDetailFormSectionsValue = useMemo(
+    () => (caseDetail ? shouldShowDetailFormSections(caseDetail.bucket) : false),
+    [caseDetail],
+  );
+
+  const acceptCase = useCallback(
+    (onAccepted: () => void): void => {
+      LoggerService.info(`${FILE_NAME}: acceptCase: accepting new case`, { caseId });
+      setIsSubmitting(true);
+      setSubmitError(null);
+
+      acceptCaseApi(caseId)
+        .then(() => {
+          LoggerService.info(`${FILE_NAME}: acceptCase: case accepted`, { caseId });
+          onAccepted();
+        })
+        .catch((error: unknown) => {
+          LoggerService.error(`${FILE_NAME}: acceptCase: failed`, {
+            caseId,
+            reason: error instanceof Error ? error.message : 'unknown error',
+          });
+          setSubmitError('network');
+        })
+        .finally(() => {
+          setIsSubmitting(false);
+        });
+    },
+    [caseId],
+  );
+
   const isUtvSectionVisible = verificationStatus === VERIFICATION_STATUS_UTV;
   const isInsufficientSectionVisible = verificationStatus === VERIFICATION_STATUS_INSUFFICIENT;
   const isVerifiedResidenceSectionVisible =
@@ -208,6 +257,10 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     isLoading,
     loadError,
     refresh: loadCaseDetail,
+    isReadOnly,
+    isNewCase: isNewCaseValue,
+    shouldShowDetailFormSections: shouldShowDetailFormSectionsValue,
+    acceptCase,
 
     verificationStatus,
     selectVerificationStatus,

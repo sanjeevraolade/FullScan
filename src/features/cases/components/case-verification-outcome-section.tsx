@@ -24,6 +24,8 @@ export interface CaseVerificationOutcomeSectionProps {
   readonly onSelectInsufficientReason: (reason: string) => void;
   readonly insufficientRemarks: string;
   readonly onInsufficientRemarksChange: (remarks: string) => void;
+
+  readonly isReadOnly?: boolean;
 }
 
 /** Section 5 — verification status outcome, with UTV / Insufficient follow-up fields. */
@@ -43,6 +45,7 @@ export function CaseVerificationOutcomeSection({
   onSelectInsufficientReason,
   insufficientRemarks,
   onInsufficientRemarksChange,
+  isReadOnly = false,
 }: CaseVerificationOutcomeSectionProps): ReactElement {
   const { t } = useTranslation();
 
@@ -69,6 +72,7 @@ export function CaseVerificationOutcomeSection({
           value={verificationStatus}
           onValueChange={onSelectStatus}
           options={statusOptions.map((status) => ({ label: status.label, value: status.code }))}
+          isDisabled={isReadOnly}
         />
 
         {isUtvSectionVisible ? (
@@ -90,6 +94,7 @@ export function CaseVerificationOutcomeSection({
               value={utvReason}
               onValueChange={onSelectUtvReason}
               options={utvReasonOptions.map((reason) => ({ label: reason.label, value: reason.code }))}
+              isDisabled={isReadOnly}
             />
             <FormTextareaField
               fieldId="case-details-utv-remarks"
@@ -97,6 +102,7 @@ export function CaseVerificationOutcomeSection({
               value={utvRemarks}
               onChangeText={onUtvRemarksChange}
               placeholder={t('caseDetails.outcome.utvRemarksPlaceholder')}
+              isDisabled={isReadOnly}
             />
           </VStack>
         ) : null}
@@ -120,6 +126,7 @@ export function CaseVerificationOutcomeSection({
               value={insufficientReason}
               onValueChange={onSelectInsufficientReason}
               options={insufficientReasonOptions.map((reason) => ({ label: reason.label, value: reason.code }))}
+              isDisabled={isReadOnly}
             />
             <FormTextareaField
               fieldId="case-details-insufficient-remarks"
@@ -127,6 +134,7 @@ export function CaseVerificationOutcomeSection({
               value={insufficientRemarks}
               onChangeText={onInsufficientRemarksChange}
               placeholder={t('caseDetails.outcome.insufficientRemarksPlaceholder')}
+              isDisabled={isReadOnly}
             />
           </VStack>
         ) : null}

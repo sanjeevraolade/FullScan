@@ -42,6 +42,7 @@ export interface FormTextFieldProps {
   readonly errorKey?: string | undefined;
   readonly isRequired?: boolean;
   readonly isSecure?: boolean;
+  readonly isDisabled?: boolean;
   readonly keyboardType?: FormTextFieldKeyboard;
   readonly returnKeyType?: ReturnKeyTypeOptions | undefined;
   readonly onSubmitEditing?: (() => void) | undefined;
@@ -69,6 +70,7 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
       errorKey,
       isRequired = false,
       isSecure = false,
+      isDisabled = false,
       keyboardType = 'default',
       returnKeyType,
       onSubmitEditing,
@@ -113,11 +115,11 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
     );
 
     return (
-      <FormControl isInvalid={Boolean(errorKey)} isRequired={isRequired}>
+      <FormControl isInvalid={Boolean(errorKey)} isRequired={isRequired} isDisabled={isDisabled}>
         <FormControlLabel>
           <FormControlLabelText>{label}</FormControlLabelText>
         </FormControlLabel>
-        <Input>
+        <Input opacity={isDisabled ? 0.6 : 1}>
           <InputField
             ref={inputRef}
             value={value}
@@ -131,6 +133,7 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
             onSubmitEditing={onSubmitEditing}
             accessibilityLabel={label}
             testID={`${fieldId}-input`}
+            editable={!isDisabled}
           />
           {isSecure ? (
             <InputSlot
