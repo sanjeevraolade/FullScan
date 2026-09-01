@@ -3,23 +3,19 @@ import { STORAGE_TYPE } from 'react-native-keychain';
 
 import { BiometricCredentialStorageService } from './biometric-credential-storage.service';
 
-const CREDENTIALS = {
-  username: 'field.executive',
-  password: 'secret-value',
-  token: 'jwt-token-value',
-};
+const CREDENTIALS = { username: 'field.executive', password: 'secret-value' };
 
 describe('BiometricCredentialStorageService', () => {
   afterEach(() => {
     jest.clearAllMocks();
   });
 
-  it('persists username, password and token under a biometric access control', async () => {
+  it('persists the username and password under a biometric access control', async () => {
     await BiometricCredentialStorageService.save(CREDENTIALS);
 
     expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
       'field.executive',
-      JSON.stringify({ password: 'secret-value', token: 'jwt-token-value' }),
+      'secret-value',
       expect.objectContaining({
         service: 'com.fullscan.auth.biometric',
         accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
@@ -30,7 +26,7 @@ describe('BiometricCredentialStorageService', () => {
   it('returns the stored credentials after a successful biometric prompt', async () => {
     jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
       username: 'field.executive',
-      password: JSON.stringify({ password: 'secret-value', token: 'jwt-token-value' }),
+      password: 'secret-value',
       service: 'com.fullscan.auth.biometric',
       storage: STORAGE_TYPE.AES_GCM,
     });
@@ -38,6 +34,22 @@ describe('BiometricCredentialStorageService', () => {
     await expect(
       BiometricCredentialStorageService.retrieve('Log in with biometrics'),
     ).resolves.toEqual(CREDENTIALS);
+  });
+
+  it('discards and clears a legacy JSON-encoded entry instead of returning it', async () => {
+    jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+      username: 'field.executive',
+      password: JSON.stringify({ password: 'secret-value', token: 'jwt-token-value' }),
+      service: 'com.fullscan.auth.biometric',
+      storage: STORAGE_TYPE.AES_GCM,
+    });
+
+    await expect(
+      BiometricCredentialStorageService.retrieve('Log in with biometrics'),
+    ).resolves.toBeNull();
+    expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
+      service: 'com.fullscan.auth.biometric',
+    });
   });
 
   it('returns null when no biometric credentials are stored', async () => {
