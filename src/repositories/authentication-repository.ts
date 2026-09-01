@@ -1,13 +1,31 @@
 import { apiClient } from '@/infrastructure/networking';
 import { LoggerService } from '@/infrastructure/logger';
 import { TokenStorageService } from '@/infrastructure/storage';
+import { getDeviceId, getDeviceInfo } from '@/infrastructure/device';
 import type { FieldExecutive } from '@/domain/field-executive';
 
 const FILE_NAME = 'authentication-repository.ts';
 
+export interface DeviceDetails {
+  readonly deviceName: string;
+  readonly model: string;
+  readonly brand: string;
+  readonly osVersion: string;
+  readonly appVersion: string;
+  readonly systemName: string;
+  readonly uniqueId: string;
+}
+
 export interface LoginCredentials {
   readonly username: string;
   readonly password: string;
+}
+
+interface LoginRequest {
+  readonly username: string;
+  readonly password: string;
+  readonly deviceId: string;
+  readonly deviceDetails: DeviceDetails;
 }
 
 interface ApiEnvelope<T> {
@@ -21,24 +39,34 @@ interface LoginResponseDto {
 }
 
 /**
- * Authenticates against POST /auth/login and persists the issued bearer
- * token to secure storage (Keychain/Keystore) — the api-client's request
- * interceptor reads it back from there and attaches it to every subsequent
+ * Authenticates against POST /auth/login with device binding info and persists
+ * the issued bearer token to secure storage (Keychain/Keystore) — the api-client's
+ * request interceptor reads it back from there and attaches it to every subsequent
  * authenticated request. Rejects with the underlying AxiosError on failure;
  * callers map that to a user-facing error key, never a raw message.
  */
 export async function login(credentials: LoginCredentials): Promise<void> {
   // Credentials are never logged — only non-identifying metadata.
-  LoggerService.info(`${FILE_NAME}: login: submitting credentials`, {
+  LoggerService.info(`${FILE_NAME}: login: submitting credentials with device binding`, {
     hasUsername: credentials.username.trim().length > 0,
   });
 
-  const response = await apiClient.post<ApiEnvelope<LoginResponseDto>>('/auth/login', credentials);
+  const deviceId = await getDeviceId();
+  const deviceInfo = await getDeviceInfo();
+
+  const loginRequest: LoginRequest = {
+    username: credentials.username,
+    password: credentials.password,
+    deviceId,
+    deviceDetails: deviceInfo,
+  };
+
+  const response = await apiClient.post<ApiEnvelope<LoginResponseDto>>('/auth/login', loginRequest);
   const { token } = response.data.data;
 
   await TokenStorageService.saveToken(token);
 
-  LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored`);
+  LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored, device bound`);
 }
 
 /** Clears the persisted session token — call on logout or session expiry. */

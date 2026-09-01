@@ -14,4 +14,4 @@ export interface LoginFormValues {
  * 1:1 to `login.errors.*` localization entries; the screen never sees
  * anything but one of these keys, never a raw thrown error.
  */
-export type LoginErrorKey = 'invalidCredentials' | 'network' | 'serverUnavailable';
+export type LoginErrorKey = 'invalidCredentials' | 'network' | 'serverUnavailable' | 'deviceMismatch';

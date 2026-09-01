@@ -1,5 +1,6 @@
 import { apiClient } from '@/infrastructure/networking';
 import { TokenStorageService } from '@/infrastructure/storage';
+import { getDeviceId, getDeviceInfo } from '@/infrastructure/device';
 
 import { login, logout } from './authentication-repository';
 
@@ -9,10 +10,29 @@ jest.mock('@/infrastructure/networking', () => ({
 jest.mock('@/infrastructure/storage', () => ({
   TokenStorageService: { saveToken: jest.fn(), getToken: jest.fn(), clearToken: jest.fn() },
 }));
+jest.mock('@/infrastructure/device', () => ({
+  getDeviceId: jest.fn(),
+  getDeviceInfo: jest.fn(),
+}));
 
 const CREDENTIALS = { username: 'field.executive', password: 'secret-value' };
 
+const mockDeviceInfo = {
+  deviceName: 'Test Device',
+  model: 'test-model',
+  brand: 'test-brand',
+  osVersion: '14.0',
+  appVersion: '1.0.0',
+  systemName: 'iOS',
+  uniqueId: 'unique-device-id-123',
+};
+
 describe('authentication-repository', () => {
+  beforeEach(() => {
+    jest.mocked(getDeviceId).mockResolvedValue(mockDeviceInfo.uniqueId);
+    jest.mocked(getDeviceInfo).mockResolvedValue(mockDeviceInfo);
+  });
+
   afterEach(() => {
     jest.clearAllMocks();
   });
@@ -31,7 +51,12 @@ describe('authentication-repository', () => {
 
       await login(CREDENTIALS);
 
-      expect(apiClient.post).toHaveBeenCalledWith('/auth/login', CREDENTIALS);
+      expect(apiClient.post).toHaveBeenCalledWith('/auth/login', {
+        username: CREDENTIALS.username,
+        password: CREDENTIALS.password,
+        deviceId: mockDeviceInfo.uniqueId,
+        deviceDetails: mockDeviceInfo,
+      });
       expect(TokenStorageService.saveToken).toHaveBeenCalledWith('jwt-token-value');
     });
 

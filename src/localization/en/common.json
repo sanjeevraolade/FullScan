@@ -25,7 +25,8 @@
     "errors": {
       "invalidCredentials": "Incorrect username or password. Please try again.",
       "network": "Unable to connect. Check your internet connection and try again.",
-      "serverUnavailable": "FullScan is temporarily unavailable. Please try again later."
+      "serverUnavailable": "FullScan is temporarily unavailable. Please try again later.",
+      "deviceMismatch": "This account is already logged in from another device. Please contact your administrator to change device binding."
     },
     "biometric": {
       "enroll": {

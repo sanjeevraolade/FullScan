@@ -60,6 +60,8 @@ function resolveLoginErrorKey(error: unknown): LoginErrorKey {
     const errorKey: LoginErrorKey =
       status === 401
         ? 'invalidCredentials'
+        : status === 403
+        ? 'deviceMismatch'
         : status !== undefined && status >= 500
         ? 'serverUnavailable'
         : 'network';
