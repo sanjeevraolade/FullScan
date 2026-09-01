@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
-    "build": "tsc",
+    "build": "tsc && npm run copy:migrations",
+    "copy:migrations": "node -e \"const fs = require('fs'); const path = require('path'); const src = 'src/db/migrations'; const dest = 'dist/db/migrations'; if(!fs.existsSync(dest)) fs.mkdirSync(dest, {recursive: true}); fs.readdirSync(src).forEach(f => fs.copyFileSync(path.join(src, f), path.join(dest, f)));\"",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:run": "vitest run",

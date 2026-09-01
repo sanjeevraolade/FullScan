@@ -13,4 +13,6 @@ export interface FieldExecutiveRow {
   readonly username: string;
   readonly password_hash: string;
   readonly created_at: string;
+  readonly device_id?: string | null;
+  readonly device_details?: string | null;
 }
