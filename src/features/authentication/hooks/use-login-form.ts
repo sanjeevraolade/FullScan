@@ -6,7 +6,6 @@ import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import axios from 'axios';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { TokenStorageService } from '@/infrastructure/storage';
 import { login } from '@/repositories/authentication-repository';
 import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
 import { fetchReferenceData } from '@/repositories/reference-data-repository';
@@ -118,8 +117,7 @@ export function useLoginForm(): UseLoginFormResult {
         setLoginError(null);
         try {
           await login({ username: values.username, password: values.password });
-          const [token, fieldExecutive, referenceData] = await Promise.all([
-            TokenStorageService.getToken(),
+          const [fieldExecutive, referenceData] = await Promise.all([
             fetchCurrentFieldExecutive(),
             fetchReferenceData(),
           ]);
@@ -127,13 +125,10 @@ export function useLoginForm(): UseLoginFormResult {
           useReferenceDataStore.getState().setReferenceData(referenceData);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);
 
-          const willPromptBiometricEnrollment =
-            token !== null &&
-            (await evaluateBiometricEnrollmentEligibility({
-              username: values.username,
-              password: values.password,
-              token,
-            }));
+          const willPromptBiometricEnrollment = await evaluateBiometricEnrollmentEligibility({
+            username: values.username,
+            password: values.password,
+          });
           if (willPromptBiometricEnrollment) {
             // The enrollment dialog now owns navigation once the user
             // enables or skips it — see `useBiometricEnrollment`'s `onSettled`.

@@ -7,7 +7,7 @@ import axios from 'axios';
 import { LoggerService } from '@/infrastructure/logger';
 import { BiometricsService } from '@/infrastructure/biometrics';
 import type { BiometryType } from '@/infrastructure/biometrics';
-import { BiometricCredentialStorageService, TokenStorageService } from '@/infrastructure/storage';
+import { BiometricCredentialStorageService } from '@/infrastructure/storage';
 import { login } from '@/repositories/authentication-repository';
 import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
 import { fetchReferenceData } from '@/repositories/reference-data-repository';
@@ -53,8 +53,9 @@ async function restoreSession(): Promise<void> {
 /**
  * Drives the Login screen's biometric icon: resolves whether to show it and
  * which type, then on tap verifies the user via the OS biometric prompt and
- * restores their session from the stored token — falling back to a silent
- * re-login with the stored password if that token has since expired.
+ * re-authenticates through `/auth/login` with the stored username/password —
+ * never the cached token, since that may already have expired server-side
+ * and trying it first would just cost a guaranteed-failing round trip.
  */
 export function useBiometricLogin(): UseBiometricLoginResult {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
@@ -111,21 +112,10 @@ export function useBiometricLogin(): UseBiometricLoginResult {
           return;
         }
 
-        await TokenStorageService.saveToken(credentials.token);
         try {
-          await restoreSession();
-        } catch (error: unknown) {
-          if (!axios.isAxiosError(error) || error.response?.status !== 401) {
-            // Network/server failure — not proof the stored credentials are
-            // bad, so the vault stays intact for the next attempt.
-            throw error;
-          }
-          LoggerService.warn(
-            `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: stored token expired, re-authenticating with stored password`,
-          );
-          try {
-            await login({ username: credentials.username, password: credentials.password });
-          } catch (loginError: unknown) {
+          await login({ username: credentials.username, password: credentials.password });
+        } catch (loginError: unknown) {
+          if (axios.isAxiosError(loginError) && loginError.response?.status === 401) {
             // The stored password itself no longer works (e.g. changed
             // server-side) — fail securely, this vault entry can't recover.
             LoggerService.warn(
@@ -133,10 +123,11 @@ export function useBiometricLogin(): UseBiometricLoginResult {
             );
             await BiometricCredentialStorageService.clear();
             setIsAvailable(false);
-            throw loginError;
           }
-          await restoreSession();
+          throw loginError;
         }
+
+        await restoreSession();
 
         LoggerService.info(
           `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: biometric login succeeded`,

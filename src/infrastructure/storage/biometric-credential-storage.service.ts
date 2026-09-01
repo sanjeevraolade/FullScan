@@ -15,19 +15,27 @@ const FILE_NAME = 'biometric-credential-storage.service.ts';
  */
 const KEYCHAIN_SERVICE = 'com.fullscan.auth.biometric';
 
-interface StoredSecret {
-  readonly password: string;
-  readonly token: string;
-}
-
 async function save(credentials: BiometricCredentials): Promise<void> {
-  const secret: StoredSecret = { password: credentials.password, token: credentials.token };
-  await Keychain.setGenericPassword(credentials.username, JSON.stringify(secret), {
+  await Keychain.setGenericPassword(credentials.username, credentials.password, {
     service: KEYCHAIN_SERVICE,
     accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
     accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
   });
   LoggerService.info(`${FILE_NAME}: save: biometric credentials persisted to secure storage`);
+}
+
+/**
+ * An earlier build wrote this field as `JSON.stringify({ password, token })`
+ * instead of the plain password. Detects a leftover entry in that shape so
+ * it can be discarded instead of handed to `/auth/login` as-is.
+ */
+function isLegacyEncodedSecret(password: string): boolean {
+  try {
+    const parsed: unknown = JSON.parse(password);
+    return typeof parsed === 'object' && parsed !== null && 'password' in parsed;
+  } catch {
+    return false;
+  }
 }
 
 async function retrieve(promptMessage: string): Promise<BiometricCredentials | null> {
@@ -40,9 +48,13 @@ async function retrieve(promptMessage: string): Promise<BiometricCredentials | n
       LoggerService.warn(`${FILE_NAME}: retrieve: no biometric credentials stored`);
       return null;
     }
-    const secret = JSON.parse(storedCredentials.password) as StoredSecret;
+    if (isLegacyEncodedSecret(storedCredentials.password)) {
+      LoggerService.warn(`${FILE_NAME}: retrieve: discarding legacy-format vault entry`);
+      await clear();
+      return null;
+    }
     LoggerService.info(`${FILE_NAME}: retrieve: biometric credentials verified and retrieved`);
-    return { username: storedCredentials.username, password: secret.password, token: secret.token };
+    return { username: storedCredentials.username, password: storedCredentials.password };
   } catch (error: unknown) {
     LoggerService.warn(`${FILE_NAME}: retrieve: biometric verification failed or was cancelled`);
     return null;

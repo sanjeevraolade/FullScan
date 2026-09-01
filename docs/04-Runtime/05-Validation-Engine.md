@@ -130,7 +130,7 @@ Runtime Engine
 * Longitude
 * Geo-fence
 * Mock Location
-* Speed Threshold (future)
+* Distane Threshold (future)
 
 ---
 

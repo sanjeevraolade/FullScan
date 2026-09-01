@@ -3,7 +3,12 @@
     "allow": [
       "Bash(/private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/46a0826f-09a3-48f5-a3a9-94790c34023a/scratchpad/tap.sh 590 1186)",
       "Bash(osascript -e ' *)",
-      "Bash(echo \"---tsc exit $?---\")"
+      "Bash(echo \"---tsc exit $?---\")",
+      "Bash(cd /Volumes/Dev/MyApps/FullscanField/FullScan && ls -la && echo \"---APP---\" && ls -la FullScanApp && echo \"---SERVER---\" && ls -la FullScanServer)",
+      "Read(//Volumes/Dev/MyApps/FullscanField/FullScan/**)",
+      "Bash(node -e ' *)",
+      "Bash(npx vitest *)",
+      "Bash(DB_PATH=/private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/f2ec2299-fa2b-4cae-966b-4c9d86d95c6f/scratchpad/smoke.sqlite PORT=3999 node dist/index.js)"
     ]
   }
 }
