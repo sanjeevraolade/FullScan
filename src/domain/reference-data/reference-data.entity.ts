@@ -4,10 +4,29 @@ export interface DropdownOption {
   readonly label: string;
 }
 
+/** A mobile app setting's value, already coerced to its declared type by the backend. */
+export type MobileAppSettingValue = boolean | number | string;
+
 /**
- * Every dropdown/option list the verification workflow needs, bundled into
- * one payload fetched once right after login (see the product spec's
- * login-time data fetch decision) rather than per-case or per-screen.
+ * Remote configuration administered from the Admin Portal's Mobile App Settings
+ * page and delivered with the post-login reference-data payload.
+ *
+ * `values` is an open key/value map on purpose: a setting the back office adds
+ * server-side arrives here without an app release. Use
+ * `resolveMobileAppSettings` to read it as a typed, defaulted object rather
+ * than indexing raw keys at call sites.
+ */
+export interface MobileAppSettings {
+  readonly values: Readonly<Record<string, MobileAppSettingValue>>;
+  /** Most recent change across all settings, or null if none has ever been edited. */
+  readonly updatedAt: string | null;
+}
+
+/**
+ * Every dropdown/option list the verification workflow needs, plus the
+ * admin-managed mobile app settings, bundled into one payload fetched once
+ * right after login (see the product spec's login-time data fetch decision)
+ * rather than per-case or per-screen.
  */
 export interface ReferenceData {
   readonly verificationTypeStatuses: readonly DropdownOption[];
@@ -20,4 +39,6 @@ export interface ReferenceData {
   readonly actionStatuses: readonly DropdownOption[];
   /** The whole case's aggregate report status (BGV Profile Created ... Final Report Generated). */
   readonly profileStatuses: readonly DropdownOption[];
+  /** Admin-managed remote configuration — see `resolveMobileAppSettings`. */
+  readonly mobileAppSettings: MobileAppSettings;
 }

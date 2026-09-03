@@ -66,6 +66,7 @@ describe('LoginScreen', () => {
       componentStatuses: [],
       actionStatuses: [],
       profileStatuses: [],
+      mobileAppSettings: { values: {}, updatedAt: null },
     });
     // `mockResolvedValue` (persistent, not "Once") isn't undone by `clearAllMocks`
     // in the afterEach below — reset these two to a known "unsupported" baseline

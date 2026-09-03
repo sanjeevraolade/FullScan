@@ -27,6 +27,7 @@ const mockReferenceData: ReferenceData = {
   componentStatuses: [{ code: 'component_accepted', label: 'Component Accepted' }],
   actionStatuses: [{ code: 'accepted', label: 'Accept/Approve' }],
   profileStatuses: [{ code: 'wip', label: 'WIP' }],
+  mobileAppSettings: { values: {}, updatedAt: null },
 };
 
 function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {

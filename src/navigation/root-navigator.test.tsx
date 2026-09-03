@@ -44,6 +44,7 @@ describe('RootNavigator', () => {
       componentStatuses: [],
       actionStatuses: [],
       profileStatuses: [],
+      mobileAppSettings: { values: {}, updatedAt: null },
     });
   });
 

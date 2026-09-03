@@ -8,7 +8,11 @@
       "Read(//Volumes/Dev/MyApps/FullscanField/FullScan/**)",
       "Bash(node -e ' *)",
       "Bash(npx vitest *)",
-      "Bash(DB_PATH=/private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/f2ec2299-fa2b-4cae-966b-4c9d86d95c6f/scratchpad/smoke.sqlite PORT=3999 node dist/index.js)"
+      "Bash(DB_PATH=/private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/f2ec2299-fa2b-4cae-966b-4c9d86d95c6f/scratchpad/smoke.sqlite PORT=3999 node dist/index.js)",
+      "Bash(curl -s http://localhost:3998/api/v1/reference-data)",
+      "Bash(curl -s -c /private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/f2ec2299-fa2b-4cae-966b-4c9d86d95c6f/scratchpad/j2 -X POST http://localhost:3998/api/v1/admin/auth/login -H 'Content-Type: application/json' -d '{\"username\":\"admin001\",\"password\":\"Admin@123!\"}')",
+      "Bash(curl -s -b /private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/f2ec2299-fa2b-4cae-966b-4c9d86d95c6f/scratchpad/j2 -X PUT http://localhost:3998/api/v1/admin/mobile-app-settings -H 'Content-Type: application/json' -d '{\"settings\":[{\"key\":\"geo_fence_radius_meters\",\"value\":425},{\"key\":\"watermark_enabled\",\"value\":false},{\"key\":\"default_language\",\"value\":\"hi\"}]}')",
+      "Bash(grep -n \"Portal ES modules parse cleanly\\\\|Mobile regression smoke test\\\\|npm run lint\\\\*\\\\*fails\\\\|lint\\\\*\\\\* fails\\\\|FullScanApp\\\\` \\(React Native\\): unchanged\\\\|admin-login-rate-limit.test.ts\\\\` *| 2\\\\|### Modified\" docs/ADMIN_PORTAL.md)"
     ]
   }
 }
