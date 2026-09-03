@@ -76,6 +76,12 @@ npm run test:run   # vitest, single run (CI)
 npm run lint        # eslint src/
 ```
 
+Suites live in `tests/` (config: `vitest.config.ts`). Each suite points `DB_PATH` at its own
+throwaway SQLite file via `tests/helpers/test-app.ts`, so tests never touch `./data/`.
+
+> Note: `npm run lint` currently fails — ESLint 9 requires an `eslint.config.js` and the project
+> has none. Type safety is covered by `npx tsc --noEmit`.
+
 ## API surface
 
 All routes are mounted under `/api/v1`:
@@ -90,6 +96,11 @@ All routes are mounted under `/api/v1`:
 | `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
+| `/admin/auth/login`                 | POST   | Validate admin credentials, set session cookie + return token |
+| `/admin/auth/logout`                | POST   | Clear the admin session cookie (admin auth required)     |
+| `/admin/auth/me`                    | GET    | Current admin's profile (admin auth required)            |
+| `/admin/mobile-app-settings`        | GET    | Mobile app settings + render metadata (admin auth required) |
+| `/admin/mobile-app-settings`        | PUT    | Update mobile app settings (admin auth required)         |
 
 `POST /auth/login` returns a JWT (`{ token, fieldExecutive }`) only when both the username and
 password match a seeded field executive. Send it as `Authorization: Bearer <token>` on `/cases`
@@ -113,6 +124,37 @@ detail plus `siblingComponents` — the rest of its parent case, for context.
 Component/action/profile status codes come from `dropdown_options` (categories `component_status`,
 `action_status`, `profile_status`), fetched via `/reference-data` like every other dropdown — see
 migration `009_create_case_components.sql`.
+
+## Admin Portal
+
+The server also hosts a small back-office web portal at **`http://localhost:<PORT>/admin`** —
+dependency-free static HTML/CSS/ES modules under `public/admin/`, served and guarded by Express.
+Signing in reveals a navigation drawer whose only page today is **Mobile App Settings**, with
+**Logout** pinned at the bottom.
+
+- Pages are protected **server-side**: `/admin/*` runs through `authenticateAdminPage`, which
+  redirects an anonymous browser to `/admin/login` before any HTML is sent.
+- The access token lives in an **httpOnly, `SameSite=Strict` cookie** (`fs_admin_session`), so
+  portal JavaScript never holds it. Admin API routes accept either that cookie or
+  `Authorization: Bearer <token>`.
+- Admin tokens carry `scope: 'admin'` and are **not interchangeable** with field-executive tokens
+  in either direction, even though both are signed with `JWT_SECRET`.
+- Adding a drawer page means one entry in `public/admin/assets/js/menu.js` plus one page module —
+  see `docs/ADMIN_PORTAL.md` for the full walkthrough.
+
+### Admin test credentials
+
+Migration `013_create_admin_users.sql` seeds four admins. `admin004` is deliberately deactivated so
+the "account disabled" path can be exercised.
+
+| Username   | Name                  | Role          | Active |
+| ---------- | --------------------- | ------------- | ------ |
+| `admin001` | Ravi Menon            | `super_admin` | yes    |
+| `admin002` | Priya Nair            | `admin`       | yes    |
+| `admin003` | Sunil Kulkarni        | `admin`       | yes    |
+| `admin004` | Deactivated Operator  | `admin`       | no     |
+
+All four share the password `Admin@123!`.
 
 ### Test credentials
 
@@ -139,10 +181,15 @@ src/
   services/              Business logic per resource
   db/                    SQLite connection, DAOs, migrations (*.sql)
   routes/                 Route definitions + Zod request schemas
-  middleware/             validate (Zod), error-handler
+  middleware/             validate (Zod), error-handler, authenticate, authenticate-admin
   types/                  Domain/DTO types per resource
   constants/              Mock session (pre-auth stand-in)
-  utils/                  Logger, AppError
+  utils/                  Logger, AppError, admin session cookie
+public/
+  admin/                  Admin Portal front end (static HTML/CSS/ES modules)
+    assets/js/menu.js     Drawer menu registry — the portal's extension point
+    assets/js/pages/      One module per drawer page
+tests/                    Vitest + Supertest suites
 ```
 
 ## Data

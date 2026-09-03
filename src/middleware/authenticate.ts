@@ -17,6 +17,14 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
 
   try {
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
+
+    // Admin tokens are signed with the same secret, so verifying the signature is
+    // not enough — a field-executive route requires a field-executive claim.
+    if (!payload.fieldExecutiveId) {
+      next(new AppError(401, 'Invalid or expired authentication token'));
+      return;
+    }
+
     req.fieldExecutiveId = payload.fieldExecutiveId;
     next();
   } catch {

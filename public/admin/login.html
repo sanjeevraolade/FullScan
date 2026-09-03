@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Sign in · FullScan Admin</title>
+    <link rel="stylesheet" href="/admin/assets/css/admin.css" />
+  </head>
+  <body class="login-page">
+    <main class="login-card">
+      <div class="brand login-card__brand">
+        <span class="brand__mark" aria-hidden="true">FS</span>
+        <span>
+          <span class="brand__name">FullScan</span>
+          <span class="brand__sub">Admin Portal</span>
+        </span>
+      </div>
+
+      <h1 class="login-card__title">Sign in</h1>
+      <p class="login-card__hint">Use your administrator credentials to continue.</p>
+
+      <div data-alert hidden></div>
+
+      <form data-login-form novalidate>
+        <div class="field">
+          <label class="field__label" for="username">Username</label>
+          <input
+            class="field__control"
+            id="username"
+            name="username"
+            type="text"
+            autocomplete="username"
+            autocapitalize="none"
+            spellcheck="false"
+            maxlength="100"
+            required
+          />
+        </div>
+
+        <div class="field">
+          <label class="field__label" for="password">Password</label>
+          <input
+            class="field__control"
+            id="password"
+            name="password"
+            type="password"
+            autocomplete="current-password"
+            maxlength="200"
+            required
+          />
+        </div>
+
+        <button class="btn btn--primary btn--block" type="submit" data-submit>Sign in</button>
+      </form>
+
+      <p class="login-card__footnote">
+        Development seed accounts: <code>admin001</code> – <code>admin003</code> /
+        <code>Admin@123!</code>
+      </p>
+    </main>
+
+    <script type="module" src="/admin/assets/js/login.js"></script>
+  </body>
+</html>
