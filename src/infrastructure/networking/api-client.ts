@@ -30,9 +30,23 @@ export const apiClient: AxiosInstance = axios.create({
 });
 
 apiClient.interceptors.request.use(async (request) => {
+  // Method, URL path and status code only — never headers, request bodies or
+  // response payloads: they carry bearer tokens, passwords and PII.
+  LoggerService.info(`${FILE_NAME}: apiClient: preparing request`, {
+    method: request.method,
+    url: request.url,
+  });
+
   const token = await TokenStorageService.getToken();
   if (token) {
+    LoggerService.info(`${FILE_NAME}: apiClient: attaching authorization header`, {
+      url: request.url,
+    });
     request.headers.set('Authorization', `Bearer ${token}`);
+  } else {
+    LoggerService.warn(`${FILE_NAME}: apiClient: no auth token, sending unauthenticated request`, {
+      url: request.url,
+    });
   }
 
   LoggerService.info(`${FILE_NAME}: apiClient: request`, {

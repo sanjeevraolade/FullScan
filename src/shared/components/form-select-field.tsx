@@ -51,6 +51,18 @@ export function FormSelectField({
   placeholder,
   isDisabled = false,
 }: FormSelectFieldProps): ReactElement {
+  // Never log the selected value itself — only field identity and coarse state.
+  LoggerService.info(`${FILE_NAME}: FormSelectField: rendering`, {
+    fieldId,
+    hasValue: value.length > 0,
+    optionCount: options.length,
+    isDisabled,
+  });
+
+  if (options.length === 0) {
+    LoggerService.warn(`${FILE_NAME}: FormSelectField: rendering with no options`, { fieldId });
+  }
+
   const handleValueChange = (nextValue: string): void => {
     LoggerService.info(`${FILE_NAME}: FormSelectField.handleValueChange: value changed`, { fieldId });
     onValueChange(nextValue);
@@ -72,9 +84,14 @@ export function FormSelectField({
             <SelectDragIndicatorWrapper>
               <SelectDragIndicator />
             </SelectDragIndicatorWrapper>
-            {options.map((option) => (
-              <SelectItem key={option.value} label={option.label} value={option.value} />
-            ))}
+            {options.map((option) => {
+              LoggerService.info(`${FILE_NAME}: FormSelectField: rendering option`, {
+                fieldId,
+                optionValue: option.value,
+              });
+
+              return <SelectItem key={option.value} label={option.label} value={option.value} />;
+            })}
           </SelectContent>
         </SelectPortal>
       </Select>

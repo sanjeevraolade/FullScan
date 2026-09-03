@@ -4,7 +4,6 @@ export type {
   AddressType,
   CaseDetail,
   CostRequested,
-  GpsCheck,
   Respondent,
   ResidenceType,
   SiblingComponent,

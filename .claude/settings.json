@@ -18,7 +18,9 @@
       "Bash(git checkout *)",
       "Bash(grep -n \"geo_fence_radius_meters\\\\|17 settings\\\\|Evidence capture\\\\|migration \\\\`014\\\\`\\\\|### 3.3 Migrations\" README.md docs/ADMIN_PORTAL.md)",
       "Bash(python3 -)",
-      "Bash(grep -n \"8.5 Delivering\\\\|locationRetryCount\\\\` control\\\\|migration-\\\\`015\\\\`\" docs/ADMIN_PORTAL.md)"
+      "Bash(grep -n \"8.5 Delivering\\\\|locationRetryCount\\\\` control\\\\|migration-\\\\`015\\\\`\" docs/ADMIN_PORTAL.md)",
+      "Bash(python3 /private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/4879c601-7519-4f18-89ac-36add0244c6e/scratchpad/icons.py)",
+      "Bash(npx eslint *)"
     ]
   }
 }

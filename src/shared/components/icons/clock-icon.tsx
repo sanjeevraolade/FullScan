@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Circle, Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'clock-icon.tsx';
+
 /**
  * Gluestack UI ships no clock icon — follows the same `createIcon` + svg
  * pattern as `MapPinIcon`, so it's theme-aware and sizeable via `Icon` props
@@ -17,3 +21,5 @@ export const ClockIcon = createIcon({
   ),
 });
 ClockIcon.displayName = 'ClockIcon';
+
+LoggerService.info(`${FILE_NAME}: ClockIcon: icon component defined`);

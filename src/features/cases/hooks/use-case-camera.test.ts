@@ -46,6 +46,7 @@ function buildLocation(overrides: Partial<DeviceLocation> = {}): DeviceLocation 
     accuracyMeters: 4.2,
     isMockLocation: false,
     capturedAt: new Date('2026-08-26T09:00:00.000Z'),
+    source: 'fresh',
     ...overrides,
   };
 }
@@ -57,7 +58,7 @@ describe('useCaseCamera', () => {
     jest.clearAllMocks();
     mockUseCameraDevice.mockReturnValue({ id: 'back-camera' });
     mockUseCameraPermission.mockReturnValue({ hasPermission: true, requestPermission: jest.fn() });
-    jest.mocked(LocationService.requestPermission).mockResolvedValue(true);
+    jest.mocked(LocationService.requestPermission).mockResolvedValue('granted');
     jest.mocked(LocationService.watchLocation).mockImplementation((onLocation) => {
       onLocationCallback = onLocation;
       return 1;
@@ -80,7 +81,7 @@ describe('useCaseCamera', () => {
   });
 
   it('surfaces a permissionDenied error when location permission is refused', async () => {
-    jest.mocked(LocationService.requestPermission).mockResolvedValue(false);
+    jest.mocked(LocationService.requestPermission).mockResolvedValue('denied');
 
     const { result } = await renderHook(() => useCaseCamera());
 

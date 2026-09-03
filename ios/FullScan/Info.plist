@@ -38,7 +38,7 @@
 	<key>NSFaceIDUsageDescription</key>
 	<string>FullScan uses Face ID to let you log in securely without typing your password.</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
-	<string>FullScan needs your location to geotag verification evidence photos.</string>
+	<string>FullScan needs your location to confirm you are at the assigned verification address and to geotag evidence photos.</string>
 	<key>RCTNewArchEnabled</key>
 	<true/>
 	<key>UILaunchStoryboardName</key>

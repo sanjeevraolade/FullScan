@@ -56,6 +56,9 @@ export function ApplicationProvider({ children }: PropsWithChildren): ReactEleme
   }, []);
 
   if (!isBootstrapped) {
+    LoggerService.info(
+      `${FILE_NAME}: ApplicationProvider: bootstrap not finished, rendering loading state`,
+    );
     return (
       <ThemeProvider>
         <AppSafeArea>
@@ -66,6 +69,8 @@ export function ApplicationProvider({ children }: PropsWithChildren): ReactEleme
       </ThemeProvider>
     );
   }
+
+  LoggerService.info(`${FILE_NAME}: ApplicationProvider: bootstrap complete, rendering children`);
 
   return <ThemeProvider>{children}</ThemeProvider>;
 }

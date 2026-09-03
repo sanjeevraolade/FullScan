@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'fingerprint-icon.tsx';
+
 /**
  * Gluestack UI ships no fingerprint icon — follows the same `createIcon` +
  * svg pattern as `CameraIcon`/`ShieldIcon`, so it's theme-aware and sizeable
@@ -50,3 +54,5 @@ export const FingerprintIcon = createIcon({
   ),
 });
 FingerprintIcon.displayName = 'FingerprintIcon';
+
+LoggerService.info(`${FILE_NAME}: FingerprintIcon: icon component defined`);

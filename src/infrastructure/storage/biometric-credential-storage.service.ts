@@ -16,6 +16,8 @@ const FILE_NAME = 'biometric-credential-storage.service.ts';
 const KEYCHAIN_SERVICE = 'com.fullscan.auth.biometric';
 
 async function save(credentials: BiometricCredentials): Promise<void> {
+  // Never log the username, the password, or their lengths.
+  LoggerService.info(`${FILE_NAME}: save: persisting biometric credentials to secure storage`);
   await Keychain.setGenericPassword(credentials.username, credentials.password, {
     service: KEYCHAIN_SERVICE,
     accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
@@ -30,15 +32,23 @@ async function save(credentials: BiometricCredentials): Promise<void> {
  * it can be discarded instead of handed to `/auth/login` as-is.
  */
 function isLegacyEncodedSecret(password: string): boolean {
+  // Only the shape verdict is logged — never the secret being inspected.
+  LoggerService.info(`${FILE_NAME}: isLegacyEncodedSecret: inspecting stored secret shape`);
   try {
     const parsed: unknown = JSON.parse(password);
-    return typeof parsed === 'object' && parsed !== null && 'password' in parsed;
+    const isLegacyShape = typeof parsed === 'object' && parsed !== null && 'password' in parsed;
+    LoggerService.info(`${FILE_NAME}: isLegacyEncodedSecret: secret shape resolved`, {
+      isLegacyShape,
+    });
+    return isLegacyShape;
   } catch {
+    LoggerService.info(`${FILE_NAME}: isLegacyEncodedSecret: secret is not json, not legacy`);
     return false;
   }
 }
 
 async function retrieve(promptMessage: string): Promise<BiometricCredentials | null> {
+  LoggerService.info(`${FILE_NAME}: retrieve: prompting for biometric verification`);
   try {
     const storedCredentials = await Keychain.getGenericPassword({
       service: KEYCHAIN_SERVICE,
@@ -62,12 +72,18 @@ async function retrieve(promptMessage: string): Promise<BiometricCredentials | n
 }
 
 async function clear(): Promise<void> {
+  LoggerService.info(`${FILE_NAME}: clear: removing biometric credentials from secure storage`);
   await Keychain.resetGenericPassword({ service: KEYCHAIN_SERVICE });
   LoggerService.info(`${FILE_NAME}: clear: biometric credentials removed from secure storage`);
 }
 
 async function exists(): Promise<boolean> {
-  return Keychain.hasGenericPassword({ service: KEYCHAIN_SERVICE });
+  LoggerService.info(`${FILE_NAME}: exists: checking for stored biometric credentials`);
+  const hasStoredCredentials = await Keychain.hasGenericPassword({ service: KEYCHAIN_SERVICE });
+  LoggerService.info(`${FILE_NAME}: exists: stored biometric credential check complete`, {
+    hasStoredCredentials,
+  });
+  return hasStoredCredentials;
 }
 
 /**

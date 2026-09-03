@@ -36,6 +36,7 @@ import type { CapturedPhotoEvidence } from '@/domain/case';
 
 import { CaseInfoSection } from '../components/case-info-section';
 import { CaseInstructionsSection } from '../components/case-instructions-section';
+import { CaseForceProceedDialog } from '../components/case-force-proceed-dialog';
 import { CaseLocationSection } from '../components/case-location-section';
 import { CaseMaskedCallSection } from '../components/case-masked-call-section';
 import { CasePhotoEvidenceSection } from '../components/case-photo-evidence-section';
@@ -63,17 +64,20 @@ export function CaseDetailsScreen(): ReactElement {
   const { params } = useRoute<CaseDetailsRoute>();
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
+  const [showForceProceedConsent, setShowForceProceedConsent] = useState(false);
   // Params — not local state — are the source of truth for captured photos:
   // CaseCamera always hands back the complete set (see `CaseDetailsRouteParams`
   // doc), so there's nothing here that could go stale or reset independently.
-  const capturedPhotos = useMemo<readonly CapturedPhotoEvidence[]>(
-    () =>
-      (params.capturedPhotos ?? []).map(({ capturedAtIso, ...rest }) => ({
-        ...rest,
-        capturedAt: new Date(capturedAtIso),
-      })),
-    [params.capturedPhotos],
-  );
+  const capturedPhotos = useMemo<readonly CapturedPhotoEvidence[]>(() => {
+    // File paths are evidence URIs and never logged — only how many there are.
+    LoggerService.info(`${FILE_NAME}: capturedPhotos: rehydrating captured photos from params`, {
+      count: (params.capturedPhotos ?? []).length,
+    });
+    return (params.capturedPhotos ?? []).map(({ capturedAtIso, ...rest }) => ({
+      ...rest,
+      capturedAt: new Date(capturedAtIso),
+    }));
+  }, [params.capturedPhotos]);
   const {
     caseDetail,
     referenceData,
@@ -84,6 +88,7 @@ export function CaseDetailsScreen(): ReactElement {
     isNewCase,
     shouldShowDetailFormSections,
     acceptCase: acceptCaseAction,
+    geoFence,
     verificationStatus,
     selectVerificationStatus,
     isUtvSectionVisible,
@@ -114,17 +119,34 @@ export function CaseDetailsScreen(): ReactElement {
     submit,
   } = useCaseDetails(params.caseId);
 
-  LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: rendering`, { caseId: params.caseId });
+  /**
+   * The single gate for "show the rest of the case": the geo-fence passed, or
+   * the user went through the Force Proceed consent flow.
+   */
+  const isCaseContentVisible = geoFence.isCaseContentUnlocked;
+
+  LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: rendering`, {
+    caseId: params.caseId,
+    geoFenceStatus: geoFence.status,
+    isCaseContentVisible,
+  });
 
   useLayoutEffect(() => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: header effect running`, {
+      hasCaseDetail: caseDetail !== null,
+    });
     navigation.setOptions({
       headerTitle: caseDetail ? t('caseDetails.title', { caseRef: caseDetail.caseRef }) : '',
-      headerRight: () =>
-        caseDetail ? (
+      headerRight: () => {
+        LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: rendering header badge`, {
+          bucket: caseDetail?.bucket ?? null,
+        });
+        return caseDetail ? (
           <Badge action="warning" size="sm" borderRadius="$md" mr="$4">
             <BadgeText textTransform="uppercase">{t(`caseList.tabs.${caseDetail.bucket}`)}</BadgeText>
           </Badge>
-        ) : null,
+        ) : null;
+      },
     });
   }, [caseDetail, navigation, t]);
 
@@ -163,9 +185,48 @@ export function CaseDetailsScreen(): ReactElement {
 
   const handleDeletePhoto = (filePath: string): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleDeletePhoto: removing captured photo`);
-    navigation.setParams({
-      capturedPhotos: (params.capturedPhotos ?? []).filter((photo) => photo.filePath !== filePath),
+    // Evidence file paths are never logged — counts only.
+    const remainingPhotos = (params.capturedPhotos ?? []).filter(
+      (photo) => photo.filePath !== filePath,
+    );
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleDeletePhoto: photo removed`, {
+      caseId: params.caseId,
+      previousCount: (params.capturedPhotos ?? []).length,
+      remainingCount: remainingPhotos.length,
     });
+    navigation.setParams({
+      capturedPhotos: remainingPhotos,
+    });
+  };
+
+  const handleRecalculateDistance = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleRecalculateDistance: recalculating`, {
+      caseId: params.caseId,
+    });
+    void geoFence.recalculate();
+  };
+
+  const handleForceProceedPress = (): void => {
+    LoggerService.warn(
+      `${FILE_NAME}: CaseDetailsScreen.handleForceProceedPress: showing bypass consent dialog`,
+      { caseId: params.caseId },
+    );
+    setShowForceProceedConsent(true);
+  };
+
+  const handleForceProceedCancelled = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleForceProceedCancelled: bypass declined`, {
+      caseId: params.caseId,
+    });
+    setShowForceProceedConsent(false);
+  };
+
+  const handleForceProceedAgreed = (): void => {
+    LoggerService.warn(`${FILE_NAME}: CaseDetailsScreen.handleForceProceedAgreed: bypass consented`, {
+      caseId: params.caseId,
+    });
+    setShowForceProceedConsent(false);
+    geoFence.confirmForceProceed();
   };
 
   const handleAcceptPress = (): void => {
@@ -191,11 +252,17 @@ export function CaseDetailsScreen(): ReactElement {
   const handleSubmit = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submit pressed`, { caseId: params.caseId });
     submit(() => {
+      LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submitted — navigating back`, {
+        caseId: params.caseId,
+      });
       navigation.goBack();
     });
   };
 
   if (isLoading) {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: rendering loading state`, {
+      caseId: params.caseId,
+    });
     return (
       <Box flex={1} justifyContent="center" alignItems="center">
         <Spinner size="large" accessibilityLabel={t('caseDetails.loading')} testID="case-details-loading-spinner" />
@@ -204,6 +271,11 @@ export function CaseDetailsScreen(): ReactElement {
   }
 
   if (loadError || !caseDetail) {
+    LoggerService.warn(`${FILE_NAME}: CaseDetailsScreen: rendering load-error state`, {
+      caseId: params.caseId,
+      loadError,
+      hasCaseDetail: caseDetail !== null,
+    });
     return (
       <Box flex={1} justifyContent="center" alignItems="center" p="$5">
         <VStack space="md" alignItems="center">
@@ -219,6 +291,21 @@ export function CaseDetailsScreen(): ReactElement {
     );
   }
 
+  LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: rendering case body`, {
+    caseId: params.caseId,
+    bucket: caseDetail.bucket,
+    isNewCase,
+    isReadOnly,
+    isCaseContentVisible,
+    shouldShowDetailFormSections,
+    isUtvSectionVisible,
+    isInsufficientSectionVisible,
+    isVerifiedResidenceSectionVisible,
+    hasNotice: noticeKey !== null,
+    hasSubmitError: submitError !== null,
+    capturedPhotoCount: capturedPhotos.length,
+  });
+
   return (
     <ScrollView flex={1} contentContainerStyle={{ padding: 16, gap: 12 }} testID="case-details-scroll-view">
       <VStack space="md">
@@ -233,72 +320,96 @@ export function CaseDetailsScreen(): ReactElement {
 
         <CaseLocationSection
           address={caseDetail.address}
-          gpsCheck={caseDetail.gpsCheck}
+          caseCoordinates={geoFence.caseCoordinates}
+          geoFenceStatus={geoFence.status}
+          distanceMeters={geoFence.distanceMeters}
+          distanceMethod={geoFence.distanceMethod}
+          radiusMeters={geoFence.radiusMeters}
+          isCaseLocationFromCache={geoFence.isCaseLocationFromCache}
+          unresolvedReason={geoFence.unresolvedReason}
+          remainingAttempts={geoFence.remainingAttempts}
+          canForceProceed={geoFence.canForceProceed}
+          isGeoFenceBypassed={geoFence.bypassConsent !== null}
+          isBusy={geoFence.isBusy}
           onGetDirections={handleGetDirections}
+          onRecalculate={handleRecalculateDistance}
+          onForceProceedPress={handleForceProceedPress}
         />
 
-        {!isNewCase ? (
+        {/*
+          Everything below Case Location is gated on the geo-fence: until the
+          field executive is inside the configured radius (or has explicitly
+          consented to bypass it), Case Information and Case Location are the
+          entire screen. Accepting a *new* case stays available — that happens
+          before the executive travels to the address, so it can't require
+          being there.
+        */}
+        {isCaseContentVisible ? (
           <>
-            <CaseMaskedCallSection
-              maskedPrimaryPhone={caseDetail.maskedPrimaryPhone}
-              maskedSecondaryPhone={caseDetail.maskedSecondaryPhone}
-              onCallPrimary={handleCallPrimary}
-              onCallSecondary={handleCallSecondary}
-            />
+            {!isNewCase ? (
+              <>
+                <CaseMaskedCallSection
+                  maskedPrimaryPhone={caseDetail.maskedPrimaryPhone}
+                  maskedSecondaryPhone={caseDetail.maskedSecondaryPhone}
+                  onCallPrimary={handleCallPrimary}
+                  onCallSecondary={handleCallSecondary}
+                />
 
-            <CaseInstructionsSection
-              clientInstructions={caseDetail.clientInstructions}
-              fieldExecutiveNotes={caseDetail.fieldExecutiveNotes}
-            />
-          </>
-        ) : null}
-
-        {shouldShowDetailFormSections ? (
-          <>
-            <CaseVerificationOutcomeSection
-              statusOptions={referenceData?.verificationTypeStatuses ?? []}
-              verificationStatus={verificationStatus}
-              onSelectStatus={selectVerificationStatus}
-              isUtvSectionVisible={isUtvSectionVisible}
-              utvReasonOptions={referenceData?.utvOptions ?? []}
-              utvReason={utvReason}
-              onSelectUtvReason={selectUtvReason}
-              utvRemarks={utvRemarks}
-              onUtvRemarksChange={setUtvRemarks}
-              isInsufficientSectionVisible={isInsufficientSectionVisible}
-              insufficientReasonOptions={referenceData?.insuffOptions ?? []}
-              insufficientReason={insufficientReason}
-              onSelectInsufficientReason={selectInsufficientReason}
-              insufficientRemarks={insufficientRemarks}
-              onInsufficientRemarksChange={setInsufficientRemarks}
-              isReadOnly={isReadOnly}
-            />
-
-            {isVerifiedResidenceSectionVisible ? (
-              <CaseVerifiedResidenceSection
-                residenceType={residenceType}
-                onSelectResidenceType={selectResidenceType}
-                addressType={addressType}
-                onSelectAddressType={selectAddressType}
-                respondentName={respondentName}
-                onRespondentNameChange={setRespondentName}
-                respondentRelation={respondentRelation}
-                onRespondentRelationChange={setRespondentRelation}
-                isSignatureCaptured={isSignatureCaptured}
-                onCaptureSignature={handleCaptureSignature}
-                isReadOnly={isReadOnly}
-              />
+                <CaseInstructionsSection
+                  clientInstructions={caseDetail.clientInstructions}
+                  fieldExecutiveNotes={caseDetail.fieldExecutiveNotes}
+                />
+              </>
             ) : null}
 
-            <CasePhotoEvidenceSection
-              photoTagOptions={referenceData?.photoTypes ?? []}
-              selectedPhotoTag={selectedPhotoTag}
-              onSelectPhotoTag={selectPhotoTag}
-              onOpenCamera={handleOpenCamera}
-              capturedPhotos={capturedPhotos}
-              onDeletePhoto={handleDeletePhoto}
-              isReadOnly={isReadOnly}
-            />
+            {shouldShowDetailFormSections ? (
+              <>
+                <CaseVerificationOutcomeSection
+                  statusOptions={referenceData?.verificationTypeStatuses ?? []}
+                  verificationStatus={verificationStatus}
+                  onSelectStatus={selectVerificationStatus}
+                  isUtvSectionVisible={isUtvSectionVisible}
+                  utvReasonOptions={referenceData?.utvOptions ?? []}
+                  utvReason={utvReason}
+                  onSelectUtvReason={selectUtvReason}
+                  utvRemarks={utvRemarks}
+                  onUtvRemarksChange={setUtvRemarks}
+                  isInsufficientSectionVisible={isInsufficientSectionVisible}
+                  insufficientReasonOptions={referenceData?.insuffOptions ?? []}
+                  insufficientReason={insufficientReason}
+                  onSelectInsufficientReason={selectInsufficientReason}
+                  insufficientRemarks={insufficientRemarks}
+                  onInsufficientRemarksChange={setInsufficientRemarks}
+                  isReadOnly={isReadOnly}
+                />
+
+                {isVerifiedResidenceSectionVisible ? (
+                  <CaseVerifiedResidenceSection
+                    residenceType={residenceType}
+                    onSelectResidenceType={selectResidenceType}
+                    addressType={addressType}
+                    onSelectAddressType={selectAddressType}
+                    respondentName={respondentName}
+                    onRespondentNameChange={setRespondentName}
+                    respondentRelation={respondentRelation}
+                    onRespondentRelationChange={setRespondentRelation}
+                    isSignatureCaptured={isSignatureCaptured}
+                    onCaptureSignature={handleCaptureSignature}
+                    isReadOnly={isReadOnly}
+                  />
+                ) : null}
+
+                <CasePhotoEvidenceSection
+                  photoTagOptions={referenceData?.photoTypes ?? []}
+                  selectedPhotoTag={selectedPhotoTag}
+                  onSelectPhotoTag={selectPhotoTag}
+                  onOpenCamera={handleOpenCamera}
+                  capturedPhotos={capturedPhotos}
+                  onDeletePhoto={handleDeletePhoto}
+                  isReadOnly={isReadOnly}
+                />
+              </>
+            ) : null}
           </>
         ) : null}
 
@@ -327,7 +438,7 @@ export function CaseDetailsScreen(): ReactElement {
             <AlertIcon as={AlertCircleIcon} mr="$2" />
             <AlertText>{t('caseDetails.readOnly.message')}</AlertText>
           </Alert>
-        ) : (
+        ) : isCaseContentVisible ? (
           <Button
             action="positive"
             size="lg"
@@ -340,12 +451,23 @@ export function CaseDetailsScreen(): ReactElement {
             {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
             <ButtonText>{t('caseDetails.submit')}</ButtonText>
           </Button>
-        )}
+        ) : null}
       </VStack>
+
+      <CaseForceProceedDialog
+        isOpen={showForceProceedConsent}
+        onCancel={handleForceProceedCancelled}
+        onAgree={handleForceProceedAgreed}
+      />
 
       <AlertDialog
         isOpen={showAcceptConfirmation}
-        onClose={() => setShowAcceptConfirmation(false)}
+        onClose={() => {
+          LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: accept dialog dismissed`, {
+            caseId: params.caseId,
+          });
+          setShowAcceptConfirmation(false);
+        }}
         testID="case-details-accept-confirmation-dialog"
       >
         <AlertDialogBackdrop />
@@ -354,7 +476,14 @@ export function CaseDetailsScreen(): ReactElement {
             <Heading size="lg" fontWeight="$bold">
               {t('caseList.actions.accept')}
             </Heading>
-            <AlertDialogCloseButton onPress={() => setShowAcceptConfirmation(false)}>
+            <AlertDialogCloseButton
+              onPress={() => {
+                LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: accept dialog closed`, {
+                  caseId: params.caseId,
+                });
+                setShowAcceptConfirmation(false);
+              }}
+            >
               <CloseIcon />
             </AlertDialogCloseButton>
           </AlertDialogHeader>
@@ -366,7 +495,12 @@ export function CaseDetailsScreen(): ReactElement {
               variant="outline"
               action="secondary"
               mr="$3"
-              onPress={() => setShowAcceptConfirmation(false)}
+              onPress={() => {
+                LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: accept cancelled`, {
+                  caseId: params.caseId,
+                });
+                setShowAcceptConfirmation(false);
+              }}
               testID="case-details-accept-cancel-button"
             >
               <ButtonText>{t('caseList.actions.cancel')}</ButtonText>

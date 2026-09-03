@@ -23,9 +23,15 @@ export const useSessionStore = create<SessionState>((set) => ({
       fieldExecutiveId: fieldExecutive.id,
     });
     set({ fieldExecutive });
+    LoggerService.info(`${FILE_NAME}: useSessionStore.setFieldExecutive: session stored`, {
+      hasFieldExecutive: true,
+    });
   },
   clearSession: (): void => {
     LoggerService.info(`${FILE_NAME}: useSessionStore.clearSession: clearing session`);
     set({ fieldExecutive: null });
+    LoggerService.info(`${FILE_NAME}: useSessionStore.clearSession: session cleared`, {
+      hasFieldExecutive: false,
+    });
   },
 }));

@@ -30,24 +30,46 @@ export interface UseBiometricLoginResult {
 }
 
 function resolveBiometricLoginErrorKey(error: unknown): BiometricLoginErrorKey {
+  // Only the failure shape is logged — never the error body or any credential.
+  LoggerService.info(`${FILE_NAME}: resolveBiometricLoginErrorKey: resolving failure`, {
+    isAxiosError: axios.isAxiosError(error),
+  });
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     if (status === 401) {
+      LoggerService.warn(
+        `${FILE_NAME}: resolveBiometricLoginErrorKey: unauthorized — authentication failed`,
+        { status },
+      );
       return 'authenticationFailed';
     }
-    return status !== undefined && status >= 500 ? 'serverUnavailable' : 'network';
+    const errorKey: BiometricLoginErrorKey =
+      status !== undefined && status >= 500 ? 'serverUnavailable' : 'network';
+    LoggerService.warn(`${FILE_NAME}: resolveBiometricLoginErrorKey: mapped axios failure`, {
+      status,
+      errorKey,
+    });
+    return errorKey;
   }
+  LoggerService.warn(`${FILE_NAME}: resolveBiometricLoginErrorKey: mapped non-axios failure`, {
+    errorKey: 'network',
+  });
   return 'network';
 }
 
 /** Fetches the profile + reference data and populates the app-wide stores — mirrors the post-login step in `useLoginForm`. */
 async function restoreSession(): Promise<void> {
+  LoggerService.info(`${FILE_NAME}: restoreSession: loading profile and reference data`);
   const [fieldExecutive, referenceData] = await Promise.all([
     fetchCurrentFieldExecutive(),
     fetchReferenceData(),
   ]);
-  useSessionStore.getState().setFieldExecutive(fieldExecutive);
+  // Configuration before session — see the same ordering note in
+  // `useLoginForm`: the session is what triggers location validation, which
+  // reads `mobileAppSettings`.
   useReferenceDataStore.getState().setReferenceData(referenceData);
+  useSessionStore.getState().setFieldExecutive(fieldExecutive);
+  LoggerService.info(`${FILE_NAME}: restoreSession: stores populated`);
 }
 
 /**
@@ -58,6 +80,8 @@ async function restoreSession(): Promise<void> {
  * and trying it first would just cost a guaranteed-failing round trip.
  */
 export function useBiometricLogin(): UseBiometricLoginResult {
+  LoggerService.info(`${FILE_NAME}: useBiometricLogin: initializing biometric login`);
+
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { t } = useTranslation();
   const [isAvailable, setIsAvailable] = useState(false);
@@ -68,13 +92,20 @@ export function useBiometricLogin(): UseBiometricLoginResult {
   );
 
   useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: useBiometricLogin: availability effect running`);
     let isMounted = true;
     async function resolveAvailability(): Promise<void> {
+      LoggerService.info(
+        `${FILE_NAME}: useBiometricLogin.resolveAvailability: checking device support and vault`,
+      );
       const [resolvedBiometryType, hasEnrollment] = await Promise.all([
         BiometricsService.getBiometryType(),
         BiometricCredentialStorageService.exists(),
       ]);
       if (!isMounted) {
+        LoggerService.warn(
+          `${FILE_NAME}: useBiometricLogin.resolveAvailability: unmounted before resolution — discarding result`,
+        );
         return;
       }
       const deviceSupportsBiometrics = resolvedBiometryType !== 'none';
@@ -87,6 +118,7 @@ export function useBiometricLogin(): UseBiometricLoginResult {
     }
     void resolveAvailability();
     return () => {
+      LoggerService.info(`${FILE_NAME}: useBiometricLogin: availability effect cleanup`);
       isMounted = false;
     };
   }, []);
@@ -112,8 +144,15 @@ export function useBiometricLogin(): UseBiometricLoginResult {
           return;
         }
 
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: vault unlocked, re-authenticating`,
+        );
+
         try {
           await login({ username: credentials.username, password: credentials.password });
+          LoggerService.info(
+            `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: stored credentials accepted`,
+          );
         } catch (loginError: unknown) {
           if (axios.isAxiosError(loginError) && loginError.response?.status === 401) {
             // The stored password itself no longer works (e.g. changed
@@ -123,6 +162,10 @@ export function useBiometricLogin(): UseBiometricLoginResult {
             );
             await BiometricCredentialStorageService.clear();
             setIsAvailable(false);
+          } else {
+            LoggerService.warn(
+              `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: re-authentication failed, vault kept`,
+            );
           }
           throw loginError;
         }
@@ -143,6 +186,9 @@ export function useBiometricLogin(): UseBiometricLoginResult {
         );
         setBiometricLoginError(errorKey);
       } finally {
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: attempt settled`,
+        );
         setIsAuthenticating(false);
       }
     })();

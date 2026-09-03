@@ -48,6 +48,11 @@ export function CaseBucketTabs({
 }: CaseBucketTabsProps): ReactElement {
   const { t } = useTranslation();
 
+  LoggerService.info(`${FILE_NAME}: CaseBucketTabs: rendering`, {
+    selectedBucket,
+    bucketCounts,
+  });
+
   return (
     <Tabs>
       <TabsTabList flexDirection="row" w="$full" px="$4" py="$2" gap="$2" accessibilityRole="tablist">
@@ -55,6 +60,12 @@ export function CaseBucketTabs({
           const isSelected = bucket === selectedBucket;
           const label = t(BUCKET_LABEL_KEYS[bucket]);
           const colors = BUCKET_COLOR_TOKENS[bucket];
+
+          LoggerService.info(`${FILE_NAME}: CaseBucketTabs: rendering bucket tab`, {
+            bucket,
+            isSelected,
+            count: bucketCounts[bucket],
+          });
 
           const handlePress = (): void => {
             LoggerService.info(`${FILE_NAME}: CaseBucketTabs.handlePress: tab pressed`, { bucket });

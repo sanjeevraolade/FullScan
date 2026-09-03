@@ -21,6 +21,13 @@ export function CasePhotoViewerScreen(): ReactElement {
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const { params } = useRoute<CasePhotoViewerRoute>();
 
+  // The photo's file path is evidence and never logged — only its metadata.
+  LoggerService.info(`${FILE_NAME}: CasePhotoViewerScreen: rendering`, {
+    latitude: params.latitude,
+    longitude: params.longitude,
+    capturedAtIso: params.capturedAtIso,
+  });
+
   const handleClose = (): void => {
     LoggerService.info(`${FILE_NAME}: CasePhotoViewerScreen.handleClose: closing viewer`);
     navigation.goBack();

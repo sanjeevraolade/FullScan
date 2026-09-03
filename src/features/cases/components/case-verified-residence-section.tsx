@@ -42,10 +42,62 @@ export function CaseVerifiedResidenceSection({
 }: CaseVerifiedResidenceSectionProps): ReactElement {
   const { t } = useTranslation();
 
+  // Respondent name/relation are candidate-adjacent PII — only lengths are logged.
+  LoggerService.info(`${FILE_NAME}: CaseVerifiedResidenceSection: rendering`, {
+    residenceType,
+    addressType,
+    respondentNameLength: respondentName.length,
+    respondentRelationLength: respondentRelation.length,
+    isSignatureCaptured,
+    isReadOnly,
+  });
+
+  const handleSelectResidenceType = (value: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection.handleSelectResidenceType: residence type selected`,
+      { value },
+    );
+    onSelectResidenceType(value as ResidenceType);
+  };
+
+  const handleSelectAddressType = (value: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection.handleSelectAddressType: address type selected`,
+      { value },
+    );
+    onSelectAddressType(value as AddressType);
+  };
+
+  const handleRespondentNameChange = (name: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection.handleRespondentNameChange: respondent name changed`,
+      { nameLength: name.length },
+    );
+    onRespondentNameChange(name);
+  };
+
+  const handleRespondentRelationChange = (relation: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection.handleRespondentRelationChange: respondent relation changed`,
+      { relationLength: relation.length },
+    );
+    onRespondentRelationChange(relation);
+  };
+
   const handleCaptureSignature = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseVerifiedResidenceSection.handleCaptureSignature: signature button pressed`);
     onCaptureSignature();
   };
+
+  if (isSignatureCaptured) {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection: rendering signature-captured branch`,
+    );
+  } else {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection: rendering signature-pending branch`,
+    );
+  }
 
   return (
     <Box
@@ -77,11 +129,17 @@ export function CaseVerifiedResidenceSection({
               fieldId="case-details-residence-type"
               label={t('caseDetails.residence.residenceTypeLabel')}
               value={residenceType}
-              onValueChange={(value) => onSelectResidenceType(value as ResidenceType)}
-              options={RESIDENCE_TYPES.map((type) => ({
-                label: t(`caseDetails.residence.residenceTypeOptions.${type}`),
-                value: type,
-              }))}
+              onValueChange={handleSelectResidenceType}
+              options={RESIDENCE_TYPES.map((type) => {
+                LoggerService.info(
+                  `${FILE_NAME}: CaseVerifiedResidenceSection: mapping residence type option`,
+                  { type },
+                );
+                return {
+                  label: t(`caseDetails.residence.residenceTypeOptions.${type}`),
+                  value: type,
+                };
+              })}
               isDisabled={isReadOnly}
             />
           </Box>
@@ -90,11 +148,17 @@ export function CaseVerifiedResidenceSection({
               fieldId="case-details-address-type"
               label={t('caseDetails.residence.addressTypeLabel')}
               value={addressType}
-              onValueChange={(value) => onSelectAddressType(value as AddressType)}
-              options={ADDRESS_TYPES.map((type) => ({
-                label: t(`caseDetails.residence.addressTypeOptions.${type}`),
-                value: type,
-              }))}
+              onValueChange={handleSelectAddressType}
+              options={ADDRESS_TYPES.map((type) => {
+                LoggerService.info(
+                  `${FILE_NAME}: CaseVerifiedResidenceSection: mapping address type option`,
+                  { type },
+                );
+                return {
+                  label: t(`caseDetails.residence.addressTypeOptions.${type}`),
+                  value: type,
+                };
+              })}
               isDisabled={isReadOnly}
             />
           </Box>
@@ -104,7 +168,7 @@ export function CaseVerifiedResidenceSection({
           fieldId="case-details-respondent-name"
           labelKey="caseDetails.residence.respondentNameLabel"
           value={respondentName}
-          onChangeText={onRespondentNameChange}
+          onChangeText={handleRespondentNameChange}
           isDisabled={isReadOnly}
         />
 
@@ -112,7 +176,7 @@ export function CaseVerifiedResidenceSection({
           fieldId="case-details-respondent-relation"
           labelKey="caseDetails.residence.respondentRelationLabel"
           value={respondentRelation}
-          onChangeText={onRespondentRelationChange}
+          onChangeText={handleRespondentRelationChange}
           isDisabled={isReadOnly}
         />
 

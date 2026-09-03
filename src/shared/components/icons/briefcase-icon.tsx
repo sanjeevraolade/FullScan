@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path, Rect } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'briefcase-icon.tsx';
+
 /**
  * Gluestack UI ships no briefcase/work icon — this follows the exact pattern
  * its own bundled icons use (`createIcon` + svg primitives), so it behaves
@@ -23,3 +27,5 @@ export const BriefcaseIcon = createIcon({
   ),
 });
 BriefcaseIcon.displayName = 'BriefcaseIcon';
+
+LoggerService.info(`${FILE_NAME}: BriefcaseIcon: icon component defined`);

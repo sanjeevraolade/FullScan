@@ -48,6 +48,7 @@ export interface UseCaseCameraResult {
  * `CaseCameraScreen` — this hook owns no JSX.
  */
 export function useCaseCamera(): UseCaseCameraResult {
+  LoggerService.info(`${FILE_NAME}: useCaseCamera: hook invoked`);
   const device = useCameraDevice('back');
   const previewOutput = usePreviewOutput();
   const photoOutput = usePhotoOutput();
@@ -61,40 +62,67 @@ export function useCaseCamera(): UseCaseCameraResult {
   const watchIdRef = useRef<number | null>(null);
 
   useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: useCaseCamera: location watch effect running`);
     let isMounted = true;
 
     LocationService.requestPermission()
-      .then((isGranted) => {
+      .then((permissionStatus) => {
         if (!isMounted) {
+          LoggerService.info(
+            `${FILE_NAME}: useCaseCamera: permission resolved after unmount — ignoring`,
+          );
           return;
         }
-        if (!isGranted) {
+        LoggerService.info(`${FILE_NAME}: useCaseCamera: location permission resolved`, {
+          permissionStatus,
+        });
+        if (permissionStatus !== 'granted') {
           LoggerService.warn(`${FILE_NAME}: useCaseCamera: location permission denied`);
           setLocationErrorKey('permissionDenied');
           return;
         }
 
+        LoggerService.info(`${FILE_NAME}: useCaseCamera: starting location watch`);
         watchIdRef.current = LocationService.watchLocation(
           (nextLocation) => {
             if (isMounted) {
+              LoggerService.info(`${FILE_NAME}: useCaseCamera: location update received`, {
+                accuracyMeters: nextLocation.accuracyMeters,
+                isMockLocation: nextLocation.isMockLocation,
+              });
               setLocation(nextLocation);
               setLocationErrorKey(null);
+            } else {
+              LoggerService.info(
+                `${FILE_NAME}: useCaseCamera: location update after unmount — ignoring`,
+              );
             }
           },
           () => {
             if (isMounted) {
+              LoggerService.warn(`${FILE_NAME}: useCaseCamera: location watch reported failure`);
               setLocationErrorKey('unavailable');
+            } else {
+              LoggerService.info(
+                `${FILE_NAME}: useCaseCamera: location watch failure after unmount — ignoring`,
+              );
             }
           },
         );
       })
-      .catch(() => {
+      .catch((error: unknown) => {
+        LoggerService.error(`${FILE_NAME}: useCaseCamera: location permission request failed`, {
+          message: error instanceof Error ? error.message : String(error),
+        });
         if (isMounted) {
           setLocationErrorKey('unavailable');
         }
       });
 
     return () => {
+      LoggerService.info(`${FILE_NAME}: useCaseCamera: cleaning up location watch`, {
+        hasActiveWatch: watchIdRef.current !== null,
+      });
       isMounted = false;
       if (watchIdRef.current !== null) {
         LocationService.clearWatch(watchIdRef.current);
@@ -108,6 +136,13 @@ export function useCaseCamera(): UseCaseCameraResult {
       watermarkViewRef: RefObject<View | null>,
       documentTypeCode: string,
     ): Promise<CapturedPhotoEvidence | null> => {
+      LoggerService.info(`${FILE_NAME}: capturePhoto: requested`, {
+        documentTypeCode,
+        hasDevice: device !== undefined,
+        hasCameraPermission,
+        hasLocationFix: location !== null,
+      });
+
       if (!device || !hasCameraPermission) {
         LoggerService.warn(`${FILE_NAME}: capturePhoto: camera not ready`);
         setCaptureErrorKey('cameraNotReady');
@@ -155,7 +190,18 @@ export function useCaseCamera(): UseCaseCameraResult {
           capturedAt: new Date(),
           documentTypeCode,
         };
-        setSessionPhotos((previousPhotos) => [...previousPhotos, evidence]);
+        // File paths of evidence are never logged — only the metadata shape.
+        LoggerService.info(`${FILE_NAME}: capturePhoto: evidence assembled`, {
+          documentTypeCode,
+          accuracyMeters: evidence.accuracyMeters,
+          isMockLocation: evidence.isMockLocation,
+        });
+        setSessionPhotos((previousPhotos) => {
+          LoggerService.info(`${FILE_NAME}: capturePhoto: appending to session photos`, {
+            previousCount: previousPhotos.length,
+          });
+          return [...previousPhotos, evidence];
+        });
         return evidence;
       } catch (error) {
         LoggerService.error(`${FILE_NAME}: capturePhoto: capture failed`, {
@@ -164,6 +210,7 @@ export function useCaseCamera(): UseCaseCameraResult {
         setCaptureErrorKey('captureFailed');
         return null;
       } finally {
+        LoggerService.info(`${FILE_NAME}: capturePhoto: capture settled`, { documentTypeCode });
         setIsCapturing(false);
       }
     },

@@ -9,12 +9,15 @@ import {
 } from '@/domain/case';
 import type { AddressType, CaseDetail, ResidenceType } from '@/domain/case';
 import { useReferenceDataStore } from '@/store/reference-data';
+import { useLocationStore } from '@/store/location';
 import type { ReferenceData } from '@/domain/reference-data';
 import {
   isReadOnlyCaseBucket,
   isNewCaseBucket,
   shouldShowDetailFormSections,
 } from '../utils/case-access-control';
+import { useCaseGeoFence } from './use-case-geo-fence';
+import type { UseCaseGeoFenceResult } from './use-case-geo-fence';
 
 const FILE_NAME = 'use-case-details.ts';
 
@@ -34,6 +37,11 @@ export interface UseCaseDetailsResult {
   readonly isNewCase: boolean;
   readonly shouldShowDetailFormSections: boolean;
   readonly acceptCase: (onAccepted: () => void) => void;
+  /**
+   * The Case Location geo-fence check. Everything below the Case Location
+   * section stays hidden until `geoFence.isCaseContentUnlocked` is true.
+   */
+  readonly geoFence: UseCaseGeoFenceResult;
 
   readonly verificationStatus: string;
   readonly selectVerificationStatus: (status: string) => void;
@@ -76,6 +84,7 @@ export interface UseCaseDetailsResult {
  * reveals) happen in the screen.
  */
 export function useCaseDetails(caseId: string): UseCaseDetailsResult {
+  LoggerService.info(`${FILE_NAME}: useCaseDetails: hook invoked`, { caseId });
   const referenceData = useReferenceDataStore((state) => state.referenceData);
   const [caseDetail, setCaseDetail] = useState<CaseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -103,6 +112,32 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
     fetchCaseDetail(caseId)
       .then((detail) => {
+        LoggerService.info(`${FILE_NAME}: loadCaseDetail: applying loaded detail`, {
+          caseId,
+          bucket: detail.bucket,
+          hasSelectedVerificationStatus: detail.selectedVerificationStatus !== null,
+          hasRespondent: detail.respondent !== null,
+          hasCaseCoordinates: detail.coordinates !== null,
+          addressLength: detail.address.length,
+          siblingComponentCount: detail.siblingComponents.length,
+        });
+        if (detail.coordinates === null) {
+          LoggerService.warn(
+            `${FILE_NAME}: loadCaseDetail: case carries no coordinates — geo-fence will geocode the address`,
+            { caseId, addressLength: detail.address.length },
+          );
+        }
+        if (referenceData === null) {
+          LoggerService.warn(`${FILE_NAME}: loadCaseDetail: reference data not available yet`, {
+            caseId,
+          });
+        } else {
+          LoggerService.info(`${FILE_NAME}: loadCaseDetail: reference data available`, {
+            caseId,
+            verificationStatusCount: referenceData.verificationTypeStatuses.length,
+            photoTypeCount: referenceData.photoTypes.length,
+          });
+        }
         setCaseDetail(detail);
         setVerificationStatus(detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '');
         setRespondentName(detail.respondent?.name ?? '');
@@ -118,11 +153,13 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         setLoadError('network');
       })
       .finally(() => {
+        LoggerService.info(`${FILE_NAME}: loadCaseDetail: fetch settled`, { caseId });
         setIsLoading(false);
       });
   }, [caseId, referenceData]);
 
   useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: useCaseDetails: load effect running`);
     loadCaseDetail();
   }, [loadCaseDetail]);
 
@@ -132,18 +169,24 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
   }, []);
 
   const selectUtvReason = useCallback((reason: string): void => {
+    LoggerService.info(`${FILE_NAME}: selectUtvReason: utv reason changed`, { reason });
     setUtvReason(reason);
   }, []);
 
   const selectInsufficientReason = useCallback((reason: string): void => {
+    LoggerService.info(`${FILE_NAME}: selectInsufficientReason: insufficient reason changed`, {
+      reason,
+    });
     setInsufficientReason(reason);
   }, []);
 
   const selectResidenceType = useCallback((type: ResidenceType): void => {
+    LoggerService.info(`${FILE_NAME}: selectResidenceType: residence type changed`, { type });
     setResidenceType(type);
   }, []);
 
   const selectAddressType = useCallback((type: AddressType): void => {
+    LoggerService.info(`${FILE_NAME}: selectAddressType: address type changed`, { type });
     setAddressType(type);
   }, []);
 
@@ -153,23 +196,57 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
   }, [caseId]);
 
   const selectPhotoTag = useCallback((tag: string): void => {
+    LoggerService.info(`${FILE_NAME}: selectPhotoTag: photo tag changed`, { tag });
     setSelectedPhotoTag(tag);
   }, []);
 
-  const isReadOnly = useMemo(
-    () => (caseDetail ? isReadOnlyCaseBucket(caseDetail.bucket) : false),
-    [caseDetail],
-  );
+  const isReadOnly = useMemo(() => {
+    if (!caseDetail) {
+      LoggerService.info(`${FILE_NAME}: isReadOnly: no case detail yet — treated as editable`);
+      return false;
+    }
+    const value = isReadOnlyCaseBucket(caseDetail.bucket);
+    LoggerService.info(`${FILE_NAME}: isReadOnly: resolved`, { bucket: caseDetail.bucket, value });
+    return value;
+  }, [caseDetail]);
 
-  const isNewCaseValue = useMemo(
-    () => (caseDetail ? isNewCaseBucket(caseDetail.bucket) : false),
-    [caseDetail],
-  );
+  const isNewCaseValue = useMemo(() => {
+    if (!caseDetail) {
+      LoggerService.info(`${FILE_NAME}: isNewCase: no case detail yet — treated as not new`);
+      return false;
+    }
+    const value = isNewCaseBucket(caseDetail.bucket);
+    LoggerService.info(`${FILE_NAME}: isNewCase: resolved`, { bucket: caseDetail.bucket, value });
+    return value;
+  }, [caseDetail]);
 
-  const shouldShowDetailFormSectionsValue = useMemo(
-    () => (caseDetail ? shouldShowDetailFormSections(caseDetail.bucket) : false),
-    [caseDetail],
-  );
+  const shouldShowDetailFormSectionsValue = useMemo(() => {
+    if (!caseDetail) {
+      LoggerService.info(
+        `${FILE_NAME}: shouldShowDetailFormSections: no case detail yet — sections hidden`,
+      );
+      return false;
+    }
+    const value = shouldShowDetailFormSections(caseDetail.bucket);
+    LoggerService.info(`${FILE_NAME}: shouldShowDetailFormSections: resolved`, {
+      bucket: caseDetail.bucket,
+      value,
+    });
+    return value;
+  }, [caseDetail]);
+
+  LoggerService.info(`${FILE_NAME}: useCaseDetails: invoking geo-fence check`, {
+    caseId,
+    hasCaseDetail: caseDetail !== null,
+    hasCaseCoordinates: caseDetail?.coordinates != null,
+  });
+
+  const geoFence = useCaseGeoFence({
+    caseId,
+    address: caseDetail?.address ?? '',
+    targetCoordinates: caseDetail?.coordinates ?? null,
+    isEnabled: caseDetail !== null,
+  });
 
   const acceptCase = useCallback(
     (onAccepted: () => void): void => {
@@ -190,6 +267,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
           setSubmitError('network');
         })
         .finally(() => {
+          LoggerService.info(`${FILE_NAME}: acceptCase: request settled`, { caseId });
           setIsSubmitting(false);
         });
     },
@@ -198,14 +276,70 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
   const isUtvSectionVisible = verificationStatus === VERIFICATION_STATUS_UTV;
   const isInsufficientSectionVisible = verificationStatus === VERIFICATION_STATUS_INSUFFICIENT;
+  /*
+   * Gated on the live, on-device geo-fence result. A case carries at most
+   * coordinates or an address — never a pre-computed in-range verdict — so
+   * this is the only thing that knows where the field executive is standing.
+   */
   const isVerifiedResidenceSectionVisible =
-    verificationStatus === VERIFICATION_STATUS_VERIFIED_CLEAR && caseDetail?.gpsCheck.isWithinRange === true;
+    verificationStatus === VERIFICATION_STATUS_VERIFIED_CLEAR && geoFence.isCaseContentUnlocked;
+
+  LoggerService.info(`${FILE_NAME}: useCaseDetails: outcome section visibility resolved`, {
+    caseId,
+    verificationStatus,
+    isUtvSectionVisible,
+    isInsufficientSectionVisible,
+    isVerifiedResidenceSectionVisible,
+    geoFenceStatus: geoFence.status,
+    isCaseContentUnlocked: geoFence.isCaseContentUnlocked,
+  });
 
   const submit = useCallback(
     (onSubmitted: () => void): void => {
       LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, { caseId, verificationStatus });
       setIsSubmitting(true);
       setSubmitError(null);
+
+      // Non-reactive read: the fix as of this tap. Normal app usage is only
+      // permitted while location is `ready`, so one exists here.
+      const currentLocation = useLocationStore.getState().location;
+      if (!currentLocation) {
+        LoggerService.warn(
+          `${FILE_NAME}: submit: no device location fix at submission time — submitting without location evidence`,
+          { caseId },
+        );
+      } else {
+        LoggerService.info(`${FILE_NAME}: submit: attaching device location evidence`, {
+          caseId,
+          latitude: currentLocation.latitude,
+          longitude: currentLocation.longitude,
+          isMockLocation: currentLocation.isMockLocation,
+        });
+      }
+
+      if (geoFence.bypassConsent !== null) {
+        LoggerService.warn(`${FILE_NAME}: submit: submitting with force-proceed bypass consent`, {
+          caseId,
+          distanceMeters: geoFence.distanceMeters,
+        });
+      }
+
+      LoggerService.info(`${FILE_NAME}: submit: outcome payload assembled`, {
+        caseId,
+        verificationStatus,
+        hasUtvReason: isUtvSectionVisible && utvReason.length > 0,
+        utvRemarksLength: isUtvSectionVisible ? utvRemarks.length : 0,
+        hasInsufficientReason: isInsufficientSectionVisible && insufficientReason.length > 0,
+        insufficientRemarksLength: isInsufficientSectionVisible ? insufficientRemarks.length : 0,
+        residenceType: isVerifiedResidenceSectionVisible ? residenceType : null,
+        addressType: isVerifiedResidenceSectionVisible ? addressType : null,
+        hasRespondentName: isVerifiedResidenceSectionVisible && respondentName.trim().length > 0,
+        hasRespondentRelation:
+          isVerifiedResidenceSectionVisible && respondentRelation.trim().length > 0,
+        isSignatureCaptured,
+        distanceMeters: geoFence.distanceMeters,
+        forceProceed: geoFence.bypassConsent !== null,
+      });
 
       submitVerificationOutcome(caseId, {
         verificationStatus,
@@ -217,6 +351,16 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         addressType: isVerifiedResidenceSectionVisible ? addressType : null,
         respondent: isVerifiedResidenceSectionVisible ? { name: respondentName, relation: respondentRelation } : null,
         isSignatureCaptured,
+        /*
+         * The visit's own location evidence. Read at submission time rather
+         * than from the earlier measurement, so it reflects where the
+         * executive is standing when they submit. `forceProceed` is what marks
+         * the case for scrutiny, as the consent dialog promised.
+         */
+        currentLatitude: currentLocation?.latitude ?? null,
+        currentLongitude: currentLocation?.longitude ?? null,
+        distanceToCaseMeters: geoFence.distanceMeters,
+        forceProceed: geoFence.bypassConsent !== null,
       })
         .then(() => {
           LoggerService.info(`${FILE_NAME}: submit: outcome submitted`, { caseId });
@@ -230,12 +374,15 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
           setSubmitError('network');
         })
         .finally(() => {
+          LoggerService.info(`${FILE_NAME}: submit: request settled`, { caseId });
           setIsSubmitting(false);
         });
     },
     [
       addressType,
       caseId,
+      geoFence.bypassConsent,
+      geoFence.distanceMeters,
       insufficientReason,
       insufficientRemarks,
       isInsufficientSectionVisible,
@@ -251,6 +398,30 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     ],
   );
 
+  /*
+   * `setUtvRemarks` / `setInsufficientRemarks` / `setRespondentName` /
+   * `setRespondentRelation` are handed to the screen as the raw state setters,
+   * so their calls can't be logged individually. This traces the resulting
+   * form state instead — lengths and flags only, never the entered text, which
+   * is respondent PII.
+   */
+  LoggerService.info(`${FILE_NAME}: useCaseDetails: form state`, {
+    caseId,
+    verificationStatus,
+    utvReason,
+    utvRemarksLength: utvRemarks.length,
+    insufficientReason,
+    insufficientRemarksLength: insufficientRemarks.length,
+    residenceType,
+    addressType,
+    respondentNameLength: respondentName.length,
+    respondentRelationLength: respondentRelation.length,
+    isSignatureCaptured,
+    selectedPhotoTag,
+    isSubmitting,
+    hasSubmitError: submitError !== null,
+  });
+
   return {
     caseDetail,
     referenceData,
@@ -261,6 +432,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     isNewCase: isNewCaseValue,
     shouldShowDetailFormSections: shouldShowDetailFormSectionsValue,
     acceptCase,
+    geoFence,
 
     verificationStatus,
     selectVerificationStatus,

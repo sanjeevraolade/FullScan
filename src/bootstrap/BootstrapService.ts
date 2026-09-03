@@ -59,5 +59,10 @@ export async function runBootstrap(): Promise<BootstrapResult> {
   ]);
   const result = await pipeline.run();
   LoggerService.info(`${FILE_NAME}: runBootstrap: finished`, { success: result.success });
+  if (!result.success) {
+    LoggerService.warn(`${FILE_NAME}: runBootstrap: pipeline stopped at a failed step`, {
+      failedStep: result.failedStep,
+    });
+  }
   return result;
 }

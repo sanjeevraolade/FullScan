@@ -220,6 +220,55 @@
         "mockLocationDetected": "Mock location detected — capture is disabled until location services are genuine.",
         "captureFailed": "Failed to capture photo. Please try again."
       }
+    },
+    "geoFence": {
+      "findingDistance": "Finding your distance from the case address…",
+      "findingDistanceHint": "Using your current GPS location.",
+      "resolvingLocation": "Determining the case location…",
+      "awaitingLocation": "Waiting for a valid device location before checking the distance.",
+      "configurationUnavailable": "Geo-fence settings could not be loaded from the server. Retry once you are connected — the case cannot be opened without them.",
+      "outside": "GPS Alert: {{distance}}. You must be within {{radius}}m of the address to continue.",
+      "unresolvedOffline": "Case location could not be determined. Connect to the internet and try again.",
+      "unresolvedNotFound": "The case address could not be located on the map. Contact the back office to correct it.",
+      "unresolvedNotConfigured": "Address lookup is not configured. Contact the back office.",
+      "unresolvedInvalidAddress": "This case has no usable address or coordinates. Contact the back office.",
+      "unresolvedGeneric": "Case location could not be determined. Please try again.",
+      "recalculate": "Recalculate Distance",
+      "forceProceed": "Proceed Without Distance",
+      "bypassActive": "You are working on this case without a verified distance. It will be scrutinized after submission.",
+      "cachedCaseLocation": "Case location from saved data (available offline).",
+      "methodLocal": "Distance measured on device (straight line).",
+      "methodDirections": "Distance measured by road route.",
+      "consent": {
+        "title": "Proceed without distance?",
+        "body": "You are about to open this case without being inside the required distance from the address.",
+        "scrutinyWarning": "This case will be scrutinized after submission because the geo-fence requirement was not met.",
+        "agree": "Agree"
+      },
+      "remainingAttempts_one": "{{count}} recalculation attempt left before you can proceed without distance.",
+      "remainingAttempts_other": "{{count}} recalculation attempts left before you can proceed without distance."
+    }
+  },
+  "location": {
+    "mandatory": "Location permission is mandatory to work.",
+    "permissionRequired": "Grant FullScan access to your location to continue.",
+    "permissionBlocked": "Location access is turned off for FullScan. Open Settings and allow location to continue.",
+    "serviceDisabled": "Device location services are switched off. Turn location on to continue.",
+    "unsupported": "This device does not support location, so verification work cannot be done on it.",
+    "obtaining": "Getting your location…",
+    "obtainingDetail": "Move to an open area for a faster GPS fix.",
+    "mock": {
+      "title": "Mock location detected.",
+      "detail": "FullScan cannot be used while a fake GPS app is active. Disable mock location in Developer options, then retry."
+    },
+    "errors": {
+      "unavailable": "Unable to determine your location. Move to an open area and retry.",
+      "timeout": "Getting a GPS fix took too long. Move to an open area and retry."
+    },
+    "actions": {
+      "grantPermission": "Grant Location Access",
+      "openSettings": "Open Settings",
+      "retry": "Retry"
     }
   }
 }

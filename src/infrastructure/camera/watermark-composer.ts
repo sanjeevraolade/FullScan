@@ -30,7 +30,13 @@ export async function composeWatermarkedPhoto({
   const overlayImage = await Images.loadFromFileAsync(watermarkOverlayPngPath);
   const barHeight = Math.round(photo.height * barHeightRatio);
   const barY = photo.height - barHeight;
+  // Evidence file paths are never logged — geometry only.
+  LoggerService.info(`${FILE_NAME}: composeWatermarkedPhoto: overlay loaded`, {
+    barHeight,
+    barY,
+  });
   const composedImage = await photo.renderIntoAsync(overlayImage, 0, barY, photo.width, barHeight);
+  LoggerService.info(`${FILE_NAME}: composeWatermarkedPhoto: overlay composited, saving to file`);
   const savedPath = await composedImage.saveToTemporaryFileAsync('jpg', 90);
 
   LoggerService.info(`${FILE_NAME}: composeWatermarkedPhoto: watermark applied`);

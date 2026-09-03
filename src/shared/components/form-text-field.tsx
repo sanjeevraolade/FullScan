@@ -82,17 +82,36 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const inputRef = useRef<React.ElementRef<typeof InputField>>(null);
 
+    // Never log field content — this component also renders password fields,
+    // so only the field identity, presence of a value and validity go out.
+    LoggerService.info(`${FILE_NAME}: FormTextField: rendering`, {
+      fieldId,
+      hasValue: value.length > 0,
+      isValid: !errorKey,
+      isRequired,
+      isSecure,
+      isDisabled,
+    });
+
     useImperativeHandle(
       ref,
-      () => ({
-        focus: () => {
-          // `InputField`'s declared ref type omits TextInput's imperative
-          // methods (a gap in @gluestack-ui/themed's types, not a real
-          // runtime difference) — see FormTextFieldHandle above.
-          const focusableInput = inputRef.current as unknown as { focus?: () => void } | null;
-          focusableInput?.focus?.();
-        },
-      }),
+      () => {
+        LoggerService.info(`${FILE_NAME}: FormTextField: creating imperative handle`);
+
+        return {
+          focus: () => {
+            LoggerService.info(`${FILE_NAME}: FormTextField.focus: focusing input`);
+            // `InputField`'s declared ref type omits TextInput's imperative
+            // methods (a gap in @gluestack-ui/themed's types, not a real
+            // runtime difference) — see FormTextFieldHandle above.
+            const focusableInput = inputRef.current as unknown as { focus?: () => void } | null;
+            if (!focusableInput?.focus) {
+              LoggerService.warn(`${FILE_NAME}: FormTextField.focus: input is not focusable yet`);
+            }
+            focusableInput?.focus?.();
+          },
+        };
+      },
       [],
     );
 
@@ -113,6 +132,20 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
     const visibilityToggleLabel = t(
       isPasswordVisible ? 'login.fields.hidePassword' : 'login.fields.showPassword',
     );
+
+    if (isSecure) {
+      LoggerService.info(`${FILE_NAME}: FormTextField: rendering secure-entry visibility toggle`, {
+        fieldId,
+        isPasswordVisible,
+      });
+    }
+
+    if (errorKey) {
+      LoggerService.warn(`${FILE_NAME}: FormTextField: rendering validation error`, {
+        fieldId,
+        errorKey,
+      });
+    }
 
     return (
       <FormControl isInvalid={Boolean(errorKey)} isRequired={isRequired} isDisabled={isDisabled}>

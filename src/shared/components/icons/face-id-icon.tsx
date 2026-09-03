@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'face-id-icon.tsx';
+
 /**
  * Gluestack UI ships no Face ID icon — follows the same `createIcon` + svg
  * pattern as `CameraIcon`/`ShieldIcon`, so it's theme-aware and sizeable via
@@ -60,3 +64,5 @@ export const FaceIdIcon = createIcon({
   ),
 });
 FaceIdIcon.displayName = 'FaceIdIcon';
+
+LoggerService.info(`${FILE_NAME}: FaceIdIcon: icon component defined`);

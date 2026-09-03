@@ -1,0 +1,14 @@
+export type { GeocodedAddress, IGeocodingProvider } from './geocoding-provider.interface';
+export type {
+  GeocodedCoordinates,
+  GeocodedCoordinatesSource,
+  GeocodingFailureReason,
+  GeocodingProviderConfiguration,
+} from './geocoding.types';
+export { GeocodingFailedError, isGeocodingFailedError } from './geocoding.errors';
+export {
+  GOOGLE_GEOCODING_PROVIDER_NAME,
+  GoogleGeocodingProvider,
+} from './google-geocoding.provider';
+export { GeocodingService, registerGeocodingProvider } from './geocoding.service';
+export type { IGeocodingService } from './geocoding.service';

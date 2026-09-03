@@ -18,4 +18,5 @@ module.exports = {
   },
   check: jest.fn(),
   request: jest.fn(),
+  openSettings: jest.fn(() => Promise.resolve()),
 };

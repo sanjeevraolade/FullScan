@@ -26,9 +26,13 @@ export const useReferenceDataStore = create<ReferenceDataState>((set) => ({
       mobileAppSettingsUpdatedAt: referenceData.mobileAppSettings.updatedAt,
     });
     set({ referenceData });
+    LoggerService.info(`${FILE_NAME}: useReferenceDataStore.setReferenceData: store updated`);
   },
   clearReferenceData: (): void => {
     LoggerService.info(`${FILE_NAME}: useReferenceDataStore.clearReferenceData: clearing reference data`);
     set({ referenceData: null });
+    LoggerService.info(
+      `${FILE_NAME}: useReferenceDataStore.clearReferenceData: reference data cleared`,
+    );
   },
 }));

@@ -54,6 +54,10 @@ export interface UseLoginFormResult {
  * the UI — only the mapped key.
  */
 function resolveLoginErrorKey(error: unknown): LoginErrorKey {
+  // Only the shape of the failure is logged — never the error body, which can echo credentials.
+  LoggerService.info(`${FILE_NAME}: resolveLoginErrorKey: resolving login failure`, {
+    isAxiosError: axios.isAxiosError(error),
+  });
   if (axios.isAxiosError(error)) {
     const status = error.response?.status;
     const errorKey: LoginErrorKey =
@@ -98,11 +102,25 @@ export function useLoginForm(): UseLoginFormResult {
     evaluateEligibility: evaluateBiometricEnrollmentEligibility,
     confirmEnrollment: confirmBiometricEnrollment,
     skipEnrollment: skipBiometricEnrollment,
-  } = useBiometricEnrollment(() => navigation.replace(ROUTE_NAMES.MAIN));
+  } = useBiometricEnrollment(() => {
+    LoggerService.info(
+      `${FILE_NAME}: useLoginForm.onBiometricEnrollmentSettled: navigating to main`,
+    );
+    navigation.replace(ROUTE_NAMES.MAIN);
+  });
 
   const username = useWatch({ control, name: 'username' });
   const password = useWatch({ control, name: 'password' });
   const canSubmit = username.trim().length > 0 && password.trim().length > 0;
+
+  // Field presence only — credential values are never logged.
+  LoggerService.info(`${FILE_NAME}: useLoginForm: resolved submit eligibility`, {
+    hasUsername: username.trim().length > 0,
+    hasPassword: password.trim().length > 0,
+    canSubmit,
+    hasLoginError: loginError !== null,
+    isSubmitting,
+  });
 
   const submitLogin = useCallback(() => {
     LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: submit requested`);
@@ -116,24 +134,43 @@ export function useLoginForm(): UseLoginFormResult {
 
         setLoginError(null);
         try {
+          LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: authenticating credentials`);
           await login({ username: values.username, password: values.password });
+          LoggerService.info(
+            `${FILE_NAME}: useLoginForm.submitLogin: credentials accepted, loading profile and reference data`,
+          );
           const [fieldExecutive, referenceData] = await Promise.all([
             fetchCurrentFieldExecutive(),
             fetchReferenceData(),
           ]);
-          useSessionStore.getState().setFieldExecutive(fieldExecutive);
+          // Configuration before session, deliberately: establishing the
+          // session is what starts location validation (see
+          // `ApplicationShell`), and that validation reads
+          // `mobileAppSettings` — so the settings have to already be in the
+          // store. This is the `Login Success → Load mobileAppSettings →
+          // Validate Location → App Ready` order.
           useReferenceDataStore.getState().setReferenceData(referenceData);
+          useSessionStore.getState().setFieldExecutive(fieldExecutive);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);
 
           const willPromptBiometricEnrollment = await evaluateBiometricEnrollmentEligibility({
             username: values.username,
             password: values.password,
           });
+          LoggerService.info(
+            `${FILE_NAME}: useLoginForm.submitLogin: biometric enrollment eligibility resolved`,
+            { willPromptBiometricEnrollment },
+          );
           if (willPromptBiometricEnrollment) {
             // The enrollment dialog now owns navigation once the user
             // enables or skips it — see `useBiometricEnrollment`'s `onSettled`.
+            LoggerService.info(
+              `${FILE_NAME}: useLoginForm.submitLogin: deferring navigation to enrollment prompt`,
+            );
             return;
           }
+
+          LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: navigating to main`);
 
           /*
           Navigation.replace is used here instead of navigate to prevent the user from going back to the login screen after a successful login. This ensures that the login screen is removed from the navigation stack, providing a better user experience.

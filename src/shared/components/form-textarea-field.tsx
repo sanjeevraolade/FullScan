@@ -24,6 +24,13 @@ export function FormTextareaField({
   placeholder,
   isDisabled = false,
 }: FormTextareaFieldProps): ReactElement {
+  // Never log field content — only field identity and coarse state.
+  LoggerService.info(`${FILE_NAME}: FormTextareaField: rendering`, {
+    fieldId,
+    hasValue: value.length > 0,
+    isDisabled,
+  });
+
   const handleChangeText = (nextValue: string): void => {
     LoggerService.info(`${FILE_NAME}: FormTextareaField.handleChangeText: value changed`, { fieldId });
     onChangeText(nextValue);

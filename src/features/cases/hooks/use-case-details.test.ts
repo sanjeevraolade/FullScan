@@ -45,7 +45,7 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
     address: 'Flat 204, Madhapur, Hyderabad',
     addressType: 'present',
     residenceType: 'rented',
-    gpsCheck: { targetLatitude: 17.4452, targetLongitude: 78.3821, distanceMeters: 18, isWithinRange: true },
+    coordinates: { latitude: 17.4452, longitude: 78.3821 },
     maskedPrimaryPhone: '+91-XXXXX-00001',
     maskedSecondaryPhone: '+91-XXXXX-00002',
     clientInstructions: 'Verify residence address.',
@@ -143,9 +143,9 @@ describe('useCaseDetails', () => {
     expect(result.current.isUtvSectionVisible).toBe(false);
   });
 
-  it('shows the Verified Residence section only for Verified Clear within GPS range', async () => {
+  it('shows the Verified Residence section only for Verified Clear inside the geo-fence', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(
-      buildCaseDetail({ gpsCheck: { targetLatitude: 0, targetLongitude: 0, distanceMeters: 2100, isWithinRange: false } }),
+      buildCaseDetail({ coordinates: null }),
     );
 
     const { result } = await renderHook(() => useCaseDetails('case-1'));

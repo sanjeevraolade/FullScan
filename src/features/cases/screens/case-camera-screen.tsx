@@ -32,7 +32,11 @@ const FILE_NAME = 'case-camera-screen.tsx';
 type CaseCameraRoute = RouteProp<RootStackParamList, typeof ROUTE_NAMES.CASE_CAMERA>;
 
 function formatCoordinate(value: number): string {
-  return value.toFixed(4);
+  const formatted = value.toFixed(4);
+  LoggerService.info(`${FILE_NAME}: formatCoordinate: formatted coordinate for watermark`, {
+    formatted,
+  });
+  return formatted;
 }
 
 /**
@@ -60,8 +64,24 @@ export function CaseCameraScreen(): ReactElement {
     capturePhoto,
   } = useCaseCamera();
 
+  LoggerService.info(`${FILE_NAME}: CaseCameraScreen: rendering`, {
+    caseId: params.caseId,
+    photoTagCode: params.photoTagCode,
+    hasCameraPermission,
+    hasDevice: device !== undefined,
+    hasLocationFix: location !== null,
+    isMockLocationDetected,
+    isCapturing,
+    sessionPhotoCount: sessionPhotos.length,
+    existingPhotoCount: params.existingPhotos.length,
+  });
+
   useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: CaseCameraScreen: camera permission effect running`, {
+      hasCameraPermission,
+    });
     if (!hasCameraPermission) {
+      LoggerService.info(`${FILE_NAME}: CaseCameraScreen: requesting camera permission`);
       requestCameraPermission();
     }
   }, [hasCameraPermission, requestCameraPermission]);
@@ -76,7 +96,18 @@ export function CaseCameraScreen(): ReactElement {
     // Stays on this screen — capturePhoto appends to sessionPhotos, and the
     // field executive can keep shooting more for the same category before
     // returning them all to CaseDetails in one batch via handleDone.
-    await capturePhoto(watermarkRef, params.photoTagCode);
+    const evidence = await capturePhoto(watermarkRef, params.photoTagCode);
+    if (evidence === null) {
+      LoggerService.warn(`${FILE_NAME}: CaseCameraScreen.handleCapture: capture produced no evidence`, {
+        caseId: params.caseId,
+        photoTagCode: params.photoTagCode,
+      });
+      return;
+    }
+    LoggerService.info(`${FILE_NAME}: CaseCameraScreen.handleCapture: capture succeeded`, {
+      caseId: params.caseId,
+      photoTagCode: params.photoTagCode,
+    });
   };
 
   const handleDone = (): void => {
@@ -105,6 +136,7 @@ export function CaseCameraScreen(): ReactElement {
   };
 
   if (!hasCameraPermission) {
+    LoggerService.warn(`${FILE_NAME}: CaseCameraScreen: rendering permission-denied state`);
     return (
       <Box flex={1} bg="$backgroundDark950" justifyContent="center" alignItems="center" p="$6">
         <VStack space="md" alignItems="center">
@@ -120,6 +152,7 @@ export function CaseCameraScreen(): ReactElement {
   }
 
   if (!device) {
+    LoggerService.info(`${FILE_NAME}: CaseCameraScreen: rendering device-loading state`);
     return (
       <Box flex={1} bg="$backgroundDark950" justifyContent="center" alignItems="center">
         <Spinner size="large" color="$textDark0" accessibilityLabel={t('caseDetails.camera.loadingDevice')} />
@@ -128,6 +161,15 @@ export function CaseCameraScreen(): ReactElement {
   }
 
   const isCaptureDisabled = isCapturing || isMockLocationDetected || !location;
+  LoggerService.info(`${FILE_NAME}: CaseCameraScreen: rendering viewfinder`, {
+    isCaptureDisabled,
+    isCapturing,
+    isMockLocationDetected,
+    hasLocationFix: location !== null,
+    hasLocationError: locationErrorKey !== null,
+    hasCaptureError: captureErrorKey !== null,
+    sessionPhotoCount: sessionPhotos.length,
+  });
 
   return (
     <Box flex={1} bg="$backgroundDark950" p="$3" testID="case-camera-screen">
@@ -154,17 +196,23 @@ export function CaseCameraScreen(): ReactElement {
         {sessionPhotos.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={false} testID="case-camera-session-strip">
             <HStack space="xs">
-              {sessionPhotos.map((photo) => (
-                <Image
-                  key={photo.filePath}
-                  source={{ uri: `file://${photo.filePath}` }}
-                  accessibilityLabel={t('caseDetails.camera.sessionThumbnailLabel')}
-                  w={40}
-                  h={40}
-                  borderRadius={8}
-                  resizeMode="cover"
-                />
-              ))}
+              {sessionPhotos.map((photo) => {
+                // Evidence file paths are never logged — only the tag.
+                LoggerService.info(`${FILE_NAME}: CaseCameraScreen: rendering session thumbnail`, {
+                  documentTypeCode: photo.documentTypeCode,
+                });
+                return (
+                  <Image
+                    key={photo.filePath}
+                    source={{ uri: `file://${photo.filePath}` }}
+                    accessibilityLabel={t('caseDetails.camera.sessionThumbnailLabel')}
+                    w={40}
+                    h={40}
+                    borderRadius={8}
+                    resizeMode="cover"
+                  />
+                );
+              })}
             </HStack>
           </ScrollView>
         ) : null}

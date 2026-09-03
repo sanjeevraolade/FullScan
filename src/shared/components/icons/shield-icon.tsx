@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'shield-icon.tsx';
+
 /**
  * Gluestack UI ships no shield icon — follows the same `createIcon` + svg
  * pattern as `MapPinIcon`, so it's theme-aware and sizeable via `Icon` props
@@ -21,3 +25,5 @@ export const ShieldIcon = createIcon({
   ),
 });
 ShieldIcon.displayName = 'ShieldIcon';
+
+LoggerService.info(`${FILE_NAME}: ShieldIcon: icon component defined`);

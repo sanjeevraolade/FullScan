@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'filter-icon.tsx';
+
 /**
  * Gluestack UI ships no funnel/filter icon — this follows the exact pattern
  * its own bundled icons use (`createIcon` + an svg Path), so it behaves
@@ -20,3 +24,5 @@ export const FilterIcon = createIcon({
   ),
 });
 FilterIcon.displayName = 'FilterIcon';
+
+LoggerService.info(`${FILE_NAME}: FilterIcon: icon component defined`);

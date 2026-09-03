@@ -28,6 +28,7 @@ export interface DeviceInfo {
  * through `infrastructure/` instead of importing the library directly.
  */
 export function getAppVersion(): string {
+  LoggerService.info(`${FILE_NAME}: getAppVersion: reading app version`);
   const version = getVersion();
   LoggerService.info(`${FILE_NAME}: getAppVersion: resolved app version`, { version });
   return version;
@@ -35,6 +36,8 @@ export function getAppVersion(): string {
 
 /** Gets complete device information for device binding */
 export async function getDeviceInfo(): Promise<DeviceInfo> {
+  // The unique id and device name identify the executive's handset — never logged.
+  LoggerService.info(`${FILE_NAME}: getDeviceInfo: collecting device information`);
   const deviceInfo = {
     deviceName: await getDeviceName(),
     model: await getModel(),
@@ -56,6 +59,7 @@ export async function getDeviceInfo(): Promise<DeviceInfo> {
 
 /** Gets unique device ID for device binding */
 export async function getDeviceId(): Promise<string> {
+  LoggerService.info(`${FILE_NAME}: getDeviceId: reading unique device id`);
   const uniqueId = await getUniqueId();
   LoggerService.info(`${FILE_NAME}: getDeviceId: resolved device id`);
   return uniqueId;

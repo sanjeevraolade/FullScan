@@ -3,7 +3,10 @@ import type { ReactElement } from 'react';
 import { Box, HStack, Icon, InfoIcon, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
 import type { CaseDetail } from '@/domain/case';
+
+const FILE_NAME = 'case-info-section.tsx';
 
 export interface CaseInfoSectionProps {
   readonly caseDetail: CaseDetail;
@@ -12,6 +15,12 @@ export interface CaseInfoSectionProps {
 /** Section 1 — candidate, assignment and SLA information. */
 export function CaseInfoSection({ caseDetail }: CaseInfoSectionProps): ReactElement {
   const { t } = useTranslation();
+
+  LoggerService.info(`${FILE_NAME}: CaseInfoSection: rendering`, {
+    caseId: caseDetail.caseId,
+    bucket: caseDetail.bucket,
+    verificationType: caseDetail.verificationType,
+  });
 
   return (
     <Box

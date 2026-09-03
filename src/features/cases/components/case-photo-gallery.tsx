@@ -50,11 +50,33 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isRea
   const navigation = useNavigation<NativeStackNavigationProp<RootStackParamList>>();
   const [photoPendingDeletion, setPhotoPendingDeletion] = useState<CapturedPhotoEvidence | null>(null);
 
-  const labelForDocumentType = (documentTypeCode: string): string =>
-    photoTagOptions.find((option) => option.code === documentTypeCode)?.label ?? documentTypeCode;
+  // Evidence file paths and bytes are never logged — only counts and document type codes.
+  LoggerService.info(`${FILE_NAME}: CasePhotoGallery: rendering`, {
+    photoCount: photos.length,
+    photoTagOptionCount: photoTagOptions.length,
+    isDeleteDialogOpen: photoPendingDeletion !== null,
+    isReadOnly,
+  });
+
+  const labelForDocumentType = (documentTypeCode: string): string => {
+    const matchedLabel = photoTagOptions.find((option) => option.code === documentTypeCode)?.label;
+    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.labelForDocumentType: resolved label`, {
+      documentTypeCode,
+      hasMatchingOption: matchedLabel !== undefined,
+    });
+    return matchedLabel ?? documentTypeCode;
+  };
+
+  const handleDismissDeleteDialog = (): void => {
+    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleDismissDeleteDialog: delete confirmation dismissed`);
+    setPhotoPendingDeletion(null);
+  };
 
   const handleThumbnailPress = (photo: CapturedPhotoEvidence): void => {
-    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleThumbnailPress: opening full-screen viewer`);
+    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleThumbnailPress: opening full-screen viewer`, {
+      documentTypeCode: photo.documentTypeCode,
+      isMockLocation: photo.isMockLocation,
+    });
     navigation.navigate(ROUTE_NAMES.CASE_PHOTO_VIEWER, {
       filePath: photo.filePath,
       latitude: photo.latitude,
@@ -68,12 +90,17 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isRea
   };
 
   const handleRequestDelete = (photo: CapturedPhotoEvidence): void => {
-    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleRequestDelete: delete confirmation opened`);
+    LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleRequestDelete: delete confirmation opened`, {
+      documentTypeCode: photo.documentTypeCode,
+    });
     setPhotoPendingDeletion(photo);
   };
 
   const handleConfirmDelete = (): void => {
     if (!photoPendingDeletion) {
+      LoggerService.warn(
+        `${FILE_NAME}: CasePhotoGallery.handleConfirmDelete: ignored — no photo pending deletion`,
+      );
       return;
     }
     LoggerService.info(`${FILE_NAME}: CasePhotoGallery.handleConfirmDelete: photo removed`, {
@@ -91,7 +118,11 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isRea
 
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingTop: 14, paddingRight: 14 }}>
         <Box flexDirection="row" style={{ gap: 16 }}>
-          {photos.map((photo) => (
+          {photos.map((photo) => {
+            LoggerService.info(`${FILE_NAME}: CasePhotoGallery: rendering thumbnail`, {
+              documentTypeCode: photo.documentTypeCode,
+            });
+            return (
             <Box key={photo.filePath} w={80}>
               <Box position="relative" w={80} h={80}>
                 <Pressable
@@ -142,11 +173,12 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isRea
                 {labelForDocumentType(photo.documentTypeCode)}
               </Text>
             </Box>
-          ))}
+            );
+          })}
         </Box>
       </ScrollView>
 
-      <AlertDialog isOpen={photoPendingDeletion !== null} onClose={() => setPhotoPendingDeletion(null)}>
+      <AlertDialog isOpen={photoPendingDeletion !== null} onClose={handleDismissDeleteDialog}>
         <AlertDialogBackdrop />
         <AlertDialogContent testID="case-photo-delete-dialog">
           <AlertDialogHeader>
@@ -159,7 +191,7 @@ export function CasePhotoGallery({ photos, photoTagOptions, onDeletePhoto, isRea
             <Button
               variant="outline"
               action="secondary"
-              onPress={() => setPhotoPendingDeletion(null)}
+              onPress={handleDismissDeleteDialog}
               testID="case-photo-delete-dialog-cancel"
             >
               <ButtonText>{t('caseDetails.photo.deleteCancel')}</ButtonText>

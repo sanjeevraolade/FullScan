@@ -53,6 +53,12 @@ export async function login(credentials: LoginCredentials): Promise<void> {
 
   const deviceId = await getDeviceId();
   const deviceInfo = await getDeviceInfo();
+  LoggerService.info(`${FILE_NAME}: login: device binding info resolved`, {
+    hasDeviceId: deviceId.length > 0,
+    platform: deviceInfo.systemName,
+    osVersion: deviceInfo.osVersion,
+    appVersion: deviceInfo.appVersion,
+  });
 
   const loginRequest: LoginRequest = {
     username: credentials.username,
@@ -64,6 +70,13 @@ export async function login(credentials: LoginCredentials): Promise<void> {
   const response = await apiClient.post<ApiEnvelope<LoginResponseDto>>('/auth/login', loginRequest);
   const { token } = response.data.data;
 
+  // The token itself is a secret — only its presence is ever logged.
+  LoggerService.info(`${FILE_NAME}: login: response received`, {
+    success: response.data.success,
+    hasToken: token.length > 0,
+    fieldExecutiveId: response.data.data.fieldExecutive.id,
+  });
+
   await TokenStorageService.saveToken(token);
 
   LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored, device bound`);
@@ -73,4 +86,5 @@ export async function login(credentials: LoginCredentials): Promise<void> {
 export async function logout(): Promise<void> {
   LoggerService.info(`${FILE_NAME}: logout: clearing stored session token`);
   await TokenStorageService.clearToken();
+  LoggerService.info(`${FILE_NAME}: logout: stored session token cleared`);
 }

@@ -3,8 +3,11 @@ import type { ReactElement } from 'react';
 import { Box, HStack, Icon, SettingsIcon, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
 import { FormSelectField, FormTextareaField } from '@/shared/components';
 import type { DropdownOption } from '@/domain/reference-data';
+
+const FILE_NAME = 'case-verification-outcome-section.tsx';
 
 export interface CaseVerificationOutcomeSectionProps {
   readonly statusOptions: readonly DropdownOption[];
@@ -49,6 +52,68 @@ export function CaseVerificationOutcomeSection({
 }: CaseVerificationOutcomeSectionProps): ReactElement {
   const { t } = useTranslation();
 
+  // Remarks are free text that can carry candidate details — only lengths are logged.
+  LoggerService.info(`${FILE_NAME}: CaseVerificationOutcomeSection: rendering`, {
+    verificationStatus,
+    isUtvSectionVisible,
+    isInsufficientSectionVisible,
+    isReadOnly,
+    statusOptionCount: statusOptions.length,
+  });
+
+  const handleSelectStatus = (status: string): void => {
+    LoggerService.info(`${FILE_NAME}: CaseVerificationOutcomeSection.handleSelectStatus: status selected`, {
+      status,
+    });
+    onSelectStatus(status);
+  };
+
+  const handleSelectUtvReason = (reason: string): void => {
+    LoggerService.info(`${FILE_NAME}: CaseVerificationOutcomeSection.handleSelectUtvReason: utv reason selected`, {
+      reason,
+    });
+    onSelectUtvReason(reason);
+  };
+
+  const handleUtvRemarksChange = (remarks: string): void => {
+    LoggerService.info(`${FILE_NAME}: CaseVerificationOutcomeSection.handleUtvRemarksChange: utv remarks changed`, {
+      remarksLength: remarks.length,
+    });
+    onUtvRemarksChange(remarks);
+  };
+
+  const handleSelectInsufficientReason = (reason: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerificationOutcomeSection.handleSelectInsufficientReason: insufficient reason selected`,
+      { reason },
+    );
+    onSelectInsufficientReason(reason);
+  };
+
+  const handleInsufficientRemarksChange = (remarks: string): void => {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerificationOutcomeSection.handleInsufficientRemarksChange: insufficient remarks changed`,
+      { remarksLength: remarks.length },
+    );
+    onInsufficientRemarksChange(remarks);
+  };
+
+  if (isUtvSectionVisible) {
+    LoggerService.info(`${FILE_NAME}: CaseVerificationOutcomeSection: rendering utv follow-up branch`);
+  }
+
+  if (isInsufficientSectionVisible) {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerificationOutcomeSection: rendering insufficient follow-up branch`,
+    );
+  }
+
+  if (!isUtvSectionVisible && !isInsufficientSectionVisible) {
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerificationOutcomeSection: rendering status-only branch — no follow-up required`,
+    );
+  }
+
   return (
     <Box
       bg="$backgroundLight0"
@@ -70,8 +135,14 @@ export function CaseVerificationOutcomeSection({
           fieldId="case-details-status"
           label={t('caseDetails.outcome.statusLabel')}
           value={verificationStatus}
-          onValueChange={onSelectStatus}
-          options={statusOptions.map((status) => ({ label: status.label, value: status.code }))}
+          onValueChange={handleSelectStatus}
+          options={statusOptions.map((status) => {
+            LoggerService.info(
+              `${FILE_NAME}: CaseVerificationOutcomeSection: mapping status option`,
+              { code: status.code },
+            );
+            return { label: status.label, value: status.code };
+          })}
           isDisabled={isReadOnly}
         />
 
@@ -92,15 +163,21 @@ export function CaseVerificationOutcomeSection({
               fieldId="case-details-utv-reason"
               label={t('caseDetails.outcome.utvReasonLabel')}
               value={utvReason}
-              onValueChange={onSelectUtvReason}
-              options={utvReasonOptions.map((reason) => ({ label: reason.label, value: reason.code }))}
+              onValueChange={handleSelectUtvReason}
+              options={utvReasonOptions.map((reason) => {
+                LoggerService.info(
+                  `${FILE_NAME}: CaseVerificationOutcomeSection: mapping utv reason option`,
+                  { code: reason.code },
+                );
+                return { label: reason.label, value: reason.code };
+              })}
               isDisabled={isReadOnly}
             />
             <FormTextareaField
               fieldId="case-details-utv-remarks"
               label={t('caseDetails.outcome.utvRemarksLabel')}
               value={utvRemarks}
-              onChangeText={onUtvRemarksChange}
+              onChangeText={handleUtvRemarksChange}
               placeholder={t('caseDetails.outcome.utvRemarksPlaceholder')}
               isDisabled={isReadOnly}
             />
@@ -124,15 +201,21 @@ export function CaseVerificationOutcomeSection({
               fieldId="case-details-insufficient-reason"
               label={t('caseDetails.outcome.insufficientReasonLabel')}
               value={insufficientReason}
-              onValueChange={onSelectInsufficientReason}
-              options={insufficientReasonOptions.map((reason) => ({ label: reason.label, value: reason.code }))}
+              onValueChange={handleSelectInsufficientReason}
+              options={insufficientReasonOptions.map((reason) => {
+                LoggerService.info(
+                  `${FILE_NAME}: CaseVerificationOutcomeSection: mapping insufficient reason option`,
+                  { code: reason.code },
+                );
+                return { label: reason.label, value: reason.code };
+              })}
               isDisabled={isReadOnly}
             />
             <FormTextareaField
               fieldId="case-details-insufficient-remarks"
               label={t('caseDetails.outcome.insufficientRemarksLabel')}
               value={insufficientRemarks}
-              onChangeText={onInsufficientRemarksChange}
+              onChangeText={handleInsufficientRemarksChange}
               placeholder={t('caseDetails.outcome.insufficientRemarksPlaceholder')}
               isDisabled={isReadOnly}
             />

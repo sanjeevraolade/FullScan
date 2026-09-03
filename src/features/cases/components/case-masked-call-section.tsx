@@ -23,6 +23,12 @@ export function CaseMaskedCallSection({
 }: CaseMaskedCallSectionProps): ReactElement {
   const { t } = useTranslation();
 
+  // No phone number — masked, real or proxy — is ever logged; presence flags only.
+  LoggerService.info(`${FILE_NAME}: CaseMaskedCallSection: rendering`, {
+    hasPrimaryPhone: maskedPrimaryPhone.trim().length > 0,
+    hasSecondaryPhone: maskedSecondaryPhone.trim().length > 0,
+  });
+
   const handleCallPrimary = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseMaskedCallSection.handleCallPrimary: primary call pressed`);
     onCallPrimary();

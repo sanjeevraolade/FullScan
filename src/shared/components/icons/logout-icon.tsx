@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Line, Path, Polyline } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'logout-icon.tsx';
+
 /**
  * Gluestack UI ships no logout/sign-out icon — follows the same
  * `createIcon` + svg-primitives pattern as `FilterIcon` so it behaves
@@ -32,3 +36,5 @@ export const LogoutIcon = createIcon({
   ],
 });
 LogoutIcon.displayName = 'LogoutIcon';
+
+LoggerService.info(`${FILE_NAME}: LogoutIcon: icon component defined`);

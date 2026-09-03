@@ -26,6 +26,8 @@ export interface UseBiometricEnrollmentResult {
  * it once the enrollment settles (enabled, declined, or failed).
  */
 export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrollmentResult {
+  LoggerService.info(`${FILE_NAME}: useBiometricEnrollment: initializing enrollment flow`);
+
   const { t } = useTranslation();
   const [isPromptVisible, setIsPromptVisible] = useState(false);
   const [pendingCredentials, setPendingCredentials] = useState<PendingBiometricEnrollment | null>(
@@ -46,11 +48,21 @@ export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrol
         `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: resolved eligibility`,
         {
           shouldPrompt,
+          deviceSupportsBiometrics,
+          hasExistingEnrollment,
         },
       );
       if (shouldPrompt) {
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: showing consent prompt`,
+        );
         setPendingCredentials(credentials);
         setIsPromptVisible(true);
+      } else {
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: prompt skipped — not eligible`,
+          { deviceSupportsBiometrics, hasExistingEnrollment },
+        );
       }
       return shouldPrompt;
     },
@@ -93,6 +105,9 @@ export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrol
       );
       await BiometricCredentialStorageService.clear();
     } finally {
+      LoggerService.info(
+        `${FILE_NAME}: useBiometricEnrollment.confirmEnrollment: enrollment settled, clearing pending credentials`,
+      );
       setPendingCredentials(null);
       setIsPromptVisible(false);
       onSettled();

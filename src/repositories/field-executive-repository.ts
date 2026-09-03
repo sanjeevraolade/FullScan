@@ -13,6 +13,11 @@ interface ApiEnvelope<T> {
 export async function fetchCurrentFieldExecutive(): Promise<FieldExecutive> {
   LoggerService.info(`${FILE_NAME}: fetchCurrentFieldExecutive: requesting profile`);
   const response = await apiClient.get<ApiEnvelope<FieldExecutive>>('/me');
+  // Name and email identify a person — only the id and role are logged.
+  LoggerService.info(`${FILE_NAME}: fetchCurrentFieldExecutive: response received`, {
+    success: response.data.success,
+    role: response.data.data.role,
+  });
   LoggerService.info(`${FILE_NAME}: fetchCurrentFieldExecutive: received profile`, {
     fieldExecutiveId: response.data.data.id,
   });

@@ -53,11 +53,18 @@ type CaseListNavigationProp = CompositeNavigationProp<
 >;
 
 function isAcceptableBucket(bucket: CaseBucket): boolean {
-  return bucket === 'new';
+  const isAcceptable = bucket === 'new';
+  LoggerService.info(`${FILE_NAME}: isAcceptableBucket: evaluated bucket`, {
+    bucket,
+    isAcceptable,
+  });
+  return isAcceptable;
 }
 
 function isCallableBucket(bucket: CaseBucket): boolean {
-  return bucket === 'pending' || bucket === 'beyondTat';
+  const isCallable = bucket === 'pending' || bucket === 'beyondTat';
+  LoggerService.info(`${FILE_NAME}: isCallableBucket: evaluated bucket`, { bucket, isCallable });
+  return isCallable;
 }
 
 /**
@@ -89,7 +96,13 @@ export function CaseListScreen(): ReactElement {
   LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering`, { selectedBucket });
 
   const handleToggleSearch = (): void => {
-    setIsSearchVisible((previous) => !previous);
+    LoggerService.info(`${FILE_NAME}: CaseListScreen.handleToggleSearch: toggling search bar`);
+    setIsSearchVisible((previous) => {
+      LoggerService.info(`${FILE_NAME}: CaseListScreen.handleToggleSearch: search bar visibility`, {
+        isSearchVisible: !previous,
+      });
+      return !previous;
+    });
   };
 
   const handleFilterPress = (): void => {
@@ -116,17 +129,26 @@ export function CaseListScreen(): ReactElement {
     navigation.navigate(ROUTE_NAMES.CASE_DETAILS, { caseId: caseItem.id });
   };
 
-  const renderCase = ({ item }: { item: Case }): ReactElement => (
-    <CaseCard
-      caseItem={item}
-      onPress={handleCasePress}
-      onAccept={isAcceptableBucket(item.bucket) ? acceptCase : undefined}
-      isAccepting={acceptingCaseId === item.id}
-      onCall={isCallableBucket(item.bucket) ? handleCallPress : undefined}
-    />
-  );
+  const renderCase = ({ item }: { item: Case }): ReactElement => {
+    // Candidate/client names are PII — only the case id and bucket are logged.
+    LoggerService.info(`${FILE_NAME}: renderCase: rendering case card`, {
+      caseId: item.id,
+      bucket: item.bucket,
+      isAccepting: acceptingCaseId === item.id,
+    });
+    return (
+      <CaseCard
+        caseItem={item}
+        onPress={handleCasePress}
+        onAccept={isAcceptableBucket(item.bucket) ? acceptCase : undefined}
+        isAccepting={acceptingCaseId === item.id}
+        onCall={isCallableBucket(item.bucket) ? handleCallPress : undefined}
+      />
+    );
+  };
 
   useLayoutEffect(() => {
+    LoggerService.info(`${FILE_NAME}: CaseListScreen: header effect running`);
     navigation.setOptions({
       headerTitleAlign: 'left',
       headerLeft: () => (
@@ -176,6 +198,7 @@ export function CaseListScreen(): ReactElement {
   }, [navigation, t]);
 
   if (isLoading) {
+    LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering loading state`);
     return (
       <Box flex={1} justifyContent="center" alignItems="center">
         <Spinner size="large" accessibilityLabel={t('caseList.loading')} testID="case-list-loading-spinner" />
@@ -184,6 +207,7 @@ export function CaseListScreen(): ReactElement {
   }
 
   if (loadError) {
+    LoggerService.warn(`${FILE_NAME}: CaseListScreen: rendering load-error state`, { loadError });
     return (
       <Box flex={1} justifyContent="center" alignItems="center" p="$5">
         <VStack space="md" alignItems="center">
@@ -198,6 +222,16 @@ export function CaseListScreen(): ReactElement {
       </Box>
     );
   }
+
+  LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering case list`, {
+    selectedBucket,
+    visibleCount: visibleCases.length,
+    isSearchVisible,
+    searchQueryLength: searchQuery.trim().length,
+    isRefreshing,
+    hasNotice: noticeKey !== null,
+    isEmpty: visibleCases.length === 0,
+  });
 
   return (
     <Box flex={1}>

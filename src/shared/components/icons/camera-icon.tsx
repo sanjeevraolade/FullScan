@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Circle, Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'camera-icon.tsx';
+
 /**
  * Gluestack UI ships no camera icon — follows the same `createIcon` + svg
  * pattern as `MapPinIcon`, so it's theme-aware and sizeable via `Icon` props
@@ -23,3 +27,5 @@ export const CameraIcon = createIcon({
   ),
 });
 CameraIcon.displayName = 'CameraIcon';
+
+LoggerService.info(`${FILE_NAME}: CameraIcon: icon component defined`);

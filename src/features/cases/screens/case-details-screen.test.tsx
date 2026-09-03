@@ -1,0 +1,413 @@
+import React from 'react';
+import { NavigationContainer } from '@react-navigation/native';
+import { createNativeStackNavigator } from '@react-navigation/native-stack';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+
+import { LocalizationEngine } from '@/localization';
+import { ThemeProvider } from '@/theme';
+import { ROUTE_NAMES } from '@/navigation/routes';
+import type { RootStackParamList } from '@/navigation/routes';
+import * as caseRepository from '@/repositories/case-repository';
+import { GeocodingFailedError, GeocodingService } from '@/infrastructure/geocoding';
+import type { Case, CaseDetail } from '@/domain/case';
+import type { ReferenceData } from '@/domain/reference-data';
+import type { DeviceLocation } from '@/infrastructure/location';
+import { useLocationStore } from '@/store/location';
+import { useGeoFenceBypassStore } from '@/store/geo-fence';
+import { useReferenceDataStore } from '@/store/reference-data';
+
+import { CaseDetailsScreen } from './case-details-screen';
+
+jest.mock('@/repositories/case-repository');
+jest.mock('@/infrastructure/geocoding', () => {
+  class TestGeocodingFailedError extends Error {
+    readonly reason: string;
+
+    constructor(reason: string, message: string) {
+      super(message);
+      this.name = 'GeocodingFailedError';
+      this.reason = reason;
+    }
+  }
+
+  return {
+    GeocodingService: { resolveAddressCoordinates: jest.fn(), clearCache: jest.fn() },
+    GeocodingFailedError: TestGeocodingFailedError,
+    isGeocodingFailedError: (error: unknown) => error instanceof TestGeocodingFailedError,
+  };
+});
+
+const Stack = createNativeStackNavigator<RootStackParamList>();
+
+/** The case address; the device fix below sits ~100m away from it. */
+const CASE_COORDINATES = { latitude: 17.4452, longitude: 78.3821 };
+const DEVICE_LOCATION: DeviceLocation = {
+  latitude: 17.4461,
+  longitude: 78.3821,
+  accuracyMeters: 6,
+  isMockLocation: false,
+  capturedAt: new Date('2026-09-04T09:00:00.000Z'),
+  source: 'fresh',
+};
+
+const REFERENCE_DATA: ReferenceData = {
+  verificationTypeStatuses: [
+    { code: 'verified_clear', label: 'Verified Clear' },
+    { code: 'utv', label: 'UTV' },
+  ],
+  utvOptions: [{ code: 'shifted', label: 'Shifted' }],
+  insuffOptions: [{ code: 'incorrect_address', label: 'Incorrect Address' }],
+  photoTypes: [{ code: 'house_photo_1', label: 'House Photo 1' }],
+  componentStatuses: [{ code: 'component_accepted', label: 'Component Accepted' }],
+  actionStatuses: [{ code: 'accepted', label: 'Accept/Approve' }],
+  profileStatuses: [{ code: 'wip', label: 'WIP' }],
+  mobileAppSettings: {
+    values: { geo_fence_radius_meters: 200, locationRetryCount: 3 },
+    updatedAt: '2026-09-03 14:17:05',
+  },
+};
+
+function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
+  return {
+    id: 'case-1',
+    caseId: 'case-parent-1',
+    caseRef: 'FS-2026-00001',
+    bucket: 'pending',
+    tatDueAt: new Date('2026-09-30T00:00:00.000Z'),
+    candidateName: 'Rahul Sharma',
+    fatherOrSpouseName: 'Suresh Sharma',
+    employerName: 'ABC Pvt Ltd',
+    verificationType: 'Address',
+    clientName: 'ABC Pvt Ltd',
+    address: 'Flat 204, Madhapur, Hyderabad',
+    addressType: 'present',
+    residenceType: 'rented',
+    coordinates: CASE_COORDINATES,
+    maskedPrimaryPhone: '+91-XXXXX-00001',
+    maskedSecondaryPhone: '+91-XXXXX-00002',
+    clientInstructions: 'Verify residence address.',
+    fieldExecutiveNotes: 'Gated community.',
+    selectedVerificationStatus: null,
+    respondent: null,
+    componentStatus: 'component_accepted',
+    actionStatus: null,
+    profileStatus: 'wip',
+    costRequested: null,
+    insuffRaisedAt: null,
+    insuffClearedAt: null,
+    addlDocRequestedAt: null,
+    addlDocClearedAt: null,
+    costApprovalRequestedAt: null,
+    costApprovedAt: null,
+    costRejectedAt: null,
+    siblingComponents: [],
+    ...overrides,
+  };
+}
+
+function buildCase(): Case {
+  return {
+    id: 'case-1',
+    caseId: 'case-parent-1',
+    caseRef: 'FS-2026-00001',
+    clientName: 'ABC Pvt Ltd',
+    candidateName: 'Rahul Sharma',
+    verificationType: 'Address',
+    address: 'Flat 204, Madhapur, Hyderabad',
+    bucket: 'pending',
+    updatedAt: new Date('2026-09-04T09:00:00.000Z'),
+  };
+}
+
+function seedGeoFenceSettings(radiusMeters: number, locationRetryCount = 3): void {
+  useReferenceDataStore.setState({
+    referenceData: {
+      ...REFERENCE_DATA,
+      mobileAppSettings: {
+        values: { geo_fence_radius_meters: radiusMeters, locationRetryCount },
+        updatedAt: '2026-09-03 14:17:05',
+      },
+    },
+  });
+}
+
+/** `render` and `fireEvent` are async in React Native Testing Library 14. */
+async function renderCaseDetails(): Promise<void> {
+  await render(
+    <ThemeProvider>
+      <NavigationContainer>
+        <Stack.Navigator initialRouteName={ROUTE_NAMES.CASE_DETAILS}>
+          <Stack.Screen
+            name={ROUTE_NAMES.CASE_DETAILS}
+            component={CaseDetailsScreen}
+            initialParams={{ caseId: 'case-1' }}
+          />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ThemeProvider>,
+  );
+}
+
+describe('CaseDetailsScreen geo-fence gating', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await LocalizationEngine.initialize();
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    useReferenceDataStore.setState({ referenceData: REFERENCE_DATA });
+    useGeoFenceBypassStore.getState().clearConsents();
+    useLocationStore.setState({
+      status: 'ready',
+      location: DEVICE_LOCATION,
+      errorReason: null,
+      isEvaluating: false,
+      evaluate: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    LocalizationEngine.dispose();
+    useLocationStore.getState().reset();
+  });
+
+  it('reveals every section once the device is inside the geo-fence', async () => {
+    seedGeoFenceSettings(200);
+
+    await renderCaseDetails();
+
+    await waitFor(() => expect(screen.getByTestId('case-details-gps-banner')).toBeTruthy());
+    expect(screen.getByText('Case Information')).toBeTruthy();
+    expect(screen.getByText('Masked Phone Actions')).toBeTruthy();
+    expect(screen.getByText('Select Verification Status Outcome')).toBeTruthy();
+    expect(screen.getByText('Photo Evidence Capture (Camera Only)')).toBeTruthy();
+    expect(screen.getByTestId('case-details-submit-button')).toBeTruthy();
+  });
+
+  it('shows only Case Information and Case Location while outside the geo-fence', async () => {
+    seedGeoFenceSettings(50);
+
+    await renderCaseDetails();
+
+    await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
+    expect(screen.getByText('Case Information')).toBeTruthy();
+    expect(screen.getByText('Location Address')).toBeTruthy();
+    expect(screen.queryByText('Masked Phone Actions')).toBeNull();
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+    expect(screen.queryByText('Photo Evidence Capture (Camera Only)')).toBeNull();
+    expect(screen.queryByTestId('case-details-submit-button')).toBeNull();
+  });
+
+  it('keeps the sections hidden until the Force Proceed consent is actually given', async () => {
+    seedGeoFenceSettings(50);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await fireEvent.press(screen.getByTestId('case-details-recalculate-button'));
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-force-proceed-button')).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByTestId('case-details-force-proceed-button'));
+
+    // The dialog is up but nothing is unlocked yet.
+    expect(
+      screen.getByText(
+        'This case will be scrutinized after submission because the geo-fence requirement was not met.',
+      ),
+    ).toBeTruthy();
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('case-force-proceed-cancel-button'));
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+  });
+
+  it('reveals the sections after the user agrees to proceed without distance', async () => {
+    seedGeoFenceSettings(50);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await fireEvent.press(screen.getByTestId('case-details-recalculate-button'));
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-force-proceed-button')).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByTestId('case-details-force-proceed-button'));
+    await fireEvent.press(screen.getByTestId('case-force-proceed-agree-button'));
+
+    await waitFor(() =>
+      expect(screen.getByText('Select Verification Status Outcome')).toBeTruthy(),
+    );
+    expect(screen.getByTestId('case-details-geo-fence-bypass-notice')).toBeTruthy();
+  });
+
+  it('sends the visit location and measured distance on a normal submission', async () => {
+    seedGeoFenceSettings(200);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() => expect(caseRepository.submitVerificationOutcome).toHaveBeenCalled());
+    const [, outcome] = jest.mocked(caseRepository.submitVerificationOutcome).mock.calls[0] ?? [];
+    expect(outcome).toMatchObject({
+      currentLatitude: DEVICE_LOCATION.latitude,
+      currentLongitude: DEVICE_LOCATION.longitude,
+      forceProceed: false,
+    });
+    // ~100m between the seeded device fix and the case coordinates.
+    expect(outcome?.distanceToCaseMeters).toBeGreaterThan(95);
+    expect(outcome?.distanceToCaseMeters).toBeLessThan(105);
+  });
+
+  it('sends the visit location for a force-proceeded submission too', async () => {
+    seedGeoFenceSettings(50);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await fireEvent.press(screen.getByTestId('case-details-recalculate-button'));
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-force-proceed-button')).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByTestId('case-details-force-proceed-button'));
+    await fireEvent.press(screen.getByTestId('case-force-proceed-agree-button'));
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() =>
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({
+          currentLatitude: DEVICE_LOCATION.latitude,
+          currentLongitude: DEVICE_LOCATION.longitude,
+          forceProceed: true,
+        }),
+      ),
+    );
+  });
+
+  it('flags the submission as forceProceed so the back office can scrutinize the case', async () => {
+    seedGeoFenceSettings(50);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
+
+    for (let attempt = 0; attempt < 3; attempt += 1) {
+      await fireEvent.press(screen.getByTestId('case-details-recalculate-button'));
+    }
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-force-proceed-button')).toBeTruthy(),
+    );
+    await fireEvent.press(screen.getByTestId('case-details-force-proceed-button'));
+    await fireEvent.press(screen.getByTestId('case-force-proceed-agree-button'));
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() =>
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ forceProceed: true }),
+      ),
+    );
+  });
+
+  it('leaves forceProceed false for a normal, inside-the-fence submission', async () => {
+    seedGeoFenceSettings(200);
+    await renderCaseDetails();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() =>
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ forceProceed: false }),
+      ),
+    );
+  });
+
+  it('geocodes an address-only case and gates on the resolved location', async () => {
+    seedGeoFenceSettings(200);
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ coordinates: null }));
+    jest.mocked(GeocodingService.resolveAddressCoordinates).mockResolvedValue({
+      coordinates: CASE_COORDINATES,
+      source: 'provider',
+      formattedAddress: null,
+      resolvedAtIso: '2026-09-04T09:00:00.000Z',
+      providerName: 'google',
+    });
+
+    await renderCaseDetails();
+
+    await waitFor(() => expect(screen.getByTestId('case-details-gps-banner')).toBeTruthy());
+    expect(GeocodingService.resolveAddressCoordinates).toHaveBeenCalledWith(
+      'Flat 204, Madhapur, Hyderabad',
+      expect.objectContaining({ providerName: 'google' }),
+    );
+    expect(screen.getByText('Select Verification Status Outcome')).toBeTruthy();
+  });
+
+  it('tells the user to reconnect when an address-only case cannot be resolved offline', async () => {
+    seedGeoFenceSettings(200);
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ coordinates: null }));
+    jest
+      .mocked(GeocodingService.resolveAddressCoordinates)
+      .mockRejectedValue(new GeocodingFailedError('offline', 'offline'));
+
+    await renderCaseDetails();
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Case location could not be determined. Connect to the internet and try again.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+  });
+
+  it('keeps the case locked when the device location is not usable', async () => {
+    seedGeoFenceSettings(200);
+    useLocationStore.setState({ status: 'mock_detected', location: null });
+
+    await renderCaseDetails();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-geo-fence-awaiting-location')).toBeTruthy(),
+    );
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+    // No Force Proceed escape hatch for a device problem — that must be fixed.
+    expect(screen.queryByTestId('case-details-force-proceed-button')).toBeNull();
+  });
+
+  it('locks the case when the server geo-fence configuration is unavailable', async () => {
+    useReferenceDataStore.setState({ referenceData: null });
+
+    await renderCaseDetails();
+
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-geo-fence-configuration-error')).toBeTruthy(),
+    );
+    expect(screen.queryByText('Select Verification Status Outcome')).toBeNull();
+    expect(screen.queryByTestId('case-details-force-proceed-button')).toBeNull();
+  });
+
+  it('still lets a new case be accepted without being at the address', async () => {
+    seedGeoFenceSettings(50);
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
+
+    await renderCaseDetails();
+
+    await waitFor(() => expect(screen.getByTestId('case-details-accept-button')).toBeTruthy());
+    expect(screen.queryByText('Masked Phone Actions')).toBeNull();
+  });
+});

@@ -32,19 +32,38 @@ export interface UseCaseListResult {
 function matchesSearch(candidate: Case, query: string): boolean {
   const normalizedQuery = query.trim().toLowerCase();
   if (normalizedQuery.length === 0) {
+    LoggerService.info(`${FILE_NAME}: matchesSearch: no query — case included`, {
+      caseId: candidate.id,
+    });
     return true;
   }
-  return (
+  // Query text is logged only as a length: a field executive can search by
+  // candidate name, so the term itself is potentially PII.
+  const isMatch =
     candidate.caseRef.toLowerCase().includes(normalizedQuery) ||
     candidate.candidateName.toLowerCase().includes(normalizedQuery) ||
-    candidate.clientName.toLowerCase().includes(normalizedQuery)
-  );
+    candidate.clientName.toLowerCase().includes(normalizedQuery);
+  LoggerService.info(`${FILE_NAME}: matchesSearch: query evaluated`, {
+    caseId: candidate.id,
+    queryLength: normalizedQuery.length,
+    isMatch,
+  });
+  return isMatch;
 }
 
 function countByBucket(cases: Case[]): Record<CaseBucket, number> {
+  LoggerService.info(`${FILE_NAME}: countByBucket: counting cases per bucket`, {
+    count: cases.length,
+  });
   const counts: Record<CaseBucket, number> = { new: 0, pending: 0, beyondTat: 0, completed: 0 };
   cases.forEach((item) => {
     counts[item.bucket] += 1;
+  });
+  LoggerService.info(`${FILE_NAME}: countByBucket: counted`, {
+    new: counts.new,
+    pending: counts.pending,
+    beyondTat: counts.beyondTat,
+    completed: counts.completed,
   });
   return counts;
 }
@@ -57,6 +76,7 @@ function countByBucket(cases: Case[]): Record<CaseBucket, number> {
  * screen.
  */
 export function useCaseList(): UseCaseListResult {
+  LoggerService.info(`${FILE_NAME}: useCaseList: hook invoked`);
   const fieldExecutive = useSessionStore((state) => state.fieldExecutive);
   const [cases, setCases] = useState<Case[]>([]);
   const [selectedBucket, setSelectedBucket] = useState<CaseBucket>('new');
@@ -69,8 +89,10 @@ export function useCaseList(): UseCaseListResult {
   const loadCaseList = useCallback(async (isRefresh: boolean): Promise<void> => {
     LoggerService.info(`${FILE_NAME}: loadCaseList: fetching`, { isRefresh });
     if (isRefresh) {
+      LoggerService.info(`${FILE_NAME}: loadCaseList: pull-to-refresh in progress`);
       setIsRefreshing(true);
     } else {
+      LoggerService.info(`${FILE_NAME}: loadCaseList: initial load in progress`);
       setIsLoading(true);
     }
     setLoadError(null);
@@ -85,6 +107,7 @@ export function useCaseList(): UseCaseListResult {
       });
       setLoadError('network');
     } finally {
+      LoggerService.info(`${FILE_NAME}: loadCaseList: fetch settled`, { isRefresh });
       if (isRefresh) {
         setIsRefreshing(false);
       } else {
@@ -94,10 +117,12 @@ export function useCaseList(): UseCaseListResult {
   }, []);
 
   useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: useCaseList: initial load effect running`);
     void loadCaseList(false);
   }, [loadCaseList]);
 
   const refresh = useCallback((): void => {
+    LoggerService.info(`${FILE_NAME}: refresh: refresh requested`);
     void loadCaseList(true);
   }, [loadCaseList]);
 
@@ -106,18 +131,38 @@ export function useCaseList(): UseCaseListResult {
     setSelectedBucket(bucket);
   }, []);
 
-  const bucketCounts = useMemo(() => countByBucket(cases), [cases]);
+  const bucketCounts = useMemo(() => {
+    LoggerService.info(`${FILE_NAME}: bucketCounts: recomputing tab counts`, {
+      count: cases.length,
+    });
+    return countByBucket(cases);
+  }, [cases]);
 
-  const visibleCases = useMemo(
-    () => cases.filter((item) => item.bucket === selectedBucket && matchesSearch(item, searchQuery)),
-    [cases, selectedBucket, searchQuery],
-  );
+  const visibleCases = useMemo(() => {
+    LoggerService.info(`${FILE_NAME}: visibleCases: filtering cases`, {
+      count: cases.length,
+      selectedBucket,
+      searchQueryLength: searchQuery.trim().length,
+    });
+    const filtered = cases.filter(
+      (item) => item.bucket === selectedBucket && matchesSearch(item, searchQuery),
+    );
+    LoggerService.info(`${FILE_NAME}: visibleCases: filtered`, {
+      selectedBucket,
+      visibleCount: filtered.length,
+    });
+    return filtered;
+  }, [cases, selectedBucket, searchQuery]);
 
   const acceptCase = useCallback((caseId: string): void => {
     LoggerService.info(`${FILE_NAME}: acceptCase: requested`, { caseId });
     setAcceptingCaseId(caseId);
     requestAcceptCase(caseId)
       .then((updatedCase) => {
+        LoggerService.info(`${FILE_NAME}: acceptCase: accepted — replacing case in list`, {
+          caseId,
+          bucket: updatedCase.bucket,
+        });
         setCases((previous) => previous.map((item) => (item.id === caseId ? updatedCase : item)));
       })
       .catch((error: unknown) => {
@@ -127,9 +172,22 @@ export function useCaseList(): UseCaseListResult {
         });
       })
       .finally(() => {
+        LoggerService.info(`${FILE_NAME}: acceptCase: request settled`, { caseId });
         setAcceptingCaseId(null);
       });
   }, []);
+
+  LoggerService.info(`${FILE_NAME}: useCaseList: state`, {
+    hasFieldExecutive: fieldExecutive !== null,
+    selectedBucket,
+    caseCount: cases.length,
+    visibleCount: visibleCases.length,
+    searchQueryLength: searchQuery.trim().length,
+    isLoading,
+    isRefreshing,
+    hasLoadError: loadError !== null,
+    isAccepting: acceptingCaseId !== null,
+  });
 
   return {
     fieldExecutive,

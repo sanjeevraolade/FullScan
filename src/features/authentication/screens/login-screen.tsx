@@ -82,10 +82,59 @@ export function LoginScreen(): ReactElement {
   const copyrightYear = new Date().getFullYear();
   LoggerService.info(`${FILE_NAME}: LoginScreen: rendering`);
 
+  // Credentials are never logged — only field validity and flow flags.
+  LoggerService.info(`${FILE_NAME}: LoginScreen: render state`, {
+    canSubmit,
+    isSubmitting,
+    invalidFields: Object.keys(errors).join(','),
+    hasLoginError: loginError !== null,
+    isBiometricLoginAvailable,
+    biometryType,
+    isBiometricAuthenticating,
+    isBiometricEnrollmentPromptVisible,
+  });
+
   const focusPasswordField = (): void => {
     LoggerService.info(`${FILE_NAME}: LoginScreen.focusPasswordField: moving focus to password`);
     passwordInputRef.current?.focus();
   };
+
+  const confirmEnrollment = (): void => {
+    LoggerService.info(`${FILE_NAME}: LoginScreen.confirmEnrollment: enrollment accepted from dialog`);
+    void confirmBiometricEnrollment();
+  };
+
+  const skipEnrollment = (): void => {
+    LoggerService.info(`${FILE_NAME}: LoginScreen.skipEnrollment: enrollment dismissed from dialog`);
+    skipBiometricEnrollment();
+  };
+
+  if (loginError) {
+    LoggerService.warn(`${FILE_NAME}: LoginScreen: rendering login error alert branch`, {
+      loginError,
+    });
+  }
+
+  if (isBiometricLoginAvailable) {
+    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering biometric login branch`, {
+      biometryType,
+      isBiometricAuthenticating,
+    });
+  } else {
+    LoggerService.info(
+      `${FILE_NAME}: LoginScreen: biometric login branch hidden — unavailable on this device`,
+    );
+  }
+
+  if (biometricLoginError) {
+    LoggerService.warn(`${FILE_NAME}: LoginScreen: rendering biometric error alert branch`, {
+      biometricLoginError,
+    });
+  }
+
+  if (isBiometricEnrollmentPromptVisible) {
+    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering biometric enrollment dialog branch`);
+  }
 
   return (
     <SafeAreaView style={{ flex: 1 }} edges={['top']}>
@@ -113,7 +162,13 @@ export function LoginScreen(): ReactElement {
                   control={control}
                   name="username"
                   rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
-                  render={({ field: { value, onChange, onBlur } }) => (
+                  render={({ field: { value, onChange, onBlur } }) => {
+                    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering field`, {
+                      fieldId: 'username',
+                      hasValue: value.trim().length > 0,
+                      hasError: errors.username !== undefined,
+                    });
+                    return (
                     <FormTextField
                       fieldId="username"
                       labelKey="login.fields.username"
@@ -125,14 +180,22 @@ export function LoginScreen(): ReactElement {
                       returnKeyType="next"
                       onSubmitEditing={focusPasswordField}
                     />
-                  )}
+                    );
+                  }}
                 />
 
                 <Controller
                   control={control}
                   name="password"
                   rules={{ required: VALIDATION_REQUIRED_MESSAGE_KEY }}
-                  render={({ field: { value, onChange, onBlur } }) => (
+                  render={({ field: { value, onChange, onBlur } }) => {
+                    // Only presence is logged — never the password itself.
+                    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering field`, {
+                      fieldId: 'password',
+                      hasValue: value.trim().length > 0,
+                      hasError: errors.password !== undefined,
+                    });
+                    return (
                     <FormTextField
                       ref={passwordInputRef}
                       fieldId="password"
@@ -146,13 +209,20 @@ export function LoginScreen(): ReactElement {
                       returnKeyType="done"
                       onSubmitEditing={submitLogin}
                     />
-                  )}
+                    );
+                  }}
                 />
 
                 <Controller
                   control={control}
                   name="employeeId"
-                  render={({ field: { value, onChange, onBlur } }) => (
+                  render={({ field: { value, onChange, onBlur } }) => {
+                    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering field`, {
+                      fieldId: 'employeeId',
+                      hasValue: value.trim().length > 0,
+                      hasError: errors.employeeId !== undefined,
+                    });
+                    return (
                     <FormTextField
                       fieldId="employeeId"
                       labelKey="login.fields.employeeId"
@@ -162,13 +232,19 @@ export function LoginScreen(): ReactElement {
                       errorKey={errors.employeeId?.message}
                       returnKeyType="done"
                     />
-                  )}
+                    );
+                  }}
                 />
 
                 <Controller
                   control={control}
                   name="rememberMe"
-                  render={({ field: { value, onChange } }) => (
+                  render={({ field: { value, onChange } }) => {
+                    LoggerService.info(`${FILE_NAME}: LoginScreen: rendering field`, {
+                      fieldId: 'rememberMe',
+                      isChecked: value,
+                    });
+                    return (
                     <Checkbox
                       value="rememberMe"
                       isChecked={value}
@@ -186,7 +262,8 @@ export function LoginScreen(): ReactElement {
                       </CheckboxIndicator>
                       <CheckboxLabel>{t('login.fields.rememberMe')}</CheckboxLabel>
                     </Checkbox>
-                  )}
+                    );
+                  }}
                 />
 
                 {loginError ? (
@@ -264,7 +341,7 @@ export function LoginScreen(): ReactElement {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <AlertDialog isOpen={isBiometricEnrollmentPromptVisible} onClose={skipBiometricEnrollment}>
+      <AlertDialog isOpen={isBiometricEnrollmentPromptVisible} onClose={skipEnrollment}>
         <AlertDialogBackdrop />
         <AlertDialogContent testID="biometric-enrollment-dialog">
           <AlertDialogHeader>
@@ -277,13 +354,13 @@ export function LoginScreen(): ReactElement {
             <Button
               variant="outline"
               action="secondary"
-              onPress={skipBiometricEnrollment}
+              onPress={skipEnrollment}
               testID="biometric-enrollment-skip"
             >
               <ButtonText>{t('login.biometric.enroll.skip')}</ButtonText>
             </Button>
             <Button
-              onPress={() => void confirmBiometricEnrollment()}
+              onPress={confirmEnrollment}
               testID="biometric-enrollment-accept"
             >
               <ButtonText>{t('login.biometric.enroll.accept')}</ButtonText>

@@ -3,6 +3,10 @@ import type { ReactElement } from 'react';
 import { AlertCircleIcon, Box, EditIcon, HStack, Icon, Text, VStack } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'case-instructions-section.tsx';
+
 export interface CaseInstructionsSectionProps {
   readonly clientInstructions: string;
   readonly fieldExecutiveNotes: string;
@@ -14,6 +18,11 @@ export function CaseInstructionsSection({
   fieldExecutiveNotes,
 }: CaseInstructionsSectionProps): ReactElement {
   const { t } = useTranslation();
+
+  LoggerService.info(`${FILE_NAME}: CaseInstructionsSection: rendering`, {
+    hasClientInstructions: clientInstructions.trim().length > 0,
+    hasFieldExecutiveNotes: fieldExecutiveNotes.trim().length > 0,
+  });
 
   return (
     <Box

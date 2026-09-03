@@ -35,6 +35,9 @@ class LocalizationEngineImpl implements ILocalizationEngine {
   }
 
   getLanguage(): SupportedLanguage {
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.getLanguage: returning active language`, {
+      language: this.language,
+    });
     return this.language;
   }
 
@@ -45,15 +48,33 @@ class LocalizationEngineImpl implements ILocalizationEngine {
     });
     this.language = language;
     await i18next.changeLanguage(language);
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.setLanguage: language switched`, {
+      language,
+    });
   }
 
   resolve(key: string): string {
-    return i18next.t(key);
+    const resolvedValue = i18next.t(key);
+    if (resolvedValue === key) {
+      LoggerService.warn(`${FILE_NAME}: LocalizationEngine.resolve: no translation for key`, {
+        key,
+        language: this.language,
+      });
+    } else {
+      LoggerService.info(`${FILE_NAME}: LocalizationEngine.resolve: key resolved`, {
+        key,
+        language: this.language,
+      });
+    }
+    return resolvedValue;
   }
 
   dispose(): void {
     LoggerService.info(`${FILE_NAME}: LocalizationEngine.dispose: resetting to default language`);
     this.language = DEFAULT_LANGUAGE;
+    LoggerService.info(`${FILE_NAME}: LocalizationEngine.dispose: completed`, {
+      language: this.language,
+    });
   }
 }
 

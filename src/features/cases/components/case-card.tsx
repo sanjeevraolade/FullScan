@@ -39,6 +39,33 @@ export interface CaseCardProps {
 export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onCall }: CaseCardProps): ReactElement {
   const { t } = useTranslation();
 
+  // Candidate name and address are PII — only ids, the bucket and flags are logged.
+  LoggerService.info(`${FILE_NAME}: CaseCard: rendering`, {
+    caseId: caseItem.id,
+    bucket: caseItem.bucket,
+    verificationType: caseItem.verificationType,
+    isAccepting,
+  });
+
+  if (onAccept) {
+    LoggerService.info(`${FILE_NAME}: CaseCard: rendering accept action branch`, {
+      caseId: caseItem.id,
+      isAccepting,
+    });
+  }
+
+  if (onCall) {
+    LoggerService.info(`${FILE_NAME}: CaseCard: rendering call action branch`, {
+      caseId: caseItem.id,
+    });
+  }
+
+  if (!onAccept && !onCall) {
+    LoggerService.info(`${FILE_NAME}: CaseCard: rendering without actions branch`, {
+      caseId: caseItem.id,
+    });
+  }
+
   const handlePress = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseCard.handlePress: card pressed`, { caseId: caseItem.id });
     onPress?.(caseItem);

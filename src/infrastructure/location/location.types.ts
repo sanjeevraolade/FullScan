@@ -1,4 +1,7 @@
-/** A single device location fix, normalized for geotagging evidence. */
+/** Where a fix came from — a cached fix is never treated as the current position. */
+export type DeviceLocationSource = 'fresh' | 'lastKnown';
+
+/** A single device location fix, normalized for geotagging evidence and geo-fencing. */
 export interface DeviceLocation {
   readonly latitude: number;
   readonly longitude: number;
@@ -9,6 +12,54 @@ export interface DeviceLocation {
    */
   readonly isMockLocation: boolean;
   readonly capturedAt: Date;
+  /**
+   * `'fresh'` means the platform produced this fix for our request;
+   * `'lastKnown'` means it handed back a cached one. Geo-fence decisions
+   * require `'fresh'` — a stale fix could put the field executive anywhere.
+   */
+  readonly source: DeviceLocationSource;
+}
+
+/**
+ * Application permission state, normalized across platforms.
+ *
+ * `denied` is still askable (Android's "deny once", iOS before the first
+ * prompt); `blocked` is not — the user has to change it in Settings.
+ */
+export type LocationPermissionStatus = 'granted' | 'denied' | 'blocked' | 'unavailable';
+
+/** Why a fix could not be produced. */
+export type LocationUnavailableReason =
+  | 'permission_denied'
+  | 'service_disabled'
+  | 'position_unavailable'
+  | 'timeout'
+  | 'unknown';
+
+/**
+ * The single state every screen reads before allowing normal app actions.
+ * Only `ready` permits normal usage.
+ */
+export type LocationReadinessStatus =
+  | 'unknown'
+  | 'unsupported'
+  | 'service_disabled'
+  | 'permission_required'
+  | 'permission_denied'
+  | 'obtaining_location'
+  | 'mock_detected'
+  | 'ready'
+  | 'error';
+
+export interface CurrentLocationOptions {
+  readonly timeoutMs?: number;
+  readonly isHighAccuracyEnabled?: boolean;
+  /**
+   * Oldest cached fix the platform may return, in ms. Defaults to `0` — a
+   * fresh fix — because a geo-fence decision made against a stale position is
+   * worse than no decision at all.
+   */
+  readonly maximumAgeMs?: number;
 }
 
 export type LocationWatchCallback = (location: DeviceLocation) => void;

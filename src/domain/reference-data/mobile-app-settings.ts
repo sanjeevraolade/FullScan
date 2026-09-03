@@ -1,4 +1,8 @@
+import { LoggerService } from '@/infrastructure/logger';
+
 import type { MobileAppSettings, MobileAppSettingValue } from './reference-data.entity';
+
+const FILE_NAME = 'mobile-app-settings.ts';
 
 /**
  * Setting keys as stored in the backend's `mobile_app_settings` table.
@@ -20,6 +24,21 @@ export const MOBILE_APP_SETTING_KEYS = {
   geoFenceRadiusMeters: 'geo_fence_radius_meters',
   /** Retry parameter — camelCase on the wire, as the mobile contract specifies. */
   locationRetryCount: 'locationRetryCount',
+  /** Which `IGeocodingProvider` resolves an address to coordinates. */
+  geocodingProvider: 'geocoding_provider',
+  /** Which routing provider `DirectionsDistanceService` calls. */
+  directionsProvider: 'directions_provider',
+  /**
+   * Whether route/travel distance may be fetched at all. Off by default: it
+   * costs money per request and geo-fencing never needs it.
+   */
+  isDirectionsDistanceEnabled: 'directions_distance_enabled',
+  /** Key for the configured maps provider. Never logged, never persisted by the app. */
+  mapsApiKey: 'maps_api_key',
+  /** Geocoding endpoint override, so a proxy can be swapped in server-side. */
+  mapsApiBaseUrl: 'maps_api_base_url',
+  /** Directions endpoint override, independent of the geocoding one. */
+  directionsApiBaseUrl: 'directions_api_base_url',
   photoCompressionQuality: 'photo_compression_quality',
   maxPhotoUploadSizeMb: 'max_photo_upload_size_mb',
   isWatermarkEnabled: 'watermark_enabled',
@@ -74,6 +93,15 @@ export interface ResolvedMobileAppSettings {
   readonly geoFenceRadiusMeters: number;
   /** GPS fix re-attempts before a capture is abandoned (3-10). */
   readonly locationRetryCount: number;
+  /** Geocoding provider id — the app resolves it to an `IGeocodingProvider` at runtime. */
+  readonly geocodingProvider: string;
+  /** Routing provider id for informational travel distance. */
+  readonly directionsProvider: string;
+  readonly isDirectionsDistanceEnabled: boolean;
+  /** Maps provider key. Treat as a secret: never log it and never put it in an error message. */
+  readonly mapsApiKey: string;
+  readonly mapsApiBaseUrl: string;
+  readonly directionsApiBaseUrl: string;
   readonly photoCompressionQuality: number;
   readonly maxPhotoUploadSizeMb: number;
   readonly isWatermarkEnabled: boolean;
@@ -113,6 +141,12 @@ export const DEFAULT_MOBILE_APP_SETTINGS: Omit<ResolvedMobileAppSettings, 'value
     maxLoginAttempts: 5,
     geoFenceRadiusMeters: 200,
     locationRetryCount: 3,
+    geocodingProvider: 'google',
+    directionsProvider: 'google',
+    isDirectionsDistanceEnabled: false,
+    mapsApiKey: '',
+    mapsApiBaseUrl: '',
+    directionsApiBaseUrl: '',
     photoCompressionQuality: 80,
     maxPhotoUploadSizeMb: 5,
     isWatermarkEnabled: true,
@@ -129,17 +163,31 @@ type SettingValues = Readonly<Record<string, MobileAppSettingValue>>;
  * still honoured instead of silently falling back.
  */
 function readBooleanSetting(values: SettingValues, key: string, fallback: boolean): boolean {
+  LoggerService.info(`${FILE_NAME}: readBooleanSetting: entry`, { key, fallback });
+
   const value = values[key];
 
   if (typeof value === 'boolean') {
+    LoggerService.info(`${FILE_NAME}: readBooleanSetting: resolved from boolean value`, {
+      key,
+      value,
+    });
     return value;
   }
   if (value === 'true') {
+    LoggerService.info(`${FILE_NAME}: readBooleanSetting: resolved from string 'true'`, { key });
     return true;
   }
   if (value === 'false') {
+    LoggerService.info(`${FILE_NAME}: readBooleanSetting: resolved from string 'false'`, { key });
     return false;
   }
+
+  LoggerService.warn(`${FILE_NAME}: readBooleanSetting: fallback used — absent or malformed`, {
+    key,
+    valueType: typeof value,
+    fallback,
+  });
   return fallback;
 }
 
@@ -153,28 +201,77 @@ function readNumberSetting(
   fallback: number,
   range?: NumericRange,
 ): number {
+  LoggerService.info(`${FILE_NAME}: readNumberSetting: entry`, {
+    key,
+    fallback,
+    hasRange: Boolean(range),
+  });
+
   const value = values[key];
   let numeric: number | null = null;
 
   if (typeof value === 'number' && Number.isFinite(value)) {
+    LoggerService.info(`${FILE_NAME}: readNumberSetting: value arrived as a finite number`, {
+      key,
+      value,
+    });
     numeric = value;
   } else if (typeof value === 'string' && value.trim().length > 0) {
     const parsed = Number(value);
+    if (Number.isFinite(parsed)) {
+      LoggerService.info(`${FILE_NAME}: readNumberSetting: parsed numeric string`, { key, parsed });
+    } else {
+      LoggerService.warn(`${FILE_NAME}: readNumberSetting: string value is not numeric`, { key });
+    }
     numeric = Number.isFinite(parsed) ? parsed : null;
+  } else {
+    LoggerService.warn(`${FILE_NAME}: readNumberSetting: no usable value present`, {
+      key,
+      valueType: typeof value,
+    });
   }
 
   if (numeric === null) {
+    LoggerService.warn(`${FILE_NAME}: readNumberSetting: fallback used — absent or malformed`, {
+      key,
+      fallback,
+    });
     return fallback;
   }
   if (range && (numeric < range.min || numeric > range.max)) {
+    LoggerService.warn(`${FILE_NAME}: readNumberSetting: fallback used — value outside range`, {
+      key,
+      numeric,
+      min: range.min,
+      max: range.max,
+      fallback,
+    });
     return fallback;
   }
+
+  LoggerService.info(`${FILE_NAME}: readNumberSetting: resolved`, { key, numeric });
   return numeric;
 }
 
 /** Reads a string setting. An all-whitespace value counts as absent. */
 function readStringSetting(values: SettingValues, key: string, fallback: string): string {
+  LoggerService.info(`${FILE_NAME}: readStringSetting: entry`, { key });
+
   const value = values[key];
+  // Values are never logged here: this reader also serves `maps_api_key` and
+  // `support_contact_number`. Length only.
+  const trimmedLength = typeof value === 'string' ? value.trim().length : 0;
+
+  if (trimmedLength > 0) {
+    LoggerService.info(`${FILE_NAME}: readStringSetting: resolved`, { key, trimmedLength });
+  } else {
+    LoggerService.warn(`${FILE_NAME}: readStringSetting: fallback used — absent or blank`, {
+      key,
+      valueType: typeof value,
+      fallbackLength: fallback.length,
+    });
+  }
+
   return typeof value === 'string' && value.trim().length > 0 ? value.trim() : fallback;
 }
 
@@ -184,7 +281,23 @@ function readLanguageSetting(
   key: string,
   fallback: MobileAppLanguage,
 ): MobileAppLanguage {
+  LoggerService.info(`${FILE_NAME}: readLanguageSetting: entry`, { key, fallback });
+
   const value = values[key];
+  const supportedLanguage = SUPPORTED_LANGUAGES.find((language) => language === value);
+
+  if (supportedLanguage) {
+    LoggerService.info(`${FILE_NAME}: readLanguageSetting: resolved`, {
+      key,
+      language: supportedLanguage,
+    });
+  } else {
+    LoggerService.warn(
+      `${FILE_NAME}: readLanguageSetting: fallback used — language absent or unsupported`,
+      { key, valueType: typeof value, fallback },
+    );
+  }
+
   return SUPPORTED_LANGUAGES.find((language) => language === value) ?? fallback;
 }
 
@@ -199,12 +312,27 @@ function readLanguageSetting(
 export function resolveMobileAppSettings(
   settings: MobileAppSettings | null | undefined,
 ): ResolvedMobileAppSettings {
+  LoggerService.info(`${FILE_NAME}: resolveMobileAppSettings: entry`, {
+    hasSettings: Boolean(settings),
+  });
+
   const values: SettingValues = settings?.values ?? {};
   const keys = MOBILE_APP_SETTING_KEYS;
   const defaults = DEFAULT_MOBILE_APP_SETTINGS;
   const ranges = MOBILE_APP_SETTING_RANGES;
 
-  return {
+  if (!settings) {
+    LoggerService.warn(
+      `${FILE_NAME}: resolveMobileAppSettings: no payload — every setting will use its default`,
+    );
+  } else {
+    LoggerService.info(`${FILE_NAME}: resolveMobileAppSettings: reading payload`, {
+      settingCount: Object.keys(values).length,
+      updatedAt: settings.updatedAt,
+    });
+  }
+
+  const resolved: ResolvedMobileAppSettings = {
     minSupportedAppVersion: readStringSetting(
       values,
       keys.minSupportedAppVersion,
@@ -295,7 +423,130 @@ export function resolveMobileAppSettings(
       ranges.offlineQueueRetryLimit,
     ),
     isSyncOnWifiOnly: readBooleanSetting(values, keys.isSyncOnWifiOnly, defaults.isSyncOnWifiOnly),
+    geocodingProvider: readStringSetting(
+      values,
+      keys.geocodingProvider,
+      defaults.geocodingProvider,
+    ),
+    directionsProvider: readStringSetting(
+      values,
+      keys.directionsProvider,
+      defaults.directionsProvider,
+    ),
+    isDirectionsDistanceEnabled: readBooleanSetting(
+      values,
+      keys.isDirectionsDistanceEnabled,
+      defaults.isDirectionsDistanceEnabled,
+    ),
+    mapsApiKey: readStringSetting(values, keys.mapsApiKey, defaults.mapsApiKey),
+    mapsApiBaseUrl: readStringSetting(values, keys.mapsApiBaseUrl, defaults.mapsApiBaseUrl),
+    directionsApiBaseUrl: readStringSetting(
+      values,
+      keys.directionsApiBaseUrl,
+      defaults.directionsApiBaseUrl,
+    ),
     values,
     updatedAt: settings?.updatedAt ?? null,
   };
+
+  LoggerService.info(`${FILE_NAME}: resolveMobileAppSettings: resolved`, {
+    defaultLanguage: resolved.defaultLanguage,
+    minSupportedAppVersion: resolved.minSupportedAppVersion,
+    isForceUpdateEnabled: resolved.isForceUpdateEnabled,
+    isMaintenanceModeEnabled: resolved.isMaintenanceModeEnabled,
+    isBiometricLoginEnabled: resolved.isBiometricLoginEnabled,
+    isMockLocationBlockEnabled: resolved.isMockLocationBlockEnabled,
+    sessionTimeoutMinutes: resolved.sessionTimeoutMinutes,
+    maxLoginAttempts: resolved.maxLoginAttempts,
+    geoFenceRadiusMeters: resolved.geoFenceRadiusMeters,
+    locationRetryCount: resolved.locationRetryCount,
+    geocodingProvider: resolved.geocodingProvider,
+    directionsProvider: resolved.directionsProvider,
+    isDirectionsDistanceEnabled: resolved.isDirectionsDistanceEnabled,
+    // The key itself is a secret — only its presence is ever logged.
+    hasMapsApiKey: resolved.mapsApiKey.length > 0,
+    photoCompressionQuality: resolved.photoCompressionQuality,
+    maxPhotoUploadSizeMb: resolved.maxPhotoUploadSizeMb,
+    isWatermarkEnabled: resolved.isWatermarkEnabled,
+    syncIntervalMinutes: resolved.syncIntervalMinutes,
+    offlineQueueRetryLimit: resolved.offlineQueueRetryLimit,
+    isSyncOnWifiOnly: resolved.isSyncOnWifiOnly,
+    updatedAt: resolved.updatedAt,
+  });
+  return resolved;
+}
+
+/**
+ * The two settings geo-fencing cannot run without.
+ *
+ * Separate from `ResolvedMobileAppSettings` on purpose: everywhere else a
+ * missing setting quietly falls back to a safe default, but a geo-fence
+ * decision made against a *guessed* radius would either wave through a field
+ * executive who is nowhere near the address or lock out one who is standing at
+ * the door. So this reader is strict — see `resolveGeoFenceConfiguration`.
+ */
+export interface GeoFenceConfiguration {
+  readonly geoFenceRadiusMeters: number;
+  readonly locationRetryCount: number;
+}
+
+/**
+ * Reads the geo-fence configuration, or `null` when the payload has never
+ * arrived or either value is missing, malformed, or outside the range the
+ * back office enforces. A `null` result must block geo-fence access rather
+ * than fall back to a default.
+ */
+export function resolveGeoFenceConfiguration(
+  settings: MobileAppSettings | null | undefined,
+): GeoFenceConfiguration | null {
+  LoggerService.info(`${FILE_NAME}: resolveGeoFenceConfiguration: entry`, {
+    hasSettings: Boolean(settings),
+  });
+
+  if (!settings) {
+    LoggerService.warn(
+      `${FILE_NAME}: resolveGeoFenceConfiguration: rejected — settings payload has never arrived`,
+    );
+    return null;
+  }
+
+  const values: SettingValues = settings.values;
+  const radiusRange = MOBILE_APP_SETTING_RANGES.geoFenceRadiusMeters;
+  const retryRange = MOBILE_APP_SETTING_RANGES.locationRetryCount;
+
+  // `NaN` as the fallback means "absent or malformed" — no real setting can
+  // produce it, so it can't be confused with a configured value.
+  const geoFenceRadiusMeters = readNumberSetting(
+    values,
+    MOBILE_APP_SETTING_KEYS.geoFenceRadiusMeters,
+    Number.NaN,
+    radiusRange,
+  );
+  const locationRetryCount = readNumberSetting(
+    values,
+    MOBILE_APP_SETTING_KEYS.locationRetryCount,
+    Number.NaN,
+    retryRange,
+  );
+
+  if (!Number.isFinite(geoFenceRadiusMeters) || !Number.isFinite(locationRetryCount)) {
+    LoggerService.warn(
+      `${FILE_NAME}: resolveGeoFenceConfiguration: rejected — a required value is missing, malformed or out of range`,
+      {
+        hasRadius: Number.isFinite(geoFenceRadiusMeters),
+        hasRetryCount: Number.isFinite(locationRetryCount),
+        radiusMin: radiusRange.min,
+        radiusMax: radiusRange.max,
+        retryMin: retryRange.min,
+        retryMax: retryRange.max,
+      },
+    );
+    return null;
+  }
+
+  LoggerService.info(`${FILE_NAME}: resolveGeoFenceConfiguration: resolved`, {
+    geoFenceRadiusMeters,
+    locationRetryCount,
+  });
+  return { geoFenceRadiusMeters, locationRetryCount };
 }

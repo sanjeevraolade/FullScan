@@ -34,14 +34,60 @@ export function CasePhotoEvidenceSection({
 }: CasePhotoEvidenceSectionProps): ReactElement {
   const { t } = useTranslation();
 
+  // File paths and photo bytes are never logged — only counts and document type codes.
+  LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: rendering`, {
+    selectedPhotoTag,
+    capturedPhotoCount: capturedPhotos.length,
+    photoTagOptionCount: photoTagOptions.length,
+    isReadOnly,
+  });
+
   // Each captured photo is tagged with the document type it was captured
   // for — only show the thumbnails for whichever tag is currently selected.
-  const photosForSelectedTag = capturedPhotos.filter((photo) => photo.documentTypeCode === selectedPhotoTag);
+  const photosForSelectedTag = capturedPhotos.filter((photo) => {
+    const matchesSelectedTag = photo.documentTypeCode === selectedPhotoTag;
+    LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: filtering captured photo by tag`, {
+      documentTypeCode: photo.documentTypeCode,
+      matchesSelectedTag,
+    });
+    return matchesSelectedTag;
+  });
+
+  LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: resolved photos for selected tag`, {
+    selectedPhotoTag,
+    matchingPhotoCount: photosForSelectedTag.length,
+  });
+
+  const handleSelectPhotoTag = (tag: string): void => {
+    LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection.handleSelectPhotoTag: photo tag selected`, {
+      tag,
+    });
+    onSelectPhotoTag(tag);
+  };
+
+  const handleDeletePhoto = (filePath: string): void => {
+    // Deliberately logs no path — evidence file locations stay out of the log.
+    LoggerService.warn(`${FILE_NAME}: CasePhotoEvidenceSection.handleDeletePhoto: delete requested`, {
+      selectedPhotoTag,
+      matchingPhotoCount: photosForSelectedTag.length,
+    });
+    onDeletePhoto(filePath);
+  };
 
   const handleOpenCamera = (): void => {
     LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection.handleOpenCamera: camera button pressed`);
     onOpenCamera();
   };
+
+  if (photosForSelectedTag.length > 0) {
+    LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: rendering gallery branch`, {
+      matchingPhotoCount: photosForSelectedTag.length,
+    });
+  } else {
+    LoggerService.info(
+      `${FILE_NAME}: CasePhotoEvidenceSection: rendering empty branch — no photos for selected tag`,
+    );
+  }
 
   return (
     <Box
@@ -64,8 +110,13 @@ export function CasePhotoEvidenceSection({
           fieldId="case-details-photo-tag"
           label={t('caseDetails.photo.tagLabel')}
           value={selectedPhotoTag}
-          onValueChange={onSelectPhotoTag}
-          options={photoTagOptions.map((tag) => ({ label: tag.label, value: tag.code }))}
+          onValueChange={handleSelectPhotoTag}
+          options={photoTagOptions.map((tag) => {
+            LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: mapping photo tag option`, {
+              code: tag.code,
+            });
+            return { label: tag.label, value: tag.code };
+          })}
           isDisabled={isReadOnly}
         />
 
@@ -73,7 +124,7 @@ export function CasePhotoEvidenceSection({
           <CasePhotoGallery
             photos={photosForSelectedTag}
             photoTagOptions={photoTagOptions}
-            onDeletePhoto={onDeletePhoto}
+            onDeletePhoto={handleDeletePhoto}
             isReadOnly={isReadOnly}
           />
         ) : null}

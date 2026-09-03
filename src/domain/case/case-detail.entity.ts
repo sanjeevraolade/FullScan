@@ -1,3 +1,5 @@
+import type { GeoCoordinates } from '@/core/types';
+
 import type { CaseBucket } from './case.entity';
 
 /** How the candidate answered the door, independent of who owns the property. */
@@ -20,18 +22,6 @@ export const VERIFICATION_STATUS_INSUFFICIENT = 'insufficient';
 export interface Respondent {
   readonly name: string;
   readonly relation: string;
-}
-
-/**
- * Result of comparing the visited location against the assignment's target
- * address. `isWithinRange` and `distanceMeters` are computed server-side so
- * the app never hardcodes a match-distance threshold.
- */
-export interface GpsCheck {
-  readonly targetLatitude: number;
-  readonly targetLongitude: number;
-  readonly distanceMeters: number;
-  readonly isWithinRange: boolean;
 }
 
 /** How much the client is being charged for this component's extra visit/effort, if anything was requested. */
@@ -74,7 +64,22 @@ export interface CaseDetail {
   readonly address: string;
   readonly addressType: AddressType | null;
   readonly residenceType: ResidenceType | null;
-  readonly gpsCheck: GpsCheck;
+  /**
+   * The assignment's coordinates when the back office has them, `null` when it
+   * only has `address`.
+   *
+   * Both states are first-class and permanently supported: a case is located
+   * from these coordinates when present and from `address` when not, and
+   * neither is a fallback for the other. Today most records are address-only
+   * and as digitization progresses more will arrive with coordinates — that
+   * shift needs no code change, it simply moves cases from one branch of
+   * `useCaseGeoFence`'s resolution step to the other.
+   *
+   * A case never carries more than coordinates or an address string — no
+   * server-computed distance and no in-range verdict — because only the device
+   * can know where the field executive actually is at the moment of the visit.
+   */
+  readonly coordinates: GeoCoordinates | null;
   readonly maskedPrimaryPhone: string;
   readonly maskedSecondaryPhone: string;
   readonly clientInstructions: string;
@@ -110,4 +115,30 @@ export interface VerificationOutcomeSubmission {
   readonly addressType: AddressType | null;
   readonly respondent: Respondent | null;
   readonly isSignatureCaptured: boolean;
+  /**
+   * Where the field executive was standing when they submitted — the device's
+   * own fix, not anything the back office pre-computed. `null` only in the
+   * degenerate case where no fix was ever obtained (normal app use requires
+   * one, so this should not happen in practice).
+   */
+  readonly currentLatitude: number | null;
+  readonly currentLongitude: number | null;
+  /**
+   * Measured distance from that position to the case location, in metres, or
+   * `null` when the case location could never be determined. Sent as measured;
+   * the back office compares it against the configured radius itself rather
+   * than trusting an app-side verdict.
+   */
+  readonly distanceToCaseMeters: number | null;
+  /**
+   * `true` when the field executive completed this case without satisfying the
+   * geo-fence, via the Force Proceed consent flow.
+   *
+   * The submission itself is an ordinary one — the back office accepts it like
+   * any other case and uses this flag to mark it for scrutiny, exactly as the
+   * consent dialog warns. The remaining consent detail (configured radius,
+   * attempt count, consent timestamp) stays on the device in
+   * `useGeoFenceBypassStore` rather than on the wire.
+   */
+  readonly forceProceed: boolean;
 }

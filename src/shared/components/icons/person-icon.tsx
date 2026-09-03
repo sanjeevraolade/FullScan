@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Circle, Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'person-icon.tsx';
+
 /**
  * Gluestack UI ships no person/candidate icon — this follows the exact
  * pattern its own bundled icons use (`createIcon` + svg primitives), so it
@@ -24,3 +28,5 @@ export const PersonIcon = createIcon({
   ),
 });
 PersonIcon.displayName = 'PersonIcon';
+
+LoggerService.info(`${FILE_NAME}: PersonIcon: icon component defined`);

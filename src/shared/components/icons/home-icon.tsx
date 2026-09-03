@@ -2,6 +2,10 @@ import React from 'react';
 import { createIcon } from '@gluestack-ui/themed';
 import { Path } from 'react-native-svg';
 
+import { LoggerService } from '@/infrastructure/logger';
+
+const FILE_NAME = 'home-icon.tsx';
+
 /**
  * Gluestack UI ships no house/home icon — follows the same `createIcon` +
  * svg pattern as `MapPinIcon`, so it's theme-aware and sizeable via `Icon`
@@ -29,3 +33,5 @@ export const HomeIcon = createIcon({
   ),
 });
 HomeIcon.displayName = 'HomeIcon';
+
+LoggerService.info(`${FILE_NAME}: HomeIcon: icon component defined`);
