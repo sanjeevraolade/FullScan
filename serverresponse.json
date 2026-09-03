@@ -175,6 +175,7 @@
       "values": {
         "geo_fence_radius_meters": 200,
         "photo_compression_quality": 80,
+        "locationRetryCount": 3,
         "max_photo_upload_size_mb": 5,
         "watermark_enabled": true,
         "min_supported_app_version": "1.0.0",
