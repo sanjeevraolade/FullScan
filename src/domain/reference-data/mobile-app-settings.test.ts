@@ -2,6 +2,7 @@ import type { MobileAppSettings } from './reference-data.entity';
 import {
   DEFAULT_MOBILE_APP_SETTINGS,
   MOBILE_APP_SETTING_KEYS,
+  MOBILE_APP_SETTING_RANGES,
   resolveMobileAppSettings,
 } from './mobile-app-settings';
 
@@ -48,6 +49,7 @@ describe('resolveMobileAppSettings', () => {
           session_timeout_minutes: 60,
           max_login_attempts: 3,
           geo_fence_radius_meters: 500,
+          locationRetryCount: 7,
           photo_compression_quality: 55,
           max_photo_upload_size_mb: 12,
           watermark_enabled: false,
@@ -69,6 +71,7 @@ describe('resolveMobileAppSettings', () => {
         sessionTimeoutMinutes: 60,
         maxLoginAttempts: 3,
         geoFenceRadiusMeters: 500,
+        locationRetryCount: 7,
         photoCompressionQuality: 55,
         maxPhotoUploadSizeMb: 12,
         isWatermarkEnabled: false,
@@ -150,6 +153,130 @@ describe('resolveMobileAppSettings', () => {
         expect(
           resolveMobileAppSettings(buildSettings({ default_language: language })).defaultLanguage,
         ).toBe(language);
+      }
+    });
+  });
+
+  describe('locationRetryCount', () => {
+    it('defaults to 3 when absent', () => {
+      expect(resolveMobileAppSettings(null).locationRetryCount).toBe(3);
+      expect(DEFAULT_MOBILE_APP_SETTINGS.locationRetryCount).toBe(3);
+    });
+
+    it('reads a value inside the 3-10 range', () => {
+      for (const count of [3, 5, 10]) {
+        expect(
+          resolveMobileAppSettings(buildSettings({ locationRetryCount: count })).locationRetryCount,
+        ).toBe(count);
+      }
+    });
+
+    it('falls back for a value below the minimum of 3', () => {
+      expect(
+        resolveMobileAppSettings(buildSettings({ locationRetryCount: 2 })).locationRetryCount,
+      ).toBe(3);
+    });
+
+    it('falls back for a value above the maximum of 10', () => {
+      expect(
+        resolveMobileAppSettings(buildSettings({ locationRetryCount: 11 })).locationRetryCount,
+      ).toBe(3);
+    });
+
+    it('is keyed camelCase on the wire, as the mobile contract specifies', () => {
+      expect(MOBILE_APP_SETTING_KEYS.locationRetryCount).toBe('locationRetryCount');
+
+      // The snake_case spelling is not the contract and must not resolve.
+      expect(
+        resolveMobileAppSettings(buildSettings({ location_retry_count: 9 })).locationRetryCount,
+      ).toBe(3);
+    });
+  });
+
+  describe('numeric range validation', () => {
+    it('accepts geo_fence_radius_meters across its 10-2000 range', () => {
+      for (const radius of [10, 200, 2000]) {
+        expect(
+          resolveMobileAppSettings(buildSettings({ geo_fence_radius_meters: radius }))
+            .geoFenceRadiusMeters,
+        ).toBe(radius);
+      }
+    });
+
+    it('falls back for a geo-fence radius below 10 metres', () => {
+      expect(
+        resolveMobileAppSettings(buildSettings({ geo_fence_radius_meters: 9 }))
+          .geoFenceRadiusMeters,
+      ).toBe(DEFAULT_MOBILE_APP_SETTINGS.geoFenceRadiusMeters);
+    });
+
+    it('falls back for a geo-fence radius above 2000 metres', () => {
+      // 5000 was legal under the old bounds — a stale row must not be trusted.
+      expect(
+        resolveMobileAppSettings(buildSettings({ geo_fence_radius_meters: 5000 }))
+          .geoFenceRadiusMeters,
+      ).toBe(DEFAULT_MOBILE_APP_SETTINGS.geoFenceRadiusMeters);
+    });
+
+    it('range-checks a numeric string too', () => {
+      expect(
+        resolveMobileAppSettings(buildSettings({ geo_fence_radius_meters: '9000' }))
+          .geoFenceRadiusMeters,
+      ).toBe(DEFAULT_MOBILE_APP_SETTINGS.geoFenceRadiusMeters);
+      expect(
+        resolveMobileAppSettings(buildSettings({ geo_fence_radius_meters: '1500' }))
+          .geoFenceRadiusMeters,
+      ).toBe(1500);
+    });
+
+    it('rejects out-of-range values for every numeric setting, and accepts its bounds', () => {
+      // Table-driven over the range map, so a setting added later is covered too.
+      const outcomes = Object.entries(MOBILE_APP_SETTING_RANGES).map(([name, range]) => {
+        const settingName = name as keyof typeof MOBILE_APP_SETTING_RANGES;
+        const key = MOBILE_APP_SETTING_KEYS[settingName];
+        const fallback = DEFAULT_MOBILE_APP_SETTINGS[settingName];
+
+        return {
+          name,
+          belowMin: resolveMobileAppSettings(buildSettings({ [key]: range.min - 1 }))[settingName],
+          aboveMax: resolveMobileAppSettings(buildSettings({ [key]: range.max + 1 }))[settingName],
+          atMin: resolveMobileAppSettings(buildSettings({ [key]: range.min }))[settingName],
+          atMax: resolveMobileAppSettings(buildSettings({ [key]: range.max }))[settingName],
+          fallback,
+          range,
+        };
+      });
+
+      expect(outcomes.length).toBe(Object.keys(MOBILE_APP_SETTING_RANGES).length);
+
+      for (const outcome of outcomes) {
+        expect({ name: outcome.name, value: outcome.belowMin }).toEqual({
+          name: outcome.name,
+          value: outcome.fallback,
+        });
+        expect({ name: outcome.name, value: outcome.aboveMax }).toEqual({
+          name: outcome.name,
+          value: outcome.fallback,
+        });
+        expect({ name: outcome.name, value: outcome.atMin }).toEqual({
+          name: outcome.name,
+          value: outcome.range.min,
+        });
+        expect({ name: outcome.name, value: outcome.atMax }).toEqual({
+          name: outcome.name,
+          value: outcome.range.max,
+        });
+      }
+    });
+
+    it('keeps every default inside its own declared range', () => {
+      for (const [name, range] of Object.entries(MOBILE_APP_SETTING_RANGES)) {
+        const value = DEFAULT_MOBILE_APP_SETTINGS[name as keyof typeof MOBILE_APP_SETTING_RANGES];
+
+        expect({ name, inRange: value >= range.min && value <= range.max }).toEqual({
+          name,
+          inRange: true,
+        });
       }
     });
   });

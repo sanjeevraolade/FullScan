@@ -18,6 +18,8 @@ export const MOBILE_APP_SETTING_KEYS = {
   sessionTimeoutMinutes: 'session_timeout_minutes',
   maxLoginAttempts: 'max_login_attempts',
   geoFenceRadiusMeters: 'geo_fence_radius_meters',
+  /** Retry parameter — camelCase on the wire, as the mobile contract specifies. */
+  locationRetryCount: 'locationRetryCount',
   photoCompressionQuality: 'photo_compression_quality',
   maxPhotoUploadSizeMb: 'max_photo_upload_size_mb',
   isWatermarkEnabled: 'watermark_enabled',
@@ -30,6 +32,32 @@ export const MOBILE_APP_SETTING_KEYS = {
 export type MobileAppLanguage = 'en' | 'hi' | 'te';
 
 const SUPPORTED_LANGUAGES: readonly MobileAppLanguage[] = ['en', 'hi', 'te'];
+
+/**
+ * Accepted range for each numeric setting, mirroring the `min_value`/`max_value`
+ * the backend enforces when an admin saves.
+ *
+ * Duplicated here on purpose: the mobile payload deliberately carries only
+ * values (not the portal's min/max metadata), so the app cannot learn the bounds
+ * at runtime. A value outside its range is treated like any other malformed
+ * value — that one setting falls back to its default — which keeps a bad
+ * configuration from disabling geo-fencing or wedging the retry loop.
+ */
+export const MOBILE_APP_SETTING_RANGES = {
+  sessionTimeoutMinutes: { min: 5, max: 10080 },
+  maxLoginAttempts: { min: 1, max: 20 },
+  geoFenceRadiusMeters: { min: 10, max: 2000 },
+  locationRetryCount: { min: 3, max: 10 },
+  photoCompressionQuality: { min: 1, max: 100 },
+  maxPhotoUploadSizeMb: { min: 1, max: 50 },
+  syncIntervalMinutes: { min: 1, max: 1440 },
+  offlineQueueRetryLimit: { min: 1, max: 25 },
+} as const;
+
+interface NumericRange {
+  readonly min: number;
+  readonly max: number;
+}
 
 /** Every known setting, resolved to a usable value. */
 export interface ResolvedMobileAppSettings {
@@ -44,6 +72,8 @@ export interface ResolvedMobileAppSettings {
   readonly sessionTimeoutMinutes: number;
   readonly maxLoginAttempts: number;
   readonly geoFenceRadiusMeters: number;
+  /** GPS fix re-attempts before a capture is abandoned (3-10). */
+  readonly locationRetryCount: number;
   readonly photoCompressionQuality: number;
   readonly maxPhotoUploadSizeMb: number;
   readonly isWatermarkEnabled: boolean;
@@ -82,6 +112,7 @@ export const DEFAULT_MOBILE_APP_SETTINGS: Omit<ResolvedMobileAppSettings, 'value
     sessionTimeoutMinutes: 720,
     maxLoginAttempts: 5,
     geoFenceRadiusMeters: 200,
+    locationRetryCount: 3,
     photoCompressionQuality: 80,
     maxPhotoUploadSizeMb: 5,
     isWatermarkEnabled: true,
@@ -112,20 +143,33 @@ function readBooleanSetting(values: SettingValues, key: string, fallback: boolea
   return fallback;
 }
 
-/** Reads a numeric setting, rejecting non-finite values and numeric-looking junk. */
-function readNumberSetting(values: SettingValues, key: string, fallback: number): number {
+/**
+ * Reads a numeric setting, rejecting non-finite values, numeric-looking junk and
+ * — when a `range` is given — anything outside the bounds the backend enforces.
+ */
+function readNumberSetting(
+  values: SettingValues,
+  key: string,
+  fallback: number,
+  range?: NumericRange,
+): number {
   const value = values[key];
+  let numeric: number | null = null;
 
   if (typeof value === 'number' && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === 'string' && value.trim().length > 0) {
+    numeric = value;
+  } else if (typeof value === 'string' && value.trim().length > 0) {
     const parsed = Number(value);
-    if (Number.isFinite(parsed)) {
-      return parsed;
-    }
+    numeric = Number.isFinite(parsed) ? parsed : null;
   }
-  return fallback;
+
+  if (numeric === null) {
+    return fallback;
+  }
+  if (range && (numeric < range.min || numeric > range.max)) {
+    return fallback;
+  }
+  return numeric;
 }
 
 /** Reads a string setting. An all-whitespace value counts as absent. */
@@ -146,7 +190,8 @@ function readLanguageSetting(
 
 /**
  * Turns the raw settings payload into a fully typed object, substituting a safe
- * default for anything missing or malformed.
+ * default for anything missing, malformed, or outside the range the backend
+ * enforces (see `MOBILE_APP_SETTING_RANGES`).
  *
  * Pass `null` before the first fetch (or offline on a cold start) to get the
  * defaults — callers never have to null-check individual settings.
@@ -157,6 +202,7 @@ export function resolveMobileAppSettings(
   const values: SettingValues = settings?.values ?? {};
   const keys = MOBILE_APP_SETTING_KEYS;
   const defaults = DEFAULT_MOBILE_APP_SETTINGS;
+  const ranges = MOBILE_APP_SETTING_RANGES;
 
   return {
     minSupportedAppVersion: readStringSetting(
@@ -199,22 +245,37 @@ export function resolveMobileAppSettings(
       values,
       keys.sessionTimeoutMinutes,
       defaults.sessionTimeoutMinutes,
+      ranges.sessionTimeoutMinutes,
     ),
-    maxLoginAttempts: readNumberSetting(values, keys.maxLoginAttempts, defaults.maxLoginAttempts),
+    maxLoginAttempts: readNumberSetting(
+      values,
+      keys.maxLoginAttempts,
+      defaults.maxLoginAttempts,
+      ranges.maxLoginAttempts,
+    ),
     geoFenceRadiusMeters: readNumberSetting(
       values,
       keys.geoFenceRadiusMeters,
       defaults.geoFenceRadiusMeters,
+      ranges.geoFenceRadiusMeters,
+    ),
+    locationRetryCount: readNumberSetting(
+      values,
+      keys.locationRetryCount,
+      defaults.locationRetryCount,
+      ranges.locationRetryCount,
     ),
     photoCompressionQuality: readNumberSetting(
       values,
       keys.photoCompressionQuality,
       defaults.photoCompressionQuality,
+      ranges.photoCompressionQuality,
     ),
     maxPhotoUploadSizeMb: readNumberSetting(
       values,
       keys.maxPhotoUploadSizeMb,
       defaults.maxPhotoUploadSizeMb,
+      ranges.maxPhotoUploadSizeMb,
     ),
     isWatermarkEnabled: readBooleanSetting(
       values,
@@ -225,11 +286,13 @@ export function resolveMobileAppSettings(
       values,
       keys.syncIntervalMinutes,
       defaults.syncIntervalMinutes,
+      ranges.syncIntervalMinutes,
     ),
     offlineQueueRetryLimit: readNumberSetting(
       values,
       keys.offlineQueueRetryLimit,
       defaults.offlineQueueRetryLimit,
+      ranges.offlineQueueRetryLimit,
     ),
     isSyncOnWifiOnly: readBooleanSetting(values, keys.isSyncOnWifiOnly, defaults.isSyncOnWifiOnly),
     values,
