@@ -151,14 +151,16 @@ the one post-login batch fetch the app already makes — as an extra `mobileAppS
 {
   "verificationTypeStatuses": [ /* … unchanged … */ ],
   "mobileAppSettings": {
-    "values": { "geo_fence_radius_meters": 200, "watermark_enabled": true, "default_language": "en" },
+    "values": { "geo_fence_radius_meters": 200, "locationRetryCount": 3, "watermark_enabled": true },
     "updatedAt": "2026-09-03 15:45:29"
   }
 }
 ```
 
 `values` is keyed by `setting_key` with each value already coerced to its declared type, so a
-setting added as a seed row reaches the app with no server or app release. The admin-facing
+setting added as a seed row reaches the app with no server or app release. Note `locationRetryCount`
+is camelCase — that is the param name the mobile contract specifies, so it is stored and sent
+verbatim rather than normalised to snake_case like the keys around it. The admin-facing
 `label`/`description` text is deliberately excluded — the app renders user-visible strings from its
 own en/hi/te localization keys. On the app side, read settings through
 `useMobileAppSettings()` / `getMobileAppSettings()` (see `FullScanApp/src/store/reference-data/`).

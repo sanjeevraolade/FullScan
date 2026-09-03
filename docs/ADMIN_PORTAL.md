@@ -4,9 +4,8 @@ This document describes the Admin User feature added to **FullScanServer**: the 
 seed data, the authentication design, the guarded Admin Portal at `/admin`, its navigation drawer,
 the Mobile App Settings page, and how to extend any of it.
 
-Scope note: this work is **server-side only**. Nothing in `FullScanApp` (the React Native app) was
-touched — no files, no dependencies, no contracts. The existing mobile API surface behaves exactly
-as before, with one deliberate security hardening called out in [§9](#9-changes-to-existing-behaviour).
+It also covers **delivery of those settings to the React Native app** (`FullScanApp`), which rides on
+the existing post-login reference-data call — see [§8.5](#85-delivering-settings-to-the-mobile-app).
 
 ---
 
@@ -20,6 +19,7 @@ as before, with one deliberate security hardening called out in [§9](#9-changes
 6. [The Admin Portal front end](#6-the-admin-portal-front-end)
 7. [Navigation drawer & how to extend it](#7-navigation-drawer--how-to-extend-it)
 8. [Mobile App Settings page](#8-mobile-app-settings-page)
+   - [8.5 Delivering settings to the mobile app](#85-delivering-settings-to-the-mobile-app)
 9. [Changes to existing behaviour](#9-changes-to-existing-behaviour)
 10. [Testing](#10-testing)
 11. [Running it](#11-running-it)
@@ -33,7 +33,7 @@ as before, with one deliberate security hardening called out in [§9](#9-changes
 
 | Requirement                                        | Delivered                                                                                              |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| Update server/schema for Admin Users               | `admin_users` table (migration `013`), plus `mobile_app_settings` (migration `014`)                    |
+| Update server/schema for Admin Users               | `admin_users` table (migration `013`), plus `mobile_app_settings` (`014`) and `locationRetryCount` (`015`) |
 | Seed admin users for testing                       | 4 admins seeded — 3 active (incl. one `super_admin`), 1 deliberately deactivated                        |
 | Admin Login page                                    | `GET /admin/login` — served from `public/admin/login.html`                                              |
 | Authenticate against the server                     | `POST /api/v1/admin/auth/login` — bcrypt verify → admin-scoped JWT                                     |
@@ -43,6 +43,9 @@ as before, with one deliberate security hardening called out in [§9](#9-changes
 | Drawer: Mobile App Settings                          | Data-driven settings page, `assets/js/pages/mobile-app-settings.js`                                     |
 | Drawer: Logout at the bottom                         | Pinned in `.drawer__footer`; clears the session cookie and returns to the login page                    |
 | Extensible drawer structure                          | Declarative menu registry (`assets/js/menu.js`) + lazily-imported page modules                          |
+| Send settings to the mobile app, existing calls only | Added to the existing `GET /reference-data` payload; typed resolver + hooks on the app side              |
+| `locationRetryCount` control, validated 3-10         | Seed row in migration `015`; portal renders the bounded input with no front-end change                  |
+| `geo_fence_radius_meters` validated 10-2000m         | Bounds tightened in `015`; pre-existing out-of-range values clamped                                     |
 
 **Zero new npm dependencies.** Everything uses packages already in `package.json` — including
 `express-rate-limit`, which was previously an unused dependency and is now wired up on admin login.
@@ -132,19 +135,46 @@ Why key/value: the row carries its own presentation and validation metadata, so 
 its entire form from the API response** and the service validates from the same rows. Adding a new
 mobile setting is one `INSERT` in a new migration — no server code, no portal code, no types.
 
-17 settings are seeded across the four categories, chosen to match real FullScan domain concerns:
-geo-fence radius, watermarking, photo compression/size, mock-location blocking, biometric login,
-session timeout, sync interval and Wi-Fi-only sync, offline retry limit, minimum app version and
-force-update, default language (`en`/`hi`/`te`), support number, and maintenance mode.
+18 settings are seeded across the four categories, chosen to match real FullScan domain concerns:
+geo-fence radius, location retry count, watermarking, photo compression/size, mock-location blocking,
+biometric login, session timeout, sync interval and Wi-Fi-only sync, offline retry limit, minimum app
+version and force-update, default language (`en`/`hi`/`te`), support number, and maintenance mode.
 
-> These settings are **stored and administered** by this feature. Wiring the mobile app to consume
-> them is intentionally *not* part of this change — that needs a mobile-facing read endpoint and app
-> changes, both out of scope here.
+These settings are delivered to the mobile app on the existing post-login reference-data call — see
+[§8.5](#85-delivering-settings-to-the-mobile-app).
 
-### 3.3 Migrations
+### 3.3 `locationRetryCount` and the tightened geo-fence — migration `015`
+
+Migration `015_add_location_retry_and_tighten_geofence.sql`:
+
+| Setting                    | Change                                          | Range          |
+| -------------------------- | ----------------------------------------------- | -------------- |
+| `locationRetryCount`       | **New.** GPS fix re-attempts per capture; default `3` | `3` – `10`  |
+| `geo_fence_radius_meters`  | Bounds tightened from `25`–`5000`                | `10` – `2000`  |
+
+Two things worth knowing about it:
+
+**The key is camelCase.** `locationRetryCount`, not `location_retry_count`, unlike every key around
+it. `setting_key` is what goes on the wire to the app, and the mobile contract names the param
+`locationRetryCount`, so it is stored verbatim rather than normalised. The app's
+`MOBILE_APP_SETTING_KEYS.locationRetryCount` maps to that exact string, and a test asserts the
+snake_case spelling does **not** resolve.
+
+**Existing out-of-range values are clamped.** The old geo-fence bounds were wider, so a database
+written before `015` can hold a radius (say `4500`) that the admin form would now refuse to save.
+The migration pulls any such value to the nearest legal one, so the app is never served a
+configuration the portal itself considers invalid. Covered by `tests/mobile-app-settings-migration.test.ts`,
+which stages the upgrade on a scratch database rather than trusting the seed defaults.
+
+**No portal code changed for this.** The Mobile App Settings page renders its inputs from each row's
+`value_type`/`min_value`/`max_value`, so the new setting appears automatically as a numeric field
+bounded to 3–10, with an "Allowed range: 3 to 10" hint — which is exactly the payoff of the
+data-driven design in [§3.2](#32-mobile_app_settings--migration-014_create_mobile_app_settingssql).
+
+### 3.4 Migrations
 
 `initDb()` applies pending `src/db/migrations/*.sql` in filename order on startup and records them in
-the `migrations` table, so both new migrations apply automatically on the next `npm run dev` /
+the `migrations` table, so the new migrations apply automatically on the next `npm run dev` /
 `npm start`. No manual step. `npm run build` copies the `.sql` files into `dist/`.
 
 ---
@@ -469,11 +499,100 @@ The drawer's one page today, and a demonstration of the data-driven pattern.
 - All listeners are **delegated on the page container**, because saving replaces the form markup
   wholesale.
 
+### 8.5 Delivering settings to the mobile app
+
+Settings would be inert if the app never saw them. They are delivered on the **existing**
+`GET /api/v1/reference-data` call — the single post-login batch fetch the app already makes
+(`fetchReferenceData()` in `use-login-form.ts` and `use-biometric-login.ts`) — as one extra field:
+
+```jsonc
+{
+  "verificationTypeStatuses": [ /* … all seven dropdown lists, unchanged … */ ],
+  "mobileAppSettings": {
+    "values": {
+      "geo_fence_radius_meters": 200,   // number
+      "locationRetryCount": 3,          // number
+      "watermark_enabled": true,        // boolean
+      "default_language": "en"          // string
+    },
+    "updatedAt": "2026-09-03 15:45:29"
+  }
+}
+```
+
+**Why this endpoint and not a new one.** `/reference-data` is already the login-time configuration
+batch, it needs no extra round trip, it is re-fetched on every login (including biometric), and one
+call means one failure mode. `reference-data.service.ts` reuses `getAllMobileAppSettings()` rather
+than re-reading the DAO, so type coercion lives in exactly one place.
+
+**What is deliberately *not* sent.** The portal-only presentation metadata — `label`, `description`,
+`minValue`/`maxValue`, `options`, `updatedBy`. `label` and `description` are admin-facing **English**;
+the mobile app renders user-visible text from its own en/hi/te localization keys, and shipping server
+English to the app would invite a violation of that rule. A test asserts the payload contains only
+`values` and `updatedAt`.
+
+**Open key/value map, not a fixed schema.** `values` is keyed by `setting_key`, so a setting added as
+a seed row reaches the app without a server or app release.
+
+#### Mobile app side (`FullScanApp`)
+
+| File                                                     | Purpose                                                              |
+| -------------------------------------------------------- | -------------------------------------------------------------------- |
+| `src/domain/reference-data/reference-data.entity.ts`      | `MobileAppSettings`, `MobileAppSettingValue`, and the new field       |
+| `src/domain/reference-data/mobile-app-settings.ts`        | Setting keys, safe defaults, accepted ranges, typed resolver          |
+| `src/store/reference-data/use-mobile-app-settings.ts`     | `useMobileAppSettings()` hook + non-React `getMobileAppSettings()`    |
+| `src/store/reference-data/reference-data.store.ts`        | Logs the setting count / `updatedAt` when the payload lands           |
+
+The repository (`reference-data-repository.ts`) needed **no change at all** — it already returns the
+whole payload, which is the point of reusing the existing call.
+
+`resolveMobileAppSettings()` turns the open map into a fully typed `ResolvedMobileAppSettings`:
+
+```ts
+const { geoFenceRadiusMeters, locationRetryCount } = useMobileAppSettings();
+```
+
+Four properties matter here:
+
+1. **Defaults, not nulls.** Before the first fetch — and offline on a cold start — the hook returns
+   `DEFAULT_MOBILE_APP_SETTINGS`, which mirrors the seeded server values with the security-relevant
+   ones erring strict (watermarking on, mock-location blocking on, maintenance mode off). Callers
+   never null-check an individual setting, which keeps the app usable offline as the architecture
+   requires.
+2. **Per-setting tolerance.** Each value is validated independently: a boolean arriving as `'true'`
+   is honoured, a numeric string is parsed, and anything malformed (`NaN`, `Infinity`, a blank
+   string, an unsupported language) falls back to that one default instead of discarding the payload.
+3. **Range validation mirrors the server.** `MOBILE_APP_SETTING_RANGES` restates each numeric
+   setting's `min_value`/`max_value` — `geoFenceRadiusMeters` 10–2000, `locationRetryCount` 3–10, and
+   so on. It is duplicated deliberately: the mobile payload carries only values, not the portal's
+   min/max metadata, so the app cannot learn the bounds at runtime. An out-of-range value is treated
+   like any other malformed one and falls back to its default, which matters most for a **stale row**
+   — a `5000`-metre radius saved under the pre-`015` bounds must not silently widen geo-fencing on a
+   device that has not re-fetched. A test asserts every default sits inside its own declared range,
+   so the two cannot drift into an unusable combination.
+4. **Forward compatibility.** Unknown keys survive on `resolved.values`, so a setting the back office
+   adds after this release is still reachable without an app update.
+
+Settings live in the existing reference-data store, so they follow reference data's lifecycle exactly
+— set on login, cleared on logout by `app-drawer-content.tsx`. They are **in-memory only**, which
+matches how reference data already behaves; persisting either across a cold start is a separate,
+pre-existing gap (no MMKV wrapper exists yet) and was left alone deliberately.
+
+> Note: this delivers and exposes the settings. **Applying** them — making the location fix loop read
+> `locationRetryCount`, the camera read `photoCompressionQuality`, the sync queue read
+> `syncIntervalMinutes` — is a separate change per feature, and several of those features are not
+> built yet.
+
 ---
 
 ## 9. Changes to existing behaviour
 
-One deliberate change outside the new files:
+Two deliberate changes outside the new files.
+
+**`GET /api/v1/reference-data` gained a `mobileAppSettings` field** — additive, so a client that
+ignores unknown fields is unaffected. See [§8.5](#85-delivering-settings-to-the-mobile-app). The
+app's `ReferenceData` type makes it required, so all three existing test fixtures that build a
+`ReferenceData` were updated.
 
 **`src/middleware/authenticate.ts` now requires a `fieldExecutiveId` claim.**
 
@@ -494,8 +613,9 @@ Everything else is additive: new migrations, new files, and new route mounts in 
 
 ## 10. Testing
 
-`npx vitest run` — **63 tests across 5 suites, all passing.** Config in `vitest.config.ts`; suites in
-`tests/`. `tests/helpers/test-app.ts` points `DB_PATH` at a fresh temp SQLite file and runs the
+### Server — `npx vitest run`
+
+**84 tests across 7 suites, all passing.** Config in `vitest.config.ts`; suites in `tests/`. `tests/helpers/test-app.ts` points `DB_PATH` at a fresh temp SQLite file and runs the
 migrations before importing the app, so tests never touch `./data/` and always start from known seed
 data. (These are the project's first tests — `vitest` and `supertest` were already dependencies but
 no suites existed.)
@@ -503,10 +623,21 @@ no suites existed.)
 | Suite                            | Tests | Covers                                                                                                                             |
 | -------------------------------- | ----- | ---------------------------------------------------------------------------------------------------------------------------------- |
 | `admin-auth.test.ts`             | 19    | Login success/failure, no hash leakage, cookie flags, token scope, user enumeration, deactivated account, FE-at-admin-endpoint, validation, `/me` via cookie and Bearer, garbage/expired/orphaned tokens, **bidirectional token scope isolation**, logout |
-| `mobile-app-settings.test.ts`    | 16    | Read/write authorization, metadata and type coercion, enum options, batch update, `updated_by` audit, string trimming, min/max/enum/boolean/unknown-key/duplicate/empty rejection, **atomic rollback of a partly-invalid batch** |
+| `mobile-app-settings.test.ts`    | 22    | Read/write authorization, metadata and type coercion, enum options, batch update, `updated_by` audit, string trimming, min/max/enum/boolean/unknown-key/duplicate/empty rejection, **atomic rollback of a partly-invalid batch** |
 | `admin-portal.test.ts`           | 12    | Page guard redirects (root and deep, `next` preserved), **shell HTML never sent to anonymous browsers**, forged cookie rejected, shell served when signed in, `no-store`, login page reachable, signed-in bounce off login, asset serving, asset 404, portal CSP |
 | `admin-portal-menu.test.ts`      | 14    | Registry completeness and unique routes, role gating, section grouping, `escapeHtml` (incl. both quote styles, null/undefined), icon fallback and coverage |
 | `admin-login-rate-limit.test.ts` | 2     | 10 failures allowed then `429`; throttle uses the standard error envelope (isolated file — the limiter's store is per-process)      |
+| `reference-data-settings.test.ts` | 9    | Dropdown lists still intact, all settings carried, `locationRetryCount` under its camelCase key, values typed not stringified, portal-only metadata excluded, `updatedAt` is the latest change, **admin-edit → app-payload round trip**, rejected edits not served |
+| `mobile-app-settings-migration.test.ts` | 6 | Migration `015` on a staged database: adds `locationRetryCount` (default 3, range 3-10), narrows the geo-fence bounds, **clamps stored values above 2000 and below 10**, leaves in-range values alone, and does not reset an admin-saved value on replay |
+
+### Mobile app — `npx jest`
+
+**123 tests across 17 suites, all passing** (up from 92 — 31 new), plus `npx tsc --noEmit` clean.
+
+| Suite                                                    | Tests | Covers                                                                                                                        |
+| -------------------------------------------------------- | ----- | ----------------------------------------------------------------------------------------------------------------------------- |
+| `domain/reference-data/mobile-app-settings.test.ts`      | 23    | Defaults for null/undefined, strict security defaults, full-payload mapping of all 18 keys, per-setting fallback, `'true'`/`'false'` strings, numeric strings, `NaN`/`Infinity`/blank/unsupported-language rejection, trimming, **`locationRetryCount` 3-10 bounds and its camelCase-only key**, **geo-fence 10-2000 bounds incl. a stale 5000 row**, table-driven range checks for every numeric setting, defaults-within-range invariant, unknown-key forward compatibility |
+| `store/reference-data/use-mobile-app-settings.test.ts`   | 8     | Defaults before fetch, server values after fetch, omitted settings defaulted, re-resolve on store update, memo stability, fallback after logout, non-reactive `getMobileAppSettings()` |
 
 Also verified:
 
@@ -516,9 +647,15 @@ Also verified:
 - Portal ES modules parse cleanly under `tsc --allowJs`.
 - End-to-end smoke test against the **built** server (`node dist/index.js`): anonymous redirect →
   login page → failed login → successful login → cookie set → guarded shell served → signed-in
-  bounce off the login page → `/me` → 17 settings across 4 categories → valid update (with
+  bounce off the login page → `/me` → 18 settings across 4 categories → valid update (with
   `updatedBy`) → rejected out-of-range update → 401 without a session → assets → logout → redirect
   again.
+- Migration `015` applied to a **copy of the real dev database** (`data/fullscan.sqlite`, WAL files
+  included): it upgraded from `014` cleanly, and the portal then reported `locationRetryCount` as a
+  numeric field bounded 3-10 and `geo_fence_radius_meters` as 10-2000.
+- Bounds exercised through the live API: `locationRetryCount` accepted at 3 and 10, rejected at 2 and
+  11; `geo_fence_radius_meters` accepted at 10 and 2000, rejected at 9 and 2001. The saved value then
+  appeared on `/reference-data` as a JSON number.
 - Mobile regression smoke test (see [§9](#9-changes-to-existing-behaviour)).
 
 `npm run lint` **fails, and did before this change**: ESLint 9 requires an `eslint.config.js` and the
@@ -624,6 +761,7 @@ no new dependency.
 | ------------------------------------------------- | --------------------------------------------------- |
 | `src/db/migrations/013_create_admin_users.sql`     | `admin_users` table + 4 seeded admins               |
 | `src/db/migrations/014_create_mobile_app_settings.sql` | Settings table + 17 seeded settings             |
+| `src/db/migrations/015_add_location_retry_and_tighten_geofence.sql` | `locationRetryCount` + tightened geo-fence bounds |
 | `src/types/admin.types.ts`                        | Admin row/DTO/login/JWT-payload types               |
 | `src/types/mobile-app-setting.types.ts`           | Setting row/DTO/update types, categories            |
 | `src/db/admin-user.dao.ts`                        | Admin lookups, `last_login_at` stamp                |
@@ -655,14 +793,39 @@ no new dependency.
 | `tests/admin-portal.test.ts`                            | 12 portal/guard tests            |
 | `tests/admin-portal-menu.test.ts`                       | 14 registry/escaping tests       |
 | `tests/admin-login-rate-limit.test.ts`                  | 2 throttling tests               |
+| `tests/reference-data-settings.test.ts`                 | 9 settings-delivery tests        |
+| `tests/mobile-app-settings-migration.test.ts`           | 6 migration-`015` tests          |
 
-### Modified
+### Modified — server
 
-| File                              | Change                                                                    |
-| --------------------------------- | ------------------------------------------------------------------------- |
-| `src/app.ts`                      | Mount `/api/v1/admin/auth`, `/api/v1/admin/mobile-app-settings`, `/admin` |
-| `src/middleware/authenticate.ts`  | Require a `fieldExecutiveId` claim — see [§9](#9-changes-to-existing-behaviour) |
-| `src/types/express.d.ts`          | Add `adminUserId`, `adminRole` to `Request`                               |
-| `README.md`                       | Admin endpoints, Admin Portal section, admin credentials, layout, test notes |
+| File                                     | Change                                                                    |
+| ---------------------------------------- | ------------------------------------------------------------------------- |
+| `src/app.ts`                             | Mount `/api/v1/admin/auth`, `/api/v1/admin/mobile-app-settings`, `/admin` |
+| `src/middleware/authenticate.ts`         | Require a `fieldExecutiveId` claim — see [§9](#9-changes-to-existing-behaviour) |
+| `src/types/express.d.ts`                 | Add `adminUserId`, `adminRole` to `Request`                               |
+| `src/types/reference-data.types.ts`      | Add `MobileAppSettings` + `mobileAppSettings` on `ReferenceData`          |
+| `src/services/reference-data.service.ts` | Flatten admin settings into the reference-data payload                    |
+| `README.md`                              | Admin endpoints, Admin Portal section, settings delivery, credentials, layout, test notes |
 
-**`FullScanApp` (React Native): unchanged.**
+### New — mobile app (`FullScanApp`)
+
+| File                                                        | Purpose                                             |
+| ----------------------------------------------------------- | --------------------------------------------------- |
+| `src/domain/reference-data/mobile-app-settings.ts`           | Setting keys, safe defaults, ranges, typed resolver |
+| `src/domain/reference-data/mobile-app-settings.test.ts`      | 23 resolver tests                                   |
+| `src/store/reference-data/use-mobile-app-settings.ts`        | `useMobileAppSettings()` + `getMobileAppSettings()` |
+| `src/store/reference-data/use-mobile-app-settings.test.ts`   | 8 hook tests                                        |
+
+### Modified — mobile app (`FullScanApp`)
+
+| File                                                       | Change                                                     |
+| ---------------------------------------------------------- | ---------------------------------------------------------- |
+| `src/domain/reference-data/reference-data.entity.ts`        | Add `MobileAppSettings`, `MobileAppSettingValue`, new field |
+| `src/domain/reference-data/index.ts`                        | Export the settings types, ranges and resolver              |
+| `src/store/reference-data/index.ts`                        | Export the settings hooks                                   |
+| `src/store/reference-data/reference-data.store.ts`          | Log setting count / `updatedAt` on arrival                  |
+| `src/features/authentication/screens/login-screen.test.tsx` | Fixture: add `mobileAppSettings`                            |
+| `src/navigation/root-navigator.test.tsx`                    | Fixture: add `mobileAppSettings`                            |
+| `src/features/cases/hooks/use-case-details.test.ts`         | Fixture: add `mobileAppSettings`                            |
+
+No mobile screen, navigator, repository, dependency or native config was touched.

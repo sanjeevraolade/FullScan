@@ -62,6 +62,16 @@ describe(`GET ${REFERENCE_DATA}`, () => {
     expect(values.force_update_enabled).toBe(false);
   });
 
+  it('carries locationRetryCount under its camelCase contract key', async () => {
+    const response = await request(app).get(REFERENCE_DATA);
+    const { values } = response.body.data.mobileAppSettings;
+
+    expect(values).toHaveProperty('locationRetryCount');
+    expect(values.locationRetryCount).toBe(3);
+    expect(values.locationRetryCount).toBeTypeOf('number');
+    expect(values).not.toHaveProperty('location_retry_count');
+  });
+
   it('omits the portal-only presentation metadata', async () => {
     const response = await request(app).get(REFERENCE_DATA);
     const { mobileAppSettings } = response.body.data;
@@ -113,6 +123,17 @@ describe('admin edit → mobile payload round trip', () => {
     expect(values.geo_fence_radius_meters).toBe(425);
     expect(values.watermark_enabled).toBe(false);
     expect(values.default_language).toBe('hi');
+  });
+
+  it('serves an admin-saved locationRetryCount to the app', async () => {
+    await request(app)
+      .put(ADMIN_SETTINGS)
+      .set('Cookie', cookie)
+      .send({ settings: [{ key: 'locationRetryCount', value: 6 }] });
+
+    const response = await request(app).get(REFERENCE_DATA);
+
+    expect(response.body.data.mobileAppSettings.values.locationRetryCount).toBe(6);
   });
 
   it('does not serve a rejected edit', async () => {

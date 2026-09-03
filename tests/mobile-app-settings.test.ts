@@ -49,8 +49,24 @@ describe(`GET ${ENDPOINT}`, () => {
     expect(geoFence).toMatchObject({
       valueType: 'number',
       category: 'evidence',
-      minValue: 25,
-      maxValue: 5000,
+      minValue: 10,
+      maxValue: 2000,
+    });
+  });
+
+  it('exposes locationRetryCount with a 3-10 range, so the portal renders a bounded input', async () => {
+    const response = await request(app).get(ENDPOINT).set('Cookie', cookie);
+    const retryCount = findSetting(response.body.data, 'locationRetryCount');
+
+    expect(retryCount).toMatchObject({
+      key: 'locationRetryCount',
+      value: 3,
+      valueType: 'number',
+      category: 'evidence',
+      minValue: 3,
+      maxValue: 10,
+      label: 'Location retry count',
+      options: null,
     });
   });
 
@@ -127,7 +143,7 @@ describe(`PUT ${ENDPOINT}`, () => {
       .send({ settings: [{ key: 'geo_fence_radius_meters', value: 5 }] });
 
     expect(response.status).toBe(400);
-    expect(response.body.error).toContain('at least 25');
+    expect(response.body.error).toContain('at least 10');
   });
 
   it('rejects a number above its maximum', async () => {
@@ -158,6 +174,61 @@ describe(`PUT ${ENDPOINT}`, () => {
 
     expect(response.status).toBe(400);
     expect(response.body.error).toContain('true or false');
+  });
+
+  it('accepts locationRetryCount at both ends of its range', async () => {
+    for (const value of [3, 10]) {
+      const response = await request(app)
+        .put(ENDPOINT)
+        .set('Cookie', cookie)
+        .send({ settings: [{ key: 'locationRetryCount', value }] });
+
+      expect(response.status).toBe(200);
+      expect(findSetting(response.body.data, 'locationRetryCount')?.value).toBe(value);
+    }
+  });
+
+  it('rejects locationRetryCount below 3', async () => {
+    const response = await request(app)
+      .put(ENDPOINT)
+      .set('Cookie', cookie)
+      .send({ settings: [{ key: 'locationRetryCount', value: 2 }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('"Location retry count" must be at least 3');
+  });
+
+  it('rejects locationRetryCount above 10', async () => {
+    const response = await request(app)
+      .put(ENDPOINT)
+      .set('Cookie', cookie)
+      .send({ settings: [{ key: 'locationRetryCount', value: 11 }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toBe('"Location retry count" must be at most 10');
+  });
+
+  it('accepts the geo-fence radius at both ends of its tightened range', async () => {
+    for (const value of [10, 2000]) {
+      const response = await request(app)
+        .put(ENDPOINT)
+        .set('Cookie', cookie)
+        .send({ settings: [{ key: 'geo_fence_radius_meters', value }] });
+
+      expect(response.status).toBe(200);
+      expect(findSetting(response.body.data, 'geo_fence_radius_meters')?.value).toBe(value);
+    }
+  });
+
+  it('rejects a geo-fence radius above the new 2000m maximum', async () => {
+    // 3000 was legal under the previous 5000m bound.
+    const response = await request(app)
+      .put(ENDPOINT)
+      .set('Cookie', cookie)
+      .send({ settings: [{ key: 'geo_fence_radius_meters', value: 3000 }] });
+
+    expect(response.status).toBe(400);
+    expect(response.body.error).toContain('at most 2000');
   });
 
   it('rejects an unknown setting key', async () => {
