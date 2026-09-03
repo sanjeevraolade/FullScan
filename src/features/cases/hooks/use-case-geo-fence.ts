@@ -500,15 +500,19 @@ export function useCaseGeoFence({
   const remainingAttempts =
     locationRetryCount === null ? 0 : Math.max(locationRetryCount - attemptCount, 0);
 
+  const isCaseContentUnlocked =
+    !isEnabled || status === 'inside' || bypassConsent !== null;
+
   LoggerService.info(`${FILE_NAME}: useCaseGeoFence: remaining retry attempts resolved`, {
     caseId,
     remainingAttempts,
-    isCaseContentUnlocked: status === 'inside' || bypassConsent !== null,
+    isEnabled,
+    isCaseContentUnlocked,
   });
 
   return {
     status,
-    isCaseContentUnlocked: status === 'inside' || bypassConsent !== null,
+    isCaseContentUnlocked,
     isBusy: status === 'resolving_case_location' || status === 'measuring',
     distanceMeters,
     distanceMethod,

@@ -1,7 +1,7 @@
 import React, { useLayoutEffect, useState } from 'react';
 import type { ReactElement } from 'react';
 import { FlatList } from 'react-native';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import type { CompositeNavigationProp } from '@react-navigation/native';
 import type { DrawerNavigationProp } from '@react-navigation/drawer';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
@@ -31,6 +31,7 @@ import { ROUTE_NAMES } from '@/navigation/routes';
 import type { DrawerParamList, RootStackParamList } from '@/navigation/routes';
 import { FilterIcon } from '@/shared/components';
 import type { Case, CaseBucket } from '@/domain/case';
+import { DraftStorageService } from '../services/draft-storage';
 
 import { CaseBucketTabs } from '../components/case-bucket-tabs';
 import { CaseCard } from '../components/case-card';
@@ -92,6 +93,15 @@ export function CaseListScreen(): ReactElement {
   } = useCaseList();
   const [isSearchVisible, setIsSearchVisible] = useState(false);
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
+  const [, setRefreshKey] = useState(0);
+
+  useFocusEffect(
+    React.useCallback(() => {
+      LoggerService.info(`${FILE_NAME}: CaseListScreen: screen focused, triggering re-render for draft updates`);
+      // Force a re-render so draft badges update after returning from case details
+      setRefreshKey((prev) => prev + 1);
+    }, []),
+  );
 
   LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering`, { selectedBucket });
 
@@ -131,10 +141,12 @@ export function CaseListScreen(): ReactElement {
 
   const renderCase = ({ item }: { item: Case }): ReactElement => {
     // Candidate/client names are PII — only the case id and bucket are logged.
+    const hasDraft = DraftStorageService.hasDraft(item.id);
     LoggerService.info(`${FILE_NAME}: renderCase: rendering case card`, {
       caseId: item.id,
       bucket: item.bucket,
       isAccepting: acceptingCaseId === item.id,
+      hasDraft,
     });
     return (
       <CaseCard
@@ -143,6 +155,7 @@ export function CaseListScreen(): ReactElement {
         onAccept={isAcceptableBucket(item.bucket) ? acceptCase : undefined}
         isAccepting={acceptingCaseId === item.id}
         onCall={isCallableBucket(item.bucket) ? handleCallPress : undefined}
+        hasDraft={hasDraft}
       />
     );
   };

@@ -7,7 +7,7 @@ import {
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
 } from '@/domain/case';
-import type { AddressType, CaseDetail, ResidenceType } from '@/domain/case';
+import type { AddressType, CaseDetail, ResidenceType, CapturedPhotoEvidence } from '@/domain/case';
 import { useReferenceDataStore } from '@/store/reference-data';
 import { useLocationStore } from '@/store/location';
 import type { ReferenceData } from '@/domain/reference-data';
@@ -18,6 +18,7 @@ import {
 } from '../utils/case-access-control';
 import { useCaseGeoFence } from './use-case-geo-fence';
 import type { UseCaseGeoFenceResult } from './use-case-geo-fence';
+import { DraftStorageService } from '../services/draft-storage';
 
 const FILE_NAME = 'use-case-details.ts';
 
@@ -42,6 +43,14 @@ export interface UseCaseDetailsResult {
    * section stays hidden until `geoFence.isCaseContentUnlocked` is true.
    */
   readonly geoFence: UseCaseGeoFenceResult;
+  /** Whether this case has a saved draft. */
+  readonly hasDraft: boolean;
+  /** ISO timestamp of when the draft was last saved, or null if no draft. */
+  readonly draftSavedAt: string | null;
+  /** Save current form state as a draft. */
+  readonly saveDraft: () => void;
+  /** Clear the saved draft for this case. */
+  readonly clearDraft: () => void;
 
   readonly verificationStatus: string;
   readonly selectVerificationStatus: (status: string) => void;
@@ -104,6 +113,9 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [submitError, setSubmitError] = useState<CaseDetailsSubmitErrorKey | null>(null);
+
+  const [hasDraft, setHasDraft] = useState(false);
+  const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
 
   const loadCaseDetail = useCallback((): void => {
     LoggerService.info(`${FILE_NAME}: loadCaseDetail: fetching`, { caseId });
@@ -200,6 +212,35 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     setSelectedPhotoTag(tag);
   }, []);
 
+  useEffect(() => {
+    if (!caseDetail) return;
+    LoggerService.info(`${FILE_NAME}: useCaseDetails: checking for draft`, { caseId });
+    const draft = DraftStorageService.loadDraft(caseId);
+    if (draft) {
+      LoggerService.info(`${FILE_NAME}: useCaseDetails: restoring draft`, {
+        caseId,
+        savedAt: draft.savedAt,
+      });
+      setVerificationStatus(draft.verificationStatus || '');
+      setUtvReason(draft.utvReason || '');
+      setUtvRemarks(draft.utvRemarks || '');
+      setInsufficientReason(draft.insufficientReason || '');
+      setInsufficientRemarks(draft.insufficientRemarks || '');
+      setResidenceType(draft.residenceType || 'rented');
+      setAddressType(draft.addressType || 'present');
+      setRespondentName(draft.respondentName || '');
+      setRespondentRelation(draft.respondentRelation || '');
+      setIsSignatureCaptured(draft.isSignatureCaptured || false);
+      setSelectedPhotoTag(draft.selectedPhotoTag || '');
+      setHasDraft(true);
+      setDraftSavedAt(draft.savedAt || null);
+    } else {
+      LoggerService.info(`${FILE_NAME}: useCaseDetails: no draft found`, { caseId });
+      setHasDraft(false);
+      setDraftSavedAt(null);
+    }
+  }, [caseId, caseDetail]);
+
   const isReadOnly = useMemo(() => {
     if (!caseDetail) {
       LoggerService.info(`${FILE_NAME}: isReadOnly: no case detail yet — treated as editable`);
@@ -239,13 +280,14 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     caseId,
     hasCaseDetail: caseDetail !== null,
     hasCaseCoordinates: caseDetail?.coordinates != null,
+    caseBucket: caseDetail?.bucket ?? null,
   });
 
   const geoFence = useCaseGeoFence({
     caseId,
     address: caseDetail?.address ?? '',
     targetCoordinates: caseDetail?.coordinates ?? null,
-    isEnabled: caseDetail !== null,
+    isEnabled: caseDetail?.bucket === 'pending',
   });
 
   const acceptCase = useCallback(
@@ -364,6 +406,10 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
       })
         .then(() => {
           LoggerService.info(`${FILE_NAME}: submit: outcome submitted`, { caseId });
+          DraftStorageService.deleteDraft(caseId);
+          LoggerService.info(`${FILE_NAME}: submit: draft cleared after successful submission`, {
+            caseId,
+          });
           onSubmitted();
         })
         .catch((error: unknown) => {
@@ -398,6 +444,58 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     ],
   );
 
+  const saveDraft = useCallback((): void => {
+    if (!caseDetail) {
+      LoggerService.warn(`${FILE_NAME}: saveDraft: no case detail — cannot save draft`, { caseId });
+      return;
+    }
+    LoggerService.info(`${FILE_NAME}: saveDraft: saving draft`, { caseId });
+    const savedAt = new Date().toISOString();
+    DraftStorageService.saveDraft({
+      caseId,
+      verificationStatus,
+      utvReason,
+      utvRemarks,
+      insufficientReason,
+      insufficientRemarks,
+      residenceType,
+      addressType,
+      respondentName,
+      respondentRelation,
+      isSignatureCaptured,
+      selectedPhotoTag,
+      capturedPhotos: ([] as readonly CapturedPhotoEvidence[]),
+      geoFenceBypassConsent: geoFence.bypassConsent,
+      savedAt,
+    });
+    setHasDraft(true);
+    setDraftSavedAt(savedAt);
+    LoggerService.info(`${FILE_NAME}: saveDraft: draft saved`, { caseId, savedAt });
+  }, [
+    caseDetail,
+    caseId,
+    verificationStatus,
+    utvReason,
+    utvRemarks,
+    insufficientReason,
+    insufficientRemarks,
+    residenceType,
+    addressType,
+    respondentName,
+    respondentRelation,
+    isSignatureCaptured,
+    selectedPhotoTag,
+    geoFence.bypassConsent,
+  ]);
+
+  const clearDraft = useCallback((): void => {
+    LoggerService.info(`${FILE_NAME}: clearDraft: clearing draft`, { caseId });
+    DraftStorageService.deleteDraft(caseId);
+    setHasDraft(false);
+    setDraftSavedAt(null);
+    LoggerService.info(`${FILE_NAME}: clearDraft: draft cleared`, { caseId });
+  }, [caseId]);
+
   /*
    * `setUtvRemarks` / `setInsufficientRemarks` / `setRespondentName` /
    * `setRespondentRelation` are handed to the screen as the raw state setters,
@@ -420,6 +518,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     selectedPhotoTag,
     isSubmitting,
     hasSubmitError: submitError !== null,
+    hasDraft,
   });
 
   return {
@@ -465,5 +564,10 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     isSubmitting,
     submitError,
     submit,
+
+    hasDraft,
+    draftSavedAt,
+    saveDraft,
+    clearDraft,
   };
 }

@@ -340,13 +340,13 @@ describe('useCaseGeoFence', () => {
     expect(GeocodingService.resolveAddressCoordinates).not.toHaveBeenCalled();
   });
 
-  it('does nothing until the case detail has loaded', async () => {
+  it('unlocks content when geo-fence is disabled (non-pending cases)', async () => {
     seedReadyLocation();
 
     const { result } = await renderGeoFence({ isEnabled: false });
 
     expect(result.current.status).toBe('idle');
-    expect(result.current.isCaseContentUnlocked).toBe(false);
+    expect(result.current.isCaseContentUnlocked).toBe(true);
   });
 
   describe('retries and Force Proceed', () => {

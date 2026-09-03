@@ -82,7 +82,8 @@
     "card": {
       "caseRef": "केस संदर्भ: {{caseRef}}",
       "client": "क्लाइंट: {{clientName}}",
-      "candidate": "उम्मीदवार: {{candidateName}}"
+      "candidate": "उम्मीदवार: {{candidateName}}",
+      "draft": "ड्राफ्ट"
     },
     "actions": {
       "accept": "स्वीकार करें",
@@ -247,7 +248,11 @@
       },
       "remainingAttempts_one": "बिना दूरी आगे बढ़ने से पहले {{count}} पुनर्गणना प्रयास शेष है।",
       "remainingAttempts_other": "बिना दूरी आगे बढ़ने से पहले {{count}} पुनर्गणना प्रयास शेष हैं।"
-    }
+    },
+    "draft": {
+      "saved": "📝 ड्राफ्ट {{time}} पर सहेजा गया"
+    },
+    "saveDraft": "ड्राफ्ट के रूप में सहेजें"
   },
   "location": {
     "mandatory": "काम करने के लिए स्थान अनुमति अनिवार्य है।",

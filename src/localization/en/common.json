@@ -82,7 +82,8 @@
     "card": {
       "caseRef": "Case Ref: {{caseRef}}",
       "client": "Client: {{clientName}}",
-      "candidate": "Candidate: {{candidateName}}"
+      "candidate": "Candidate: {{candidateName}}",
+      "draft": "Draft"
     },
     "actions": {
       "accept": "Accept",
@@ -247,7 +248,11 @@
       },
       "remainingAttempts_one": "{{count}} recalculation attempt left before you can proceed without distance.",
       "remainingAttempts_other": "{{count}} recalculation attempts left before you can proceed without distance."
-    }
+    },
+    "draft": {
+      "saved": "📝 Draft saved {{time}}"
+    },
+    "saveDraft": "Save as Draft"
   },
   "location": {
     "mandatory": "Location permission is mandatory to work.",

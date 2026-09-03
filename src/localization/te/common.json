@@ -82,7 +82,8 @@
     "card": {
       "caseRef": "కేసు రెఫ్: {{caseRef}}",
       "client": "క్లయింట్: {{clientName}}",
-      "candidate": "అభ్యర్థి: {{candidateName}}"
+      "candidate": "అభ్యర్థి: {{candidateName}}",
+      "draft": "డ్రాఫ్ట్"
     },
     "actions": {
       "accept": "అంగీకరించండి",
@@ -247,7 +248,11 @@
       },
       "remainingAttempts_one": "దూరం లేకుండా కొనసాగడానికి ముందు {{count}} మళ్ళీ లెక్కింపు ప్రయత్నం మిగిలి ఉంది.",
       "remainingAttempts_other": "దూరం లేకుండా కొనసాగడానికి ముందు {{count}} మళ్ళీ లెక్కింపు ప్రయత్నాలు మిగిలి ఉన్నాయి."
-    }
+    },
+    "draft": {
+      "saved": "📝 డ్రాఫ్ట్ {{time}} కి సేవ్ చేయబడింది"
+    },
+    "saveDraft": "డ్రాఫ్ట్‌గా సేవ్ చేయండి"
   },
   "location": {
     "mandatory": "పని చేయడానికి లొకేషన్ అనుమతి తప్పనిసరి.",

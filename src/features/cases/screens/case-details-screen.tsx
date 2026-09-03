@@ -25,6 +25,7 @@ import {
   Heading,
   ScrollView,
   Spinner,
+  Text,
   VStack,
 } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
@@ -117,6 +118,9 @@ export function CaseDetailsScreen(): ReactElement {
     isSubmitting,
     submitError,
     submit,
+    hasDraft,
+    draftSavedAt,
+    saveDraft,
   } = useCaseDetails(params.caseId);
 
   /**
@@ -249,6 +253,14 @@ export function CaseDetailsScreen(): ReactElement {
     });
   };
 
+  const handleSaveDraft = (): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSaveDraft: saving draft`, {
+      caseId: params.caseId,
+    });
+    // The draft timestamp line below Case Ref is the confirmation — no banner.
+    saveDraft();
+  };
+
   const handleSubmit = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submit pressed`, { caseId: params.caseId });
     submit(() => {
@@ -309,6 +321,22 @@ export function CaseDetailsScreen(): ReactElement {
   return (
     <ScrollView flex={1} contentContainerStyle={{ padding: 16, gap: 12 }} testID="case-details-scroll-view">
       <VStack space="md">
+        {hasDraft && draftSavedAt ? (
+          <Text
+            size="xs"
+            color="$textLight500"
+            sx={{ _dark: { color: '$textDark400' } }}
+            testID="case-details-draft-status"
+          >
+            {t('caseDetails.draft.saved', {
+              time: new Date(draftSavedAt).toLocaleTimeString([], {
+                hour: '2-digit',
+                minute: '2-digit',
+              }),
+            })}
+          </Text>
+        ) : null}
+
         {noticeKey ? (
           <Alert action="info" testID="case-details-notice">
             <AlertIcon as={AlertCircleIcon} mr="$2" />
@@ -439,18 +467,31 @@ export function CaseDetailsScreen(): ReactElement {
             <AlertText>{t('caseDetails.readOnly.message')}</AlertText>
           </Alert>
         ) : isCaseContentVisible ? (
-          <Button
-            action="positive"
-            size="lg"
-            borderRadius="$xl"
-            onPress={handleSubmit}
-            isDisabled={isSubmitting}
-            accessibilityLabel={t('caseDetails.submit')}
-            testID="case-details-submit-button"
-          >
-            {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
-            <ButtonText>{t('caseDetails.submit')}</ButtonText>
-          </Button>
+          <VStack space="md">
+            <Button
+              action="secondary"
+              size="lg"
+              borderRadius="$xl"
+              onPress={handleSaveDraft}
+              isDisabled={isSubmitting}
+              accessibilityLabel={t('caseDetails.saveDraft')}
+              testID="case-details-save-draft-button"
+            >
+              <ButtonText>{t('caseDetails.saveDraft')}</ButtonText>
+            </Button>
+            <Button
+              action="positive"
+              size="lg"
+              borderRadius="$xl"
+              onPress={handleSubmit}
+              isDisabled={isSubmitting}
+              accessibilityLabel={t('caseDetails.submit')}
+              testID="case-details-submit-button"
+            >
+              {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
+              <ButtonText>{t('caseDetails.submit')}</ButtonText>
+            </Button>
+          </VStack>
         ) : null}
       </VStack>
 

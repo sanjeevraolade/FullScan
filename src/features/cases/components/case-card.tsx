@@ -33,10 +33,12 @@ export interface CaseCardProps {
   readonly isAccepting?: boolean;
   /** Present only for Pending/Beyond TAT cases. */
   readonly onCall?: ((caseId: string) => void) | undefined;
+  /** Whether this case has a saved draft. */
+  readonly hasDraft?: boolean;
 }
 
 /** A single case's summary in the case-list landing page. */
-export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onCall }: CaseCardProps): ReactElement {
+export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onCall, hasDraft = false }: CaseCardProps): ReactElement {
   const { t } = useTranslation();
 
   // Candidate name and address are PII — only ids, the bucket and flags are logged.
@@ -45,6 +47,7 @@ export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onC
     bucket: caseItem.bucket,
     verificationType: caseItem.verificationType,
     isAccepting,
+    hasDraft,
   });
 
   if (onAccept) {
@@ -99,9 +102,16 @@ export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onC
           <Text size="sm" fontWeight="$bold" color="$textLight900" flex={1} sx={{ _dark: { color: '$textDark0' } }}>
             {t('caseList.card.caseRef', { caseRef: caseItem.caseRef })}
           </Text>
-          <Badge size="sm" borderRadius="$md">
-            <BadgeText textTransform="none">{caseItem.verificationType}</BadgeText>
-          </Badge>
+          <HStack space="xs" alignItems="center">
+            {hasDraft ? (
+              <Badge size="sm" borderRadius="$md" action="warning" testID={`case-card-draft-badge-${caseItem.id}`}>
+                <BadgeText textTransform="none">📝 {t('caseList.card.draft')}</BadgeText>
+              </Badge>
+            ) : null}
+            <Badge size="sm" borderRadius="$md">
+              <BadgeText textTransform="none">{caseItem.verificationType}</BadgeText>
+            </Badge>
+          </HStack>
         </HStack>
 
         <VStack space="xs">
