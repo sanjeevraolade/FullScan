@@ -92,7 +92,7 @@ All routes are mounted under `/api/v1`:
 | `/ui-config`                        | GET    | Download all screen configs                          |
 | `/ui-config/:screenId`              | GET    | Download a single screen config                       |
 | `/ui-config/:screenId`              | PUT    | Update a screen config (admin only)                    |
-| `/reference-data`                   | GET    | Download dropdown/reference data (post-login)          |
+| `/reference-data`                   | GET    | Download dropdown/reference data **+ mobile app settings** (post-login) |
 | `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
@@ -141,6 +141,27 @@ Signing in reveals a navigation drawer whose only page today is **Mobile App Set
   in either direction, even though both are signed with `JWT_SECRET`.
 - Adding a drawer page means one entry in `public/admin/assets/js/menu.js` plus one page module —
   see `docs/ADMIN_PORTAL.md` for the full walkthrough.
+
+### Mobile App Settings delivery
+
+Settings saved in the portal reach the mobile app on the **existing** `GET /reference-data` call —
+the one post-login batch fetch the app already makes — as an extra `mobileAppSettings` field:
+
+```jsonc
+{
+  "verificationTypeStatuses": [ /* … unchanged … */ ],
+  "mobileAppSettings": {
+    "values": { "geo_fence_radius_meters": 200, "watermark_enabled": true, "default_language": "en" },
+    "updatedAt": "2026-09-03 15:45:29"
+  }
+}
+```
+
+`values` is keyed by `setting_key` with each value already coerced to its declared type, so a
+setting added as a seed row reaches the app with no server or app release. The admin-facing
+`label`/`description` text is deliberately excluded — the app renders user-visible strings from its
+own en/hi/te localization keys. On the app side, read settings through
+`useMobileAppSettings()` / `getMobileAppSettings()` (see `FullScanApp/src/store/reference-data/`).
 
 ### Admin test credentials
 
