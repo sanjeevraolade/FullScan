@@ -1,5 +1,6 @@
 import Geolocation from '@react-native-community/geolocation';
 import type { GeolocationError, GeolocationResponse } from '@react-native-community/geolocation';
+import { isEmulatorSync } from 'react-native-device-info';
 import { RESULTS, check, openSettings, request } from 'react-native-permissions';
 
 import { isLocationUnavailableError } from './location.errors';
@@ -22,6 +23,11 @@ function buildPosition(
     },
     timestamp,
   } as GeolocationResponse;
+}
+
+/** A fix the platform has flagged as faked — Android's mock provider, or iOS 15+'s simulated source. */
+function buildMockedPosition(): GeolocationResponse {
+  return { ...buildPosition(), mocked: true } as GeolocationResponse;
 }
 
 function buildError(code: number, message: string): GeolocationError {
@@ -115,6 +121,8 @@ describe('LocationService.requestPermission', () => {
 describe('LocationService.getCurrentLocation', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    // Real hardware is the default; the simulator cases override it.
+    jest.mocked(isEmulatorSync).mockReturnValue(false);
   });
 
   it('normalizes a successful fix and marks it fresh', async () => {
@@ -139,9 +147,34 @@ describe('LocationService.getCurrentLocation', () => {
     expect(location.source).toBe('lastKnown');
   });
 
-  it("surfaces Android's mock-provider flag", async () => {
-    const mockedPosition = { ...buildPosition(), mocked: true } as GeolocationResponse;
-    mockPositionSuccess(mockedPosition);
+  it("surfaces the platform's mock-location flag on real hardware", async () => {
+    jest.mocked(isEmulatorSync).mockReturnValue(false);
+    mockPositionSuccess(buildMockedPosition());
+
+    await expect(LocationService.getCurrentLocation()).resolves.toMatchObject({
+      isMockLocation: true,
+    });
+  });
+
+  /**
+   * Every iOS Simulator fix is software-generated, so iOS 15+ reports
+   * `isSimulatedBySoftware` for all of them — trusting that would block the app
+   * on every simulator build.
+   */
+  it('ignores the mock-location flag on a simulator/emulator', async () => {
+    jest.mocked(isEmulatorSync).mockReturnValue(true);
+    mockPositionSuccess(buildMockedPosition());
+
+    await expect(LocationService.getCurrentLocation()).resolves.toMatchObject({
+      isMockLocation: false,
+    });
+  });
+
+  it('treats a device that cannot report its kind as real hardware', async () => {
+    jest.mocked(isEmulatorSync).mockImplementation(() => {
+      throw new Error('native module unavailable');
+    });
+    mockPositionSuccess(buildMockedPosition());
 
     await expect(LocationService.getCurrentLocation()).resolves.toMatchObject({
       isMockLocation: true,

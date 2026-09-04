@@ -27,6 +27,7 @@ export interface UseLocationReadinessResult {
 
 /** Reads location readiness and exposes the actions a blocking banner needs. */
 export function useLocationReadiness(): UseLocationReadinessResult {
+
   const status = useLocationStore((state) => state.status);
   const location = useLocationStore((state) => state.location);
   const errorReason = useLocationStore((state) => state.errorReason);
@@ -34,7 +35,7 @@ export function useLocationReadiness(): UseLocationReadinessResult {
   const evaluate = useLocationStore((state) => state.evaluate);
   const requestPermission = useLocationStore((state) => state.requestPermission);
   const openSettings = useLocationStore((state) => state.openSettings);
-
+ 
   LoggerService.info(`${FILE_NAME}: useLocationReadiness: reading readiness`, { status });
   LoggerService.info(`${FILE_NAME}: useLocationReadiness: returning readiness snapshot`, {
     status,

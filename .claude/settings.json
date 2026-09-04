@@ -20,7 +20,10 @@
       "Bash(python3 -)",
       "Bash(grep -n \"8.5 Delivering\\\\|locationRetryCount\\\\` control\\\\|migration-\\\\`015\\\\`\" docs/ADMIN_PORTAL.md)",
       "Bash(python3 /private/tmp/claude-1453943200/-Volumes-Dev-MyApps-FullscanField-FullScan-FullScanApp/4879c601-7519-4f18-89ac-36add0244c6e/scratchpad/icons.py)",
-      "Bash(npx eslint *)"
+      "Bash(npx eslint *)",
+      "Bash(sed -n '/export async function fetchCases/,/^}/p' src/repositories/case-repository.ts)",
+      "Bash(sed -n '/function toCase\\(/,/^}/p' src/repositories/case-repository.ts)",
+      "Bash(node -e \"const j=require\\('./src/localization/en/'+require\\('fs'\\).readdirSync\\('src/localization/en'\\)[0]\\);\")"
     ]
   }
 }

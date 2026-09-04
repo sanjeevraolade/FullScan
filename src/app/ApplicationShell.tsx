@@ -31,6 +31,7 @@ const FILE_NAME = 'ApplicationShell.tsx';
  */
 export function ApplicationShell(): ReactElement {
   const isAuthenticated = useSessionStore((state) => {
+    LoggerService.info(`${FILE_NAME}: ApplicationShell: evaluating session state `, { fieldExecutive: state.fieldExecutive });
     // Identity only — never the session token or the executive's details.
     const hasFieldExecutive = state.fieldExecutive !== null;
     LoggerService.info(`${FILE_NAME}: ApplicationShell: session selector evaluated`, {

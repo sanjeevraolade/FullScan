@@ -1,6 +1,7 @@
 import { Linking, Platform } from 'react-native';
 import Geolocation from '@react-native-community/geolocation';
 import type { GeolocationError, GeolocationResponse } from '@react-native-community/geolocation';
+import { isEmulatorSync } from 'react-native-device-info';
 import { PERMISSIONS, RESULTS, check, openSettings, request } from 'react-native-permissions';
 import type { Permission } from 'react-native-permissions';
 
@@ -34,8 +35,13 @@ const ERROR_CODE_PERMISSION_DENIED = 1;
 const ERROR_CODE_POSITION_UNAVAILABLE = 2;
 const ERROR_CODE_TIMEOUT = 3;
 
-/** The native module puts this on Android responses only; the published types don't declare it. */
-interface AndroidMockAwareResponse extends GeolocationResponse {
+/**
+ * The native module sets `mocked` on both platforms, but the published types
+ * don't declare it. Android maps it from `Location.isFromMockProvider()`;
+ * iOS 15+ maps it from `CLLocation.sourceInformation.isSimulatedBySoftware`
+ * (older iOS versions always report `false`).
+ */
+interface MockAwareGeolocationResponse extends GeolocationResponse {
   readonly mocked?: boolean;
 }
 
@@ -48,6 +54,60 @@ interface AndroidMockAwareResponse extends GeolocationResponse {
  */
 const SERVICE_DISABLED_MESSAGE_PATTERN = /provider|disabled|turned off|no location/i;
 
+/**
+ * Whether the app is running on an iOS Simulator or an Android emulator.
+ *
+ * Every fix an iOS Simulator produces comes from Xcode/Simulator rather than a
+ * GPS receiver, so iOS 15+ correctly reports `isSimulatedBySoftware === true`
+ * for all of them — which the native module forwards as `mocked: true`. Taken
+ * at face value that permanently blocks the app on every simulator build.
+ * Treating a simulated device as un-mocked keeps development usable without
+ * weakening the real check: production builds only ever run on real hardware,
+ * where a `mocked` fix genuinely means a fake-GPS app or a developer-attached
+ * location simulation.
+ */
+function isSimulatedDevice(): boolean {
+  // `isEmulatorSync` memoizes its own native answer, so this stays cheap.
+  let resolved: boolean;
+  try {
+    resolved = isEmulatorSync();
+  } catch (error: unknown) {
+    // A device that cannot answer is treated as real hardware, so the
+    // mock-location check keeps its teeth.
+    LoggerService.error(
+      `${FILE_NAME}: isSimulatedDevice: device check failed, assuming real hardware`,
+      { message: error instanceof Error ? error.message : String(error) },
+    );
+    resolved = false;
+  }
+
+  LoggerService.info(`${FILE_NAME}: isSimulatedDevice: device kind resolved`, {
+    isSimulatedDevice: resolved,
+  });
+  return resolved;
+}
+
+/**
+ * The platform's mock flag, with the simulator/emulator false positive removed.
+ */
+function resolveIsMockLocation(position: MockAwareGeolocationResponse): boolean {
+  const isPlatformMockReported = position.mocked ?? false;
+  if (!isPlatformMockReported) {
+    LoggerService.info(`${FILE_NAME}: resolveIsMockLocation: the platform reported a real fix`);
+    return false;
+  }
+
+  if (isSimulatedDevice()) {
+    LoggerService.warn(
+      `${FILE_NAME}: resolveIsMockLocation: ignoring the platform mock flag, this is a simulator/emulator build`,
+    );
+    return false;
+  }
+
+  LoggerService.warn(`${FILE_NAME}: resolveIsMockLocation: mock location reported on real hardware`);
+  return true;
+}
+
 function toDeviceLocationSource(timestamp: number): DeviceLocationSource {
   const ageMs = Date.now() - timestamp;
   const source: DeviceLocationSource = ageMs > FRESH_FIX_MAX_AGE_MS ? 'lastKnown' : 'fresh';
@@ -56,17 +116,17 @@ function toDeviceLocationSource(timestamp: number): DeviceLocationSource {
 }
 
 function toDeviceLocation(position: GeolocationResponse): DeviceLocation {
-  const mockAwarePosition = position as AndroidMockAwareResponse;
+  const isMockLocation = resolveIsMockLocation(position as MockAwareGeolocationResponse);
   // Coordinates are business evidence — log only fix metadata.
   LoggerService.info(`${FILE_NAME}: toDeviceLocation: mapping platform position`, {
     accuracyMeters: position.coords.accuracy,
-    isMockLocation: mockAwarePosition.mocked ?? false,
+    isMockLocation,
   });
   return {
     latitude: position.coords.latitude,
     longitude: position.coords.longitude,
     accuracyMeters: position.coords.accuracy,
-    isMockLocation: mockAwarePosition.mocked ?? false,
+    isMockLocation,
     capturedAt: new Date(position.timestamp),
     source: toDeviceLocationSource(position.timestamp),
   };

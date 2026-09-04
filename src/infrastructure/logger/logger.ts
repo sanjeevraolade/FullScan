@@ -3,6 +3,8 @@ import type { LogContext, LogLevel } from './logger.types';
 
 const LOG_PREFIX = '[FullScan]';
 
+const MILLISECOND_DIGITS = 3;
+
 /**
  * THE RELEASE SWITCH for execution-flow logging.
  *
@@ -15,6 +17,24 @@ const LOG_PREFIX = '[FullScan]';
  * edit; `setEnabled()` still overrides it at runtime for a debug menu.
  */
 const IS_LOGGING_ENABLED = true;
+
+/**
+ * Local-time stamp for a log line: `YYYY-MM-DD HH:mm:ss.SSS`.
+ *
+ * Deliberately built from the local-time getters rather than `toISOString()` —
+ * a Field Executive reading logs off a device is comparing them against the
+ * clock in front of them (and against capture timestamps on evidence), not
+ * against UTC.
+ */
+const formatTimestamp = (date: Date): string => {
+  const pad = (value: number, length = 2): string => String(value).padStart(length, '0');
+
+  const day = `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`;
+  const time = `${pad(date.getHours())}:${pad(date.getMinutes())}:${pad(date.getSeconds())}`;
+  const milliseconds = pad(date.getMilliseconds(), MILLISECOND_DIGITS);
+
+  return `${day} ${time}.${milliseconds}`;
+};
 
 class LoggerServiceImpl implements ILogger {
   private enabled = IS_LOGGING_ENABLED;
@@ -49,7 +69,7 @@ class LoggerServiceImpl implements ILogger {
       return;
     }
 
-    const prefixedMessage = `${LOG_PREFIX} ${message}`;
+    const prefixedMessage = `${LOG_PREFIX} ${formatTimestamp(new Date())} ${message}`;
     if (context) {
       // eslint-disable-next-line no-console -- LoggerService is the sanctioned console sink
       console[level](prefixedMessage, context);

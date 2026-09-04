@@ -7,4 +7,6 @@
  */
 module.exports = {
   getVersion: jest.fn(() => '1.0.0'),
+  // Tests describe real hardware by default; the simulator cases opt in.
+  isEmulatorSync: jest.fn(() => false),
 };
