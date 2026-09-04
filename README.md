@@ -96,6 +96,7 @@ All routes are mounted under `/api/v1`:
 | `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
+| `/security/mock-location`           | POST   | Record a faked/mocked device location detected by the app (auth required) |
 | `/admin/auth/login`                 | POST   | Validate admin credentials, set session cookie + return token |
 | `/admin/auth/logout`                | POST   | Clear the admin session cookie (admin auth required)     |
 | `/admin/auth/me`                    | GET    | Current admin's profile (admin auth required)            |
@@ -111,6 +112,26 @@ On `GET /cases`, the field executive's actually-assigned components (pending/bey
 stable, but the **New** bucket is a random draw (3–10 components) from the whole 'new' pool on every
 request, simulating a live incoming-case feed — accepting a case (`PATCH /cases/:caseId/accept`)
 is what actually assigns it to that field executive.
+
+### Mock-location reports
+
+`POST /security/mock-location` is the app's fraud channel. The mobile app evaluates location
+readiness the moment a session exists (and again on every resume, on a manual retry, and before an
+evidence capture); when the platform reports the fix as mocked — Android's
+`Location.isFromMockProvider()`, iOS 15+'s `isSimulatedBySoftware` — the detection is posted here
+with everything the device could observe: the faked coordinates and their accuracy, the detection
+stage (`post_login`, `app_resume`, `manual_recheck`, `photo_capture`), the case being worked, and
+the handset's identity/brand/manufacturer/installer/emulator flag/time zone. Rows land in
+`mock_location_events` (migration `016`) and are never updated or deleted — turning the fake-GPS
+app off afterwards does not erase the record.
+
+Blocking is not configurable: a mocked fix always blocks the app and is always reported. The old
+`mock_location_block_enabled` setting was removed in migration `017`.
+
+Reports are **idempotent on `clientEventId`**: the app queues a detection it could not send while
+offline and retries it under the same id. A first delivery answers `201`; a re-delivery answers
+`200` with `isDuplicate: true`, which is the app's signal to drop it from its queue. Every report
+also comes back with `totalEventCount` and `firstDetectedAt` for that executive.
 
 ### Case vs. case component
 

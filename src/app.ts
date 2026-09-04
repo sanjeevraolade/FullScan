@@ -12,6 +12,7 @@ import { uiConfigRoutes } from './routes/ui-config.routes.js';
 import { referenceDataRoutes } from './routes/reference-data.routes.js';
 import { caseRoutes } from './routes/case.routes.js';
 import { meRoutes } from './routes/field-executive.routes.js';
+import { securityRoutes } from './routes/security.routes.js';
 import { adminAuthRoutes } from './routes/admin-auth.routes.js';
 import { mobileAppSettingRoutes } from './routes/mobile-app-setting.routes.js';
 import { adminPortalRoutes } from './routes/admin-portal.routes.js';
@@ -30,6 +31,7 @@ app.use('/api/v1/ui-config', uiConfigRoutes);
 app.use('/api/v1/reference-data', referenceDataRoutes);
 app.use('/api/v1/cases', authenticate, caseRoutes);
 app.use('/api/v1/me', authenticate, meRoutes);
+app.use('/api/v1/security', authenticate, securityRoutes);
 
 // Admin API (admin-scoped session) — everything but /auth requires a signed-in admin
 app.use('/api/v1/admin/auth', adminAuthRoutes);
