@@ -188,7 +188,6 @@ Nothing is hardcoded. Both required values come from the existing post-login
 | ----------------------------- | ---------------------------------------------------------- |
 | `geo_fence_radius_meters`     | The geo-fence threshold                                    |
 | `locationRetryCount`          | Recalculation attempts before Force Proceed is offered     |
-| `mock_location_block_enabled` | Whether a mocked location blocks the app (already existed) |
 
 **Strict, un-defaulted read.** Every other setting falls back to a safe default via
 `resolveMobileAppSettings`. These two do not: `resolveGeoFenceConfiguration` returns `null` when the

@@ -4,6 +4,16 @@ import { useReferenceDataStore } from '@/store/reference-data';
 import type { ReferenceData } from '@/domain/reference-data';
 
 import { isLocationReady, useLocationStore } from './location.store';
+import {
+  flushPendingMockLocationReports,
+  recordMockLocationDetection,
+} from './mock-location-reporter';
+
+jest.mock('./mock-location-reporter', () => ({
+  recordMockLocationDetection: jest.fn(async () => undefined),
+  flushPendingMockLocationReports: jest.fn(async () => undefined),
+  resetMockLocationReportThrottle: jest.fn(),
+}));
 
 jest.mock('@/infrastructure/location', () => {
   class TestLocationUnavailableError extends Error {
@@ -152,7 +162,6 @@ describe('useLocationStore.evaluate', () => {
     jest
       .mocked(LocationService.getCurrentLocation)
       .mockResolvedValue(buildLocation({ isMockLocation: true }));
-    seedSettings({ mock_location_block_enabled: true });
 
     await useLocationStore.getState().evaluate();
 
@@ -161,25 +170,56 @@ describe('useLocationStore.evaluate', () => {
     expect(location).toBeNull();
   });
 
-  it('honours the server switch that turns mock-location blocking off', async () => {
+  it('reports a faked position to the back office as soon as the session starts', async () => {
     jest.mocked(LocationService.isSupported).mockResolvedValue(true);
     jest.mocked(LocationService.checkPermission).mockResolvedValue('granted');
     jest
       .mocked(LocationService.getCurrentLocation)
       .mockResolvedValue(buildLocation({ isMockLocation: true }));
-    seedSettings({ mock_location_block_enabled: false });
 
-    await useLocationStore.getState().evaluate();
+    await useLocationStore.getState().evaluate('post_login');
 
-    expect(useLocationStore.getState().status).toBe('ready');
+    expect(recordMockLocationDetection).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detectionStage: 'post_login',
+        isRepeatDetection: false,
+        location: expect.objectContaining({ isMockLocation: true }),
+      }),
+    );
   });
 
-  it('blocks mock locations by default when configuration has not loaded', async () => {
+  it('marks a detection that repeats an episode already blocked', async () => {
     jest.mocked(LocationService.isSupported).mockResolvedValue(true);
     jest.mocked(LocationService.checkPermission).mockResolvedValue('granted');
     jest
       .mocked(LocationService.getCurrentLocation)
       .mockResolvedValue(buildLocation({ isMockLocation: true }));
+    useLocationStore.setState({ status: 'mock_detected' });
+
+    await useLocationStore.getState().evaluate('app_resume');
+
+    expect(recordMockLocationDetection).toHaveBeenCalledWith(
+      expect.objectContaining({ detectionStage: 'app_resume', isRepeatDetection: true }),
+    );
+  });
+
+  it('reports nothing on a genuine fix, but drains anything queued offline', async () => {
+    mockHappyPath();
+
+    await useLocationStore.getState().evaluate('post_login');
+
+    expect(recordMockLocationDetection).not.toHaveBeenCalled();
+    expect(flushPendingMockLocationReports).toHaveBeenCalled();
+  });
+
+  it('blocks a faked position no matter what configuration says', async () => {
+    jest.mocked(LocationService.isSupported).mockResolvedValue(true);
+    jest.mocked(LocationService.checkPermission).mockResolvedValue('granted');
+    jest
+      .mocked(LocationService.getCurrentLocation)
+      .mockResolvedValue(buildLocation({ isMockLocation: true }));
+    // Blocking is not configurable — a payload cannot switch it off.
+    seedSettings({ geo_fence_radius_meters: 200 });
 
     await useLocationStore.getState().evaluate();
 

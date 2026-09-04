@@ -62,7 +62,7 @@ export function CaseCameraScreen(): ReactElement {
     captureErrorKey,
     sessionPhotos,
     capturePhoto,
-  } = useCaseCamera();
+  } = useCaseCamera(params.caseId);
 
   LoggerService.info(`${FILE_NAME}: CaseCameraScreen: rendering`, {
     caseId: params.caseId,

@@ -141,14 +141,14 @@ overwrite the newer result. Then, short-circuiting at the first failure:
 | `97`  | → `denied` (still askable)                         | `permission_required` |
 | `103` | — sets an interim status while the fix is acquired | `obtaining_location`  |
 | `106` | `getCurrentLocation()` with `maximumAge: 0`        | throws → catch below  |
-| `109` | `isMockLocation && isMockLocationBlockEnabled`     | `mock_detected`       |
+| `109` | `isMockLocation` (always blocks, never configurable) | `mock_detected`     |
 | `115` | `location.source !== 'fresh'`                      | `error`               |
 | `123` | all checks passed                                  | **`ready`**           |
 
 Two lines carry most of the weight:
 
-- **`:108`** `getMobileAppSettings()` — the server-configuration read that §1's ordering exists to
-  satisfy. `mock_location_block_enabled` decides whether a mocked fix blocks the app.
+- **`:109`** a mocked fix always blocks the app and is always reported to
+  `POST /security/mock-location`; no setting can switch either off.
 - **`:115`** a `lastKnown` fix is refused outright. A cached position is not where the executive is
   standing, so it can never make the app ready; the user retries instead.
 

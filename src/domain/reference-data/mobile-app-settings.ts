@@ -18,7 +18,6 @@ export const MOBILE_APP_SETTING_KEYS = {
   isMaintenanceModeEnabled: 'maintenance_mode_enabled',
   maintenanceMessage: 'maintenance_message',
   isBiometricLoginEnabled: 'biometric_login_enabled',
-  isMockLocationBlockEnabled: 'mock_location_block_enabled',
   sessionTimeoutMinutes: 'session_timeout_minutes',
   maxLoginAttempts: 'max_login_attempts',
   geoFenceRadiusMeters: 'geo_fence_radius_meters',
@@ -87,7 +86,6 @@ export interface ResolvedMobileAppSettings {
   readonly isMaintenanceModeEnabled: boolean;
   readonly maintenanceMessage: string;
   readonly isBiometricLoginEnabled: boolean;
-  readonly isMockLocationBlockEnabled: boolean;
   readonly sessionTimeoutMinutes: number;
   readonly maxLoginAttempts: number;
   readonly geoFenceRadiusMeters: number;
@@ -125,7 +123,7 @@ export interface ResolvedMobileAppSettings {
  * These are not "empty" placeholders — they are the safe operating defaults, so
  * the app stays fully usable offline and on first run. Each mirrors the seeded
  * server-side default, with the security-relevant ones erring towards strict
- * (watermarking on, mock-location blocking on, maintenance mode off).
+ * (watermarking on, maintenance mode off).
  */
 export const DEFAULT_MOBILE_APP_SETTINGS: Omit<ResolvedMobileAppSettings, 'values' | 'updatedAt'> =
   {
@@ -136,7 +134,6 @@ export const DEFAULT_MOBILE_APP_SETTINGS: Omit<ResolvedMobileAppSettings, 'value
     isMaintenanceModeEnabled: false,
     maintenanceMessage: '',
     isBiometricLoginEnabled: true,
-    isMockLocationBlockEnabled: true,
     sessionTimeoutMinutes: 720,
     maxLoginAttempts: 5,
     geoFenceRadiusMeters: 200,
@@ -364,11 +361,6 @@ export function resolveMobileAppSettings(
       keys.isBiometricLoginEnabled,
       defaults.isBiometricLoginEnabled,
     ),
-    isMockLocationBlockEnabled: readBooleanSetting(
-      values,
-      keys.isMockLocationBlockEnabled,
-      defaults.isMockLocationBlockEnabled,
-    ),
     sessionTimeoutMinutes: readNumberSetting(
       values,
       keys.sessionTimeoutMinutes,
@@ -455,7 +447,6 @@ export function resolveMobileAppSettings(
     isForceUpdateEnabled: resolved.isForceUpdateEnabled,
     isMaintenanceModeEnabled: resolved.isMaintenanceModeEnabled,
     isBiometricLoginEnabled: resolved.isBiometricLoginEnabled,
-    isMockLocationBlockEnabled: resolved.isMockLocationBlockEnabled,
     sessionTimeoutMinutes: resolved.sessionTimeoutMinutes,
     maxLoginAttempts: resolved.maxLoginAttempts,
     geoFenceRadiusMeters: resolved.geoFenceRadiusMeters,

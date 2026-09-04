@@ -7,6 +7,17 @@
  */
 module.exports = {
   getVersion: jest.fn(() => '1.0.0'),
+  getBuildNumber: jest.fn(() => '100'),
+  getUniqueId: jest.fn(async () => 'test-unique-id'),
+  getDeviceName: jest.fn(async () => 'Test Device'),
+  getModel: jest.fn(() => 'test-model'),
+  getBrand: jest.fn(() => 'test-brand'),
+  getManufacturer: jest.fn(async () => 'test-manufacturer'),
+  getDeviceType: jest.fn(() => 'Handset'),
+  getSystemName: jest.fn(() => 'Android'),
+  getSystemVersion: jest.fn(() => '14.0'),
+  getInstallerPackageName: jest.fn(async () => 'com.android.vending'),
+  isEmulator: jest.fn(async () => false),
   // Tests describe real hardware by default; the simulator cases opt in.
   isEmulatorSync: jest.fn(() => false),
 };

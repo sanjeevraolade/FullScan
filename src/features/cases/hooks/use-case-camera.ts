@@ -14,6 +14,7 @@ import { LoggerService } from '@/infrastructure/logger';
 import { composeWatermarkedPhoto } from '@/infrastructure/camera';
 import { LocationService } from '@/infrastructure/location';
 import type { DeviceLocation } from '@/infrastructure/location';
+import { recordMockLocationDetection } from '@/store/location';
 import type { CapturedPhotoEvidence } from '@/domain/case';
 
 const FILE_NAME = 'use-case-camera.ts';
@@ -46,9 +47,13 @@ export interface UseCaseCameraResult {
  * live location watch for the on-screen overlay, and photo capture + burning
  * the watermark into the saved file. Presentation lives in
  * `CaseCameraScreen` — this hook owns no JSX.
+ *
+ * `caseId` is optional only so existing callers keep working; pass it wherever
+ * it is known, so a capture blocked by a mocked location is reported against
+ * the case the executive was trying to produce evidence for.
  */
-export function useCaseCamera(): UseCaseCameraResult {
-  LoggerService.info(`${FILE_NAME}: useCaseCamera: hook invoked`);
+export function useCaseCamera(caseId?: string): UseCaseCameraResult {
+  LoggerService.info(`${FILE_NAME}: useCaseCamera: hook invoked`, { hasCaseId: Boolean(caseId) });
   const device = useCameraDevice('back');
   const previewOutput = usePreviewOutput();
   const photoOutput = usePhotoOutput();
@@ -157,6 +162,16 @@ export function useCaseCamera(): UseCaseCameraResult {
 
       if (location.isMockLocation) {
         LoggerService.warn(`${FILE_NAME}: capturePhoto: blocked — mock location detected`);
+        // An attempt to capture evidence under a faked position is the most
+        // serious form of this fraud — reported with the case it targeted.
+        void recordMockLocationDetection({
+          detectionStage: 'photo_capture',
+          location,
+          caseId: caseId ?? null,
+          // Repeated taps must not each become a report; the stage's cooldown
+          // decides whether this attempt is recorded.
+          isRepeatDetection: true,
+        });
         setCaptureErrorKey('mockLocationDetected');
         return null;
       }
@@ -214,7 +229,7 @@ export function useCaseCamera(): UseCaseCameraResult {
         setIsCapturing(false);
       }
     },
-    [device, hasCameraPermission, location, photoOutput],
+    [caseId, device, hasCameraPermission, location, photoOutput],
   );
 
   return {

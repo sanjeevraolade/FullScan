@@ -28,7 +28,6 @@ describe('resolveMobileAppSettings', () => {
       const resolved = resolveMobileAppSettings(null);
 
       expect(resolved.isWatermarkEnabled).toBe(true);
-      expect(resolved.isMockLocationBlockEnabled).toBe(true);
       expect(resolved.isMaintenanceModeEnabled).toBe(false);
       expect(resolved.isForceUpdateEnabled).toBe(false);
     });
@@ -45,7 +44,6 @@ describe('resolveMobileAppSettings', () => {
           maintenance_mode_enabled: true,
           maintenance_message: 'Back at 6pm',
           biometric_login_enabled: false,
-          mock_location_block_enabled: false,
           session_timeout_minutes: 60,
           max_login_attempts: 3,
           geo_fence_radius_meters: 500,
@@ -67,7 +65,6 @@ describe('resolveMobileAppSettings', () => {
         isMaintenanceModeEnabled: true,
         maintenanceMessage: 'Back at 6pm',
         isBiometricLoginEnabled: false,
-        isMockLocationBlockEnabled: false,
         sessionTimeoutMinutes: 60,
         maxLoginAttempts: 3,
         geoFenceRadiusMeters: 500,

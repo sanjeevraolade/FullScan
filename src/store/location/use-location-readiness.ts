@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useCallback, useEffect } from 'react';
 import { AppState } from 'react-native';
 import type { AppStateStatus } from 'react-native';
 
@@ -20,6 +20,7 @@ export interface UseLocationReadinessResult {
   readonly isEvaluating: boolean;
   /** `true` only when `status` is `ready` — the sole state that permits normal app actions. */
   readonly isReady: boolean;
+  /** Re-evaluates on demand, e.g. a banner's retry button. */
   readonly recheck: () => Promise<void>;
   readonly requestPermission: () => Promise<void>;
   readonly openSettings: () => Promise<void>;
@@ -36,6 +37,13 @@ export function useLocationReadiness(): UseLocationReadinessResult {
   const requestPermission = useLocationStore((state) => state.requestPermission);
   const openSettings = useLocationStore((state) => state.openSettings);
  
+  const recheck = useCallback(async (): Promise<void> => {
+    // Wrapped rather than handed out directly, so a press handler can never
+    // pass its event object through as the evaluation trigger.
+    LoggerService.info(`${FILE_NAME}: recheck: re-evaluating readiness on demand`);
+    await evaluate('manual_recheck');
+  }, [evaluate]);
+
   LoggerService.info(`${FILE_NAME}: useLocationReadiness: reading readiness`, { status });
   LoggerService.info(`${FILE_NAME}: useLocationReadiness: returning readiness snapshot`, {
     status,
@@ -50,7 +58,7 @@ export function useLocationReadiness(): UseLocationReadinessResult {
     errorReason,
     isEvaluating,
     isReady: isLocationReady(status),
-    recheck: evaluate,
+    recheck,
     requestPermission,
     openSettings,
   };
@@ -85,7 +93,10 @@ export function useLocationReadinessMonitor(isActive: boolean): void {
     LoggerService.info(
       `${FILE_NAME}: useLocationReadinessMonitor: activating, evaluating readiness`,
     );
-    void evaluate();
+    // The first evaluation of a session is the post-login one — the check that
+    // catches a fake-GPS app that was already running when the executive
+    // signed in, and reports it before any case can be worked.
+    void evaluate('post_login');
 
     const subscription = AppState.addEventListener('change', (nextState: AppStateStatus) => {
       LoggerService.info(`${FILE_NAME}: handleAppStateChange: app state changed`, { nextState });
@@ -97,7 +108,7 @@ export function useLocationReadinessMonitor(isActive: boolean): void {
         return;
       }
       LoggerService.info(`${FILE_NAME}: useLocationReadinessMonitor: app resumed, re-evaluating`);
-      void evaluate();
+      void evaluate('app_resume');
     });
 
     LoggerService.info(`${FILE_NAME}: useLocationReadinessMonitor: app state listener attached`);

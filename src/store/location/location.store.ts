@@ -7,7 +7,11 @@ import type {
   LocationReadinessStatus,
   LocationUnavailableReason,
 } from '@/infrastructure/location';
-import { getMobileAppSettings } from '@/store/reference-data';
+import {
+  flushPendingMockLocationReports,
+  recordMockLocationDetection,
+  resetMockLocationReportThrottle,
+} from './mock-location-reporter';
 
 const FILE_NAME = 'location.store.ts';
 
@@ -18,6 +22,13 @@ const FILE_NAME = 'location.store.ts';
  */
 let latestEvaluationId = 0;
 
+/**
+ * Why readiness is being evaluated. Carried through to a mock-location report
+ * so the back office can tell a fake GPS that was already running at login from
+ * one switched on later.
+ */
+export type LocationEvaluationTrigger = 'post_login' | 'app_resume' | 'manual_recheck';
+
 export interface LocationState {
   readonly status: LocationReadinessStatus;
   /** The last fresh fix, or `null` whenever the status is not `ready`. */
@@ -26,7 +37,7 @@ export interface LocationState {
   readonly errorReason: LocationUnavailableReason | null;
   readonly isEvaluating: boolean;
   readonly lastEvaluatedAt: Date | null;
-  evaluate: () => Promise<void>;
+  evaluate: (trigger?: LocationEvaluationTrigger) => Promise<void>;
   requestPermission: () => Promise<void>;
   openSettings: () => Promise<void>;
   reset: () => void;
@@ -60,7 +71,10 @@ export const useLocationStore = create<LocationState>((set, get) => ({
   isEvaluating: false,
   lastEvaluatedAt: null,
 
-  evaluate: async (): Promise<void> => {
+  evaluate: async (trigger: LocationEvaluationTrigger = 'manual_recheck'): Promise<void> => {
+    // Read before anything overwrites it: a detection that repeats an episode
+    // already reported is throttled rather than re-sent on every app resume.
+    const previousStatus = get().status;
     latestEvaluationId += 1;
     const evaluationId = latestEvaluationId;
     const isStale = (): boolean => {
@@ -94,7 +108,10 @@ export const useLocationStore = create<LocationState>((set, get) => ({
       set({ status, location, errorReason, isEvaluating: false, lastEvaluatedAt: new Date() });
     };
 
-    LoggerService.info(`${FILE_NAME}: evaluate: starting location readiness evaluation`);
+    LoggerService.info(`${FILE_NAME}: evaluate: starting location readiness evaluation`, {
+      trigger,
+      previousStatus,
+    });
     set({ isEvaluating: true });
 
     try {
@@ -139,15 +156,25 @@ export const useLocationStore = create<LocationState>((set, get) => ({
         isMockLocation: location.isMockLocation,
       });
 
-      const { isMockLocationBlockEnabled } = getMobileAppSettings();
-      LoggerService.info(`${FILE_NAME}: evaluate: mock-location policy resolved`, {
-        isMockLocationBlockEnabled,
-      });
-      if (location.isMockLocation && isMockLocationBlockEnabled) {
-        LoggerService.warn(`${FILE_NAME}: evaluate: mock location detected, blocking app actions`);
+      if (location.isMockLocation) {
+        // Always blocked and always reported — there is no configuration that
+        // lets a faked position through. The fake coordinates go up with the
+        // report: they are the evidence.
+        LoggerService.warn(
+          `${FILE_NAME}: evaluate: mock location detected, reporting it and blocking app actions`,
+          { trigger },
+        );
+        void recordMockLocationDetection({
+          detectionStage: trigger,
+          location,
+          isRepeatDetection: previousStatus === 'mock_detected',
+        });
         publish('mock_detected', null, null);
         return;
       }
+
+      // Any detection captured while offline is still owed to the back office.
+      void flushPendingMockLocationReports();
 
       if (location.source !== 'fresh') {
         // A cached fix is not where the field executive is standing now, so it
@@ -230,6 +257,8 @@ export const useLocationStore = create<LocationState>((set, get) => ({
 
   reset: (): void => {
     LoggerService.info(`${FILE_NAME}: reset: clearing location readiness`);
+    // A new session must report a mock location again, even on the same handset.
+    resetMockLocationReportThrottle();
     latestEvaluationId += 1;
     LoggerService.info(`${FILE_NAME}: reset: invalidated any in-flight evaluation`, {
       latestEvaluationId,
