@@ -151,6 +151,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
           });
         }
         setCaseDetail(detail);
+        LoggerService.info(`${FILE_NAME}: case detail: case detail applied`, { detail });
         setVerificationStatus(detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '');
         setRespondentName(detail.respondent?.name ?? '');
         setRespondentRelation(detail.respondent?.relation ?? '');

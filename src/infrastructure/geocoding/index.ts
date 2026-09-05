@@ -1,9 +1,14 @@
-export type { GeocodedAddress, IGeocodingProvider } from './geocoding-provider.interface';
+export type {
+  GeocodedAddress,
+  IGeocodingProvider,
+  ReverseGeocodedAddress,
+} from './geocoding-provider.interface';
 export type {
   GeocodedCoordinates,
-  GeocodedCoordinatesSource,
   GeocodingFailureReason,
   GeocodingProviderConfiguration,
+  GeocodingResultSource,
+  ResolvedAddress,
 } from './geocoding.types';
 export { GeocodingFailedError, isGeocodingFailedError } from './geocoding.errors';
 export {
