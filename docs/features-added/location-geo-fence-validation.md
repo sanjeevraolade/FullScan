@@ -3,6 +3,9 @@
 Implemented 2026-09-04. Adds device-location validation after login and geo-fence gating of the Case
 Details screen, both driven entirely by server-side `mobileAppSettings`.
 
+Updated 2026-09-05: `GeocodingService` gained the reverse direction (coordinates → address) — see §4.
+It is infrastructure only and has no caller yet; nothing about the geo-fence behaviour below changed.
+
 For a step-by-step trace of what runs when — login through to submission — see
 [code-execution-flow.md](code-execution-flow.md).
 
@@ -29,9 +32,9 @@ app change.
 | `src/infrastructure/location/location.errors.ts`               | `LocationUnavailableError` + typed `reason`                       |
 | `src/infrastructure/geocoding/geocoding.types.ts`              | Geocoding result / failure-reason / provider-config types         |
 | `src/infrastructure/geocoding/geocoding.errors.ts`             | `GeocodingFailedError` + typed `reason`                           |
-| `src/infrastructure/geocoding/geocoding-provider.interface.ts` | `IGeocodingProvider` — the vendor seam                            |
-| `src/infrastructure/geocoding/google-geocoding.provider.ts`    | Google Geocoding implementation                                   |
-| `src/infrastructure/geocoding/geocoding.service.ts`            | Provider registry + address cache + offline policy                |
+| `src/infrastructure/geocoding/geocoding-provider.interface.ts` | `IGeocodingProvider` — the vendor seam, both directions           |
+| `src/infrastructure/geocoding/google-geocoding.provider.ts`    | Google Geocoding implementation (forward + reverse)               |
+| `src/infrastructure/geocoding/geocoding.service.ts`            | Provider registry + both caches + offline policy                  |
 | `src/infrastructure/geocoding/index.ts`                        | Barrel                                                            |
 | `src/infrastructure/distance/distance.types.ts`                | `DistanceMethod`, `DistanceResult`, provider config               |
 | `src/infrastructure/distance/distance.interface.ts`            | `IDistanceService`, `IDirectionsDistanceService`                  |
@@ -133,16 +136,43 @@ obtaining_location | mock_detected | ready | error`. `isLocationReady(status)` i
 
 ### `GeocodingService` (`src/infrastructure/geocoding`)
 
-Address → coordinates behind `IGeocodingProvider`. Providers are held in a registry keyed by the
+Both directions behind `IGeocodingProvider`. Providers are held in a registry keyed by the
 `geocoding_provider` setting; `registerGeocodingProvider()` adds or replaces one. Google is the only
 registered implementation, and nothing above the interface mentions it — swapping vendors is one
 server-side setting plus one file.
 
-Cache-first (MMKV, key `geocoding:v1:<provider>:<normalized address>`), which is what makes an
-address-only case usable offline once resolved. A cache miss with no network fails with `offline`; an
-address the provider cannot match fails with `not_found`. Coordinates are never invented. Failures are
-not cached, and normalization (trim/lowercase/collapse whitespace) prevents re-billing the same
-address.
+**`resolveAddressCoordinates` (address → coordinates)** is what the geo-fence uses. Cache-first (MMKV,
+key `geocoding:v1:<provider>:<normalized address>`), which is what makes an address-only case usable
+offline once resolved. A cache miss with no network fails with `offline`; an address the provider
+cannot match fails with `not_found`. Coordinates are never invented. Failures are not cached, and
+normalization (trim/lowercase/collapse whitespace) prevents re-billing the same address.
+
+**`resolveCoordinatesAddress` (coordinates → address)**, added 2026-09-05, is the reverse: a
+human-readable label for a point, intended for a watermark bar or report header. It is deliberately
+**not** an input to any verdict — the coordinates stay the evidence, and no geo-fence decision reads
+it. Same cache-first, never-guess contract and the same `GeocodingFailedError` reasons, plus
+`invalid_coordinates` for an out-of-range point.
+
+Reverse results cache under a **separate** prefix, `geocoding-reverse:v1:<provider>:<lat>,<lng>`, so an
+address string can never collide with a coordinate pair; `clearCache()` (called on logout) drops both.
+The point in that key is **rounded to 4 decimals, ~11 m**: a raw GPS fix never repeats exactly, so
+caching on the exact pair would bill one request per photo, while a grid lets an executive standing at
+one doorstep re-use the address across a burst. That costs nothing evidentially — the exact coordinates
+are what gets recorded; the address is only the label beside them.
+
+**Why the vendor HTTP API and not the device geocoder.** `react-native-geocoder` and friends wrap
+Apple's `CLGeocoder` and Android's `android.location.Geocoder`, which looks like a free offline
+shortcut and is not one. The Android geocoder is backed by Play Services — unavailable on non-GMS
+handsets, and when rate-limited it returns an **empty list**, indistinguishable from "no such address".
+Different handsets and OS versions also answer differently for the same input. Either property is fatal
+for a geo-fence verdict that has to be reproducible in an audit, so both directions go through the
+configured provider's own API and inherit one authority, one key, one cache and one failure taxonomy.
+(The package itself is also dead: last published October 2017, pre-autolinking and pre-New-Architecture,
+against an app on RN 0.86 with `newArchEnabled=true`.)
+
+No caller consumes `resolveCoordinatesAddress` yet — the watermark currently carries latitude,
+longitude, date and time only. Wiring it in needs the address to be **optional** in the overlay, since
+a capture made offline at a point never seen before will legitimately have none.
 
 ### `DistanceService` (`src/infrastructure/distance`)
 
@@ -361,14 +391,18 @@ happens before the executive travels.
 ## 8. Tests and checks executed
 
 - `npx tsc --noEmit` → clean.
-- `npx jest` → **30 suites, 286 tests, all passing** (baseline before this work: 17 suites, 123 tests).
+- `npx jest` → **31 suites, 315 tests, all passing** (30 suites / 286 tests at 2026-09-04, before
+  reverse geocoding; baseline before this work: 17 suites, 123 tests).
 - `npx prettier --check` on every file added → clean.
 
 Coverage added: location support detection; services disabled; all permission states; mock location
 (and the server switch that disables blocking); current-location retrieval and stale-fix rejection;
 Haversine values, symmetry and antimeridian; geo-fence inside / outside / `distance == radius`;
 Directions success, failure, timeout, offline and unconfigured fallbacks; offline calculation; address
-geocoding (provider, cache, offline, not-found, unconfigured, blank, corrupt cache); configuration
+geocoding (provider, cache, offline, not-found, unconfigured, blank, corrupt cache); reverse geocoding
+(provider, grid cache hit at ~1 m jitter and miss at ~2 km, offline with and without cache, not-found,
+out-of-range coordinates, unconfigured, failures not cached, the two caches staying independent under
+`clearCache`); configuration
 loading and strict validation; `locationRetryCount` at 3 and 5; Force Proceed eligibility, consent
 confirmation, cancellation and per-case isolation; the submitted payload
 (`currentLatitude`/`currentLongitude`/`distanceToCaseMeters`/`forceProceed`, on both normal and
@@ -428,7 +462,10 @@ Items 1-3 were decided on 2026-09-04; 4 onwards are still open.
    **This dependency shrinks over time, it does not grow.** Only branch 2 of the case-location
    resolution (§5) needs the key, and every case that gets digitized moves permanently to branch 1.
    Combined with the per-address cache — an address costs at most one lookup ever — geocoding traffic
-   should trend towards zero as the back office fills in coordinates. Worth factoring into how much to
+   should trend towards zero as the back office fills in coordinates. Reverse geocoding, if a caller is
+   ever added for it, does **not** shrink that way: it bills per distinct ~11 m grid cell visited, so
+   budget it separately from the forward direction and keep the same API restriction (reverse is the
+   same Geocoding API and the same key). Worth factoring into how much to
    invest in the proxy: it is a bridge, not permanent infrastructure. Note also that until the key is
    served, branch 2 cases surface `caseDetails.geoFence.unresolvedNotConfigured` ("Address lookup is
    not configured") and cannot be geo-fenced, while branch 1 cases are unaffected.

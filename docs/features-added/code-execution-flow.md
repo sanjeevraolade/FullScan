@@ -254,20 +254,35 @@ _case_ is never depends on where the _device_ is. A case carrying coordinates re
 case carrying only an address has its lookup overlap GPS acquisition rather than queue behind it.
 
 Inside `GeocodingService.resolveAddressCoordinates` —
-[geocoding.service.ts:81](../../src/infrastructure/geocoding/geocoding.service.ts#L81) — the order is
+[geocoding.service.ts:203](../../src/infrastructure/geocoding/geocoding.service.ts#L203) — the order is
 itself deliberate:
 
-| Line  | Step                                | Failure                                    |
-| ----- | ----------------------------------- | ------------------------------------------ |
-| `86`  | blank address                       | `invalid_address`                          |
-| `91`  | provider registry lookup            | `not_configured` (unknown provider id)     |
-| `102` | **cache read**                      | — this is the offline path                 |
-| `107` | `provider.isConfigured()`           | `not_configured` (no API key)              |
-| `114` | `ConnectivityService.isConnected()` | `offline`                                  |
-| `124` | `provider.geocodeAddress()`         | `not_found` / `provider_error` / `timeout` |
+| Line  | Step                                             | Failure                                    |
+| ----- | ------------------------------------------------ | ------------------------------------------ |
+| `214` | blank address                                    | `invalid_address`                          |
+| `219` | `requireProvider()` — registry lookup            | `not_configured` (unknown provider id)     |
+| `221` | **cache read**                                   | — this is the offline path                 |
+| `229` | `requireReachableProvider()` — key, then network | `not_configured` (no API key) / `offline`  |
+| `231` | `provider.geocodeAddress()`                      | `not_found` / `provider_error` / `timeout` |
 
 Cache before key check and before connectivity is what makes an already-resolved address work offline
 and unbilled.
+
+The reverse direction, `GeocodingService.resolveCoordinatesAddress` —
+[geocoding.service.ts:264](../../src/infrastructure/geocoding/geocoding.service.ts#L264) — runs the
+same gauntlet in the same order, which is why the two middle steps are shared functions
+(`requireProvider` at `:63`, `requireReachableProvider` at `:86`) rather than duplicated:
+
+| Line  | Step                                             | Failure                                    |
+| ----- | ------------------------------------------------ | ------------------------------------------ |
+| `273` | `isValidGeoCoordinates()`                        | `invalid_coordinates`                      |
+| `278` | `requireProvider()` — registry lookup            | `not_configured` (unknown provider id)     |
+| `280` | **cache read**, on the rounded point             | — this is the offline path                 |
+| `288` | `requireReachableProvider()` — key, then network | `not_configured` (no API key) / `offline`  |
+| `290` | `provider.reverseGeocodeCoordinates()`           | `not_found` / `provider_error` / `timeout` |
+
+Nothing in the geo-fence path calls it: a reverse-geocoded address is a **label**, never an input to a
+verdict. It is not on any trace in this document yet — no caller exists.
 
 And inside `DistanceService.measureDistance` —
 [distance.service.ts:39](../../src/infrastructure/distance/distance.service.ts#L39):
