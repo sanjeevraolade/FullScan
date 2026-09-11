@@ -127,8 +127,7 @@
     "location": {
       "title": "स्थान का पता",
       "coordinates": "अक्षांश: {{latitude}} | देशांतर: {{longitude}}",
-      "tapHint": "",
-      "getDirections": "दिशा-निर्देश  >",
+      "getDirections": "दिशा-निर्देश",
       "gpsMatch": "जीपीएस मेल: {{distance}}",
       "gpsAlert": "जीपीएस चेतावनी: {{distance}}",
       "distanceMeters": "पते से {{distance}} मीटर दूर",
@@ -140,6 +139,7 @@
       "description": "उम्मीदवार के संपर्क विवरण के दुरुपयोग को रोकने के लिए वास्तविक नंबर कभी नहीं दिखाए जाते। छिपी हुई रिले कॉल शुरू करने के लिए बटन दबाएं।",
       "primaryLabel": "प्राथमिक फ़ोन",
       "secondaryLabel": "द्वितीयक फ़ोन",
+      "callButton": "कॉल करें",
       "callPrimary": "प्राथमिक को कॉल करें",
       "callSecondary": "द्वितीयक को कॉल करें",
       "comingSoon": "छिपी हुई कॉलिंग जल्द ही उपलब्ध होगी।"

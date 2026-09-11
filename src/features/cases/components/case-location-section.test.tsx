@@ -191,6 +191,11 @@ describe('CaseLocationSection', () => {
   it('still offers directions', async () => {
     await renderSection();
 
+    // An icon replaces the old "Directions >" text; the label stays for screen readers.
+    expect(screen.getByTestId('case-details-directions-icon')).toBeTruthy();
+    expect(screen.queryByText('Directions')).toBeNull();
+    expect(screen.getByLabelText('Directions')).toBeTruthy();
+
     await fireEvent.press(screen.getByTestId('case-details-location-link'));
     expect(onGetDirections).toHaveBeenCalledTimes(1);
   });

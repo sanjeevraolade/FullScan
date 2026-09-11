@@ -127,8 +127,7 @@
     "location": {
       "title": "Location Address",
       "coordinates": "Lat: {{latitude}} | Long: {{longitude}}",
-      "tapHint": "",
-      "getDirections": "Directions  >",
+      "getDirections": "Directions",
       "gpsMatch": "GPS Match: {{distance}}",
       "gpsAlert": "GPS Alert: {{distance}}",
       "distanceMeters": "{{distance}}m from address",
@@ -140,6 +139,7 @@
       "description": "Actual numbers are never visible to prevent misuse of candidate contact details. Tap buttons to initiate masked relay calls.",
       "primaryLabel": "Primary Phone",
       "secondaryLabel": "Secondary Phone",
+      "callButton": "Call",
       "callPrimary": "Call Primary",
       "callSecondary": "Call Secondary",
       "comingSoon": "Masked calling is coming soon."

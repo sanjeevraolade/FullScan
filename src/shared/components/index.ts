@@ -19,6 +19,7 @@ export { LogoutIcon } from './icons/logout-icon';
 export { BriefcaseIcon } from './icons/briefcase-icon';
 export { PersonIcon } from './icons/person-icon';
 export { MapPinIcon } from './icons/map-pin-icon';
+export { DirectionsIcon } from './icons/directions-icon';
 export { CameraIcon } from './icons/camera-icon';
 export { HomeIcon } from './icons/home-icon';
 export { ClockIcon } from './icons/clock-icon';

@@ -381,6 +381,7 @@ export function CaseDetailsScreen(): ReactElement {
                   maskedSecondaryPhone={caseDetail.maskedSecondaryPhone}
                   onCallPrimary={handleCallPrimary}
                   onCallSecondary={handleCallSecondary}
+                  isReadOnly={isReadOnly}
                 />
 
                 <CaseInstructionsSection

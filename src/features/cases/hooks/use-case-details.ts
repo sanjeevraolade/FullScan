@@ -215,6 +215,13 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
   useEffect(() => {
     if (!caseDetail) return;
+    // A completed case shows what was submitted — a leftover local draft must never overlay it.
+    if (isReadOnlyCaseBucket(caseDetail.bucket)) {
+      LoggerService.info(`${FILE_NAME}: useCaseDetails: read-only case — skipping draft restore`, { caseId });
+      setHasDraft(false);
+      setDraftSavedAt(null);
+      return;
+    }
     LoggerService.info(`${FILE_NAME}: useCaseDetails: checking for draft`, { caseId });
     const draft = DraftStorageService.loadDraft(caseId);
     if (draft) {
@@ -339,6 +346,10 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
   const submit = useCallback(
     (onSubmitted: () => void): void => {
+      if (isReadOnly) {
+        LoggerService.warn(`${FILE_NAME}: submit: refused — case is read-only`, { caseId });
+        return;
+      }
       LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, { caseId, verificationStatus });
       setIsSubmitting(true);
       setSubmitError(null);
@@ -433,6 +444,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
       insufficientReason,
       insufficientRemarks,
       isInsufficientSectionVisible,
+      isReadOnly,
       isSignatureCaptured,
       isUtvSectionVisible,
       isVerifiedResidenceSectionVisible,
@@ -448,6 +460,10 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
   const saveDraft = useCallback((): void => {
     if (!caseDetail) {
       LoggerService.warn(`${FILE_NAME}: saveDraft: no case detail — cannot save draft`, { caseId });
+      return;
+    }
+    if (isReadOnly) {
+      LoggerService.warn(`${FILE_NAME}: saveDraft: refused — case is read-only`, { caseId });
       return;
     }
     LoggerService.info(`${FILE_NAME}: saveDraft: saving draft`, { caseId });
@@ -475,6 +491,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
   }, [
     caseDetail,
     caseId,
+    isReadOnly,
     verificationStatus,
     utvReason,
     utvRemarks,

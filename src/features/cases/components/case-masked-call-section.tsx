@@ -12,6 +12,8 @@ export interface CaseMaskedCallSectionProps {
   readonly maskedSecondaryPhone: string;
   readonly onCallPrimary: () => void;
   readonly onCallSecondary: () => void;
+  /** Completed cases are view-only: the numbers stay visible but calling is disabled. */
+  readonly isReadOnly?: boolean;
 }
 
 /** Section 3 — masked primary/secondary phone actions; real numbers are never shown. */
@@ -20,6 +22,7 @@ export function CaseMaskedCallSection({
   maskedSecondaryPhone,
   onCallPrimary,
   onCallSecondary,
+  isReadOnly = false,
 }: CaseMaskedCallSectionProps): ReactElement {
   const { t } = useTranslation();
 
@@ -27,6 +30,7 @@ export function CaseMaskedCallSection({
   LoggerService.info(`${FILE_NAME}: CaseMaskedCallSection: rendering`, {
     hasPrimaryPhone: maskedPrimaryPhone.trim().length > 0,
     hasSecondaryPhone: maskedSecondaryPhone.trim().length > 0,
+    isReadOnly,
   });
 
   const handleCallPrimary = (): void => {
@@ -49,14 +53,14 @@ export function CaseMaskedCallSection({
       sx={{ _dark: { bg: '$backgroundDark900', borderColor: '$borderDark700' } }}
     >
       <VStack space="sm">
-        <HStack justifyContent="space-between" alignItems="center">
-          <HStack space="xs" alignItems="center">
+        <HStack justifyContent="space-between" alignItems="center" space="sm">
+          <HStack space="xs" alignItems="center" flex={1}>
             <Icon as={PhoneIcon} size="sm" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }} />
-            <Text size="xs" fontWeight="$bold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
+            <Text size="xs" fontWeight="$bold" color="$textLight900" flexShrink={1} sx={{ _dark: { color: '$textDark0' } }}>
               {t('caseDetails.call.title')}
             </Text>
           </HStack>
-          <Badge action="success" size="sm" borderRadius="$md">
+          <Badge action="success" size="sm" borderRadius="$md" flexShrink={0}>
             <BadgeText textTransform="none">{t('caseDetails.call.privacyLock')}</BadgeText>
           </Badge>
         </HStack>
@@ -73,10 +77,12 @@ export function CaseMaskedCallSection({
             borderWidth="$1"
             borderColor="$borderLight200"
             borderRadius="$xl"
+            space="sm"
             p="$2.5"
             sx={{ _dark: { bg: '$backgroundDark800', borderColor: '$borderDark700' } }}
           >
-            <VStack>
+            {/* flex={1} lets long label/number text wrap instead of pushing the call button off screen. */}
+            <VStack flex={1}>
               <Text size="2xs" fontWeight="$bold" color="$textLight400" textTransform="uppercase">
                 {t('caseDetails.call.primaryLabel')}
               </Text>
@@ -88,12 +94,14 @@ export function CaseMaskedCallSection({
               action="positive"
               size="sm"
               borderRadius="$lg"
+              flexShrink={0}
               onPress={handleCallPrimary}
+              isDisabled={isReadOnly}
               accessibilityLabel={t('caseDetails.call.callPrimary')}
               testID="case-details-call-primary"
             >
               <ButtonIcon as={PhoneIcon} mr="$1" />
-              <ButtonText>{t('caseDetails.call.callPrimary')}</ButtonText>
+              <ButtonText>{t('caseDetails.call.callButton')}</ButtonText>
             </Button>
           </HStack>
 
@@ -104,10 +112,12 @@ export function CaseMaskedCallSection({
             borderWidth="$1"
             borderColor="$borderLight200"
             borderRadius="$xl"
+            space="sm"
             p="$2.5"
             sx={{ _dark: { bg: '$backgroundDark800', borderColor: '$borderDark700' } }}
           >
-            <VStack>
+            {/* flex={1} lets long label/number text wrap instead of pushing the call button off screen. */}
+            <VStack flex={1}>
               <Text size="2xs" fontWeight="$bold" color="$textLight400" textTransform="uppercase">
                 {t('caseDetails.call.secondaryLabel')}
               </Text>
@@ -118,12 +128,14 @@ export function CaseMaskedCallSection({
             <Button
               size="sm"
               borderRadius="$lg"
+              flexShrink={0}
               onPress={handleCallSecondary}
+              isDisabled={isReadOnly}
               accessibilityLabel={t('caseDetails.call.callSecondary')}
               testID="case-details-call-secondary"
             >
               <ButtonIcon as={PhoneIcon} mr="$1" />
-              <ButtonText>{t('caseDetails.call.callSecondary')}</ButtonText>
+              <ButtonText>{t('caseDetails.call.callButton')}</ButtonText>
             </Button>
           </HStack>
         </VStack>

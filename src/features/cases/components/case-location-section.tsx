@@ -21,7 +21,7 @@ import {
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { MapPinIcon, RefreshIcon } from '@/shared/components';
+import { DirectionsIcon, MapPinIcon, RefreshIcon } from '@/shared/components';
 import type { GeoCoordinates } from '@/core/types';
 import type { DistanceMethod } from '@/infrastructure/distance';
 import type { GeocodingFailureReason } from '@/infrastructure/geocoding';
@@ -268,26 +268,18 @@ export function CaseLocationSection({
           accessibilityLabel={t('caseDetails.location.getDirections')}
           testID="case-details-location-link"
         >
-          <VStack space="xs">
-            <Text size="sm" fontWeight="$medium" color="$textLight800" sx={{ _dark: { color: '$textDark100' } }}>
+          <HStack space="sm" alignItems="center">
+            <Text flex={1} size="sm" fontWeight="$medium" color="$textLight800" sx={{ _dark: { color: '$textDark100' } }}>
               {address}
             </Text>
-            <HStack
-              justifyContent="space-between"
-              alignItems="center"
-              pt="$1"
-              borderTopWidth="$1"
-              borderTopColor="$primary200"
-              sx={{ _dark: { borderTopColor: '$primary800' } }}
-            >
-              <Text size="2xs" fontWeight="$bold" color="$primary600" sx={{ _dark: { color: '$primary300' } }}>
-                {t('caseDetails.location.tapHint')}
-              </Text>
-              <Text size="2xs" fontWeight="$bold" color="$primary600" sx={{ _dark: { color: '$primary300' } }}>
-                {t('caseDetails.location.getDirections')}
-              </Text>
-            </HStack>
-          </VStack>
+            <Icon
+              as={DirectionsIcon}
+              size="md"
+              color="$primary600"
+              sx={{ _dark: { color: '$primary300' } }}
+              testID="case-details-directions-icon"
+            />
+          </HStack>
         </Pressable>
 
         {isBusy ? (

@@ -41,8 +41,12 @@ Cases flow through four status buckets, each with different access rules:
 #### 4. Completed Case (Verified)
 - **What's shown**: All sections visible for review
 - **Editability**: All form fields are disabled and read-only
+- **Calling**: Masked numbers stay visible, but Call Primary / Call Secondary are disabled
+- **Drafts**: A leftover local draft is never restored — the submitted values are shown
 - **Action button**: "This case is read-only and cannot be edited" alert message
-- **Status**: Cannot be modified further
+- **Status**: Cannot be modified further — `useCaseDetails` also refuses `submit` and `saveDraft`
+  for a read-only case, so a stray call can't resubmit it
+- **Geo-fence**: Not applied (validation is Pending-only), so a completed case can be reviewed anywhere
 
 ## Implementation Details
 

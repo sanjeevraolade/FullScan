@@ -127,8 +127,7 @@
     "location": {
       "title": "స్థాన చిరునామా",
       "coordinates": "అక్షాంశం: {{latitude}} | రేఖాంశం: {{longitude}}",
-      "tapHint": "",
-      "getDirections": "దిశలు  >",
+      "getDirections": "దిశలు",
       "gpsMatch": "GPS సరిపోలిక: {{distance}}",
       "gpsAlert": "GPS హెచ్చరిక: {{distance}}",
       "distanceMeters": "చిరునామా నుండి {{distance}} మీటర్లు దూరంలో",
@@ -140,6 +139,7 @@
       "description": "అభ్యర్థి సంప్రదింపు వివరాల దుర్వినియోగాన్ని నివారించడానికి అసలు నంబర్లు ఎప్పుడూ కనిపించవు. మాస్క్ చేసిన రిలే కాల్‌లను ప్రారంభించడానికి బటన్‌లను నొక్కండి.",
       "primaryLabel": "ప్రాథమిక ఫోన్",
       "secondaryLabel": "ద్వితీయ ఫోన్",
+      "callButton": "కాల్ చేయండి",
       "callPrimary": "ప్రాథమికానికి కాల్ చేయండి",
       "callSecondary": "ద్వితీయానికి కాల్ చేయండి",
       "comingSoon": "మాస్క్ చేసిన కాలింగ్ త్వరలో అందుబాటులోకి వస్తుంది."

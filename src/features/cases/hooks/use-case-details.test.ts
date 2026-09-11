@@ -5,6 +5,8 @@ import { useReferenceDataStore } from '@/store/reference-data';
 import type { Case, CaseDetail } from '@/domain/case';
 import type { ReferenceData } from '@/domain/reference-data';
 
+import { DraftStorageService } from '../services/draft-storage';
+import type { CaseDraft } from '../services/draft-storage';
 import { useCaseDetails } from './use-case-details';
 
 jest.mock('@/repositories/case-repository');
@@ -243,5 +245,67 @@ describe('useCaseDetails', () => {
     expect(result.current.isNewCase).toBe(false);
     expect(result.current.shouldShowDetailFormSections).toBe(true);
     expect(result.current.isReadOnly).toBe(true);
+  });
+
+  describe('completed (view-only) case', () => {
+    const leftoverDraft: CaseDraft = {
+      caseId: 'case-1',
+      verificationStatus: 'utv',
+      utvReason: 'shifted',
+      utvRemarks: '',
+      insufficientReason: '',
+      insufficientRemarks: '',
+      residenceType: 'rented',
+      addressType: 'present',
+      respondentName: 'Draft Respondent',
+      respondentRelation: '',
+      isSignatureCaptured: false,
+      selectedPhotoTag: 'door_number',
+      capturedPhotos: [],
+      geoFenceBypassConsent: null,
+      savedAt: '2026-09-10T10:00:00.000Z',
+    };
+
+    afterEach(() => {
+      DraftStorageService.deleteDraft('case-1');
+    });
+
+    it('shows the submitted values, never a leftover local draft', async () => {
+      DraftStorageService.saveDraft(leftoverDraft);
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(
+        buildCaseDetail({
+          bucket: 'completed',
+          selectedVerificationStatus: 'verified_clear',
+          respondent: { name: 'Anita', relation: 'Mother' },
+        }),
+      );
+
+      const { result } = await renderHook(() => useCaseDetails('case-1'));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      expect(result.current.verificationStatus).toBe('verified_clear');
+      expect(result.current.respondentName).toBe('Anita');
+      expect(result.current.hasDraft).toBe(false);
+      expect(result.current.draftSavedAt).toBeNull();
+    });
+
+    it('refuses to submit or save a draft', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
+
+      const { result } = await renderHook(() => useCaseDetails('case-1'));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+        result.current.saveDraft();
+      });
+
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+      expect(onSubmitted).not.toHaveBeenCalled();
+      expect(result.current.isSubmitting).toBe(false);
+      expect(DraftStorageService.loadDraft('case-1')).toBeNull();
+      expect(result.current.hasDraft).toBe(false);
+    });
   });
 });

@@ -181,6 +181,35 @@ describe('CaseDetailsScreen geo-fence gating', () => {
     expect(screen.getByText('Select Verification Status Outcome')).toBeTruthy();
     expect(screen.getByText('Photo Evidence Capture (Camera Only)')).toBeTruthy();
     expect(screen.getByTestId('case-details-submit-button')).toBeTruthy();
+    expect(screen.getByTestId('case-details-call-primary')).not.toBeDisabled();
+    expect(screen.getByTestId('case-details-call-secondary')).not.toBeDisabled();
+    // The row labels already say Primary/Secondary, so both buttons just read "Call" —
+    // screen readers still get the distinguishing labels.
+    expect(screen.getAllByText('Call')).toHaveLength(2);
+    expect(screen.getByLabelText('Call Primary')).toBeTruthy();
+    expect(screen.getByLabelText('Call Secondary')).toBeTruthy();
+  });
+
+  it('makes a completed case view-only with calling disabled', async () => {
+    // A radius the device is outside of: completed cases aren't geo-fenced, so it must not lock them.
+    seedGeoFenceSettings(50);
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
+
+    await renderCaseDetails();
+
+    await waitFor(() => expect(screen.getByTestId('case-details-read-only-notice')).toBeTruthy());
+    expect(screen.getByText('Masked Phone Actions')).toBeTruthy();
+    expect(screen.getByTestId('case-details-call-primary')).toBeDisabled();
+    expect(screen.getByTestId('case-details-call-secondary')).toBeDisabled();
+    expect(screen.getByTestId('case-details-open-camera-button')).toBeDisabled();
+    expect(screen.queryByTestId('case-details-submit-button')).toBeNull();
+    expect(screen.queryByTestId('case-details-save-draft-button')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('case-details-call-primary'));
+    await fireEvent.press(screen.getByTestId('case-details-call-secondary'));
+    expect(screen.queryByTestId('case-details-notice')).toBeNull();
   });
 
   it('shows only Case Information and Case Location while outside the geo-fence', async () => {

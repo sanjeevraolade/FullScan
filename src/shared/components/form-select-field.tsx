@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import type { ReactElement } from 'react';
 import {
   ChevronDownIcon,
@@ -36,6 +36,11 @@ export interface FormSelectFieldProps {
   readonly isDisabled?: boolean;
 }
 
+function findOptionLabel(options: readonly FormSelectOption[], value: string): string | undefined {
+  LoggerService.info(`${FILE_NAME}: findOptionLabel: resolving option label`, { hasValue: value.length > 0 });
+  return options.find((option) => option.value === value)?.label;
+}
+
 /**
  * Labelled dropdown built from Gluestack's Select — the option-list
  * counterpart to `FormTextField`, reused across every status/reason/tag
@@ -63,8 +68,30 @@ export function FormSelectField({
     LoggerService.warn(`${FILE_NAME}: FormSelectField: rendering with no options`, { fieldId });
   }
 
+  const selectedOptionLabel = findOptionLabel(options, value);
+
+  if (value.length > 0 && selectedOptionLabel === undefined && options.length > 0) {
+    LoggerService.warn(`${FILE_NAME}: FormSelectField: selected value matches no option`, { fieldId });
+  }
+
+  // Gluestack's SelectInput shows its own internal label, which it only learns
+  // from `initialLabel` at mount or from an item press — for a value supplied
+  // by the parent it falls back to printing the raw code (e.g. "house_photo_1").
+  // Track the label Select is currently showing and remount it (via `key`)
+  // whenever that drifts from the label for `value`: options loaded late, the
+  // value changed from outside, or the language switched. A normal item press
+  // already updated the internal label, so it doesn't remount mid-close.
+  const [displayedLabel, setDisplayedLabel] = useState({ label: selectedOptionLabel, revision: 0 });
+
+  if (displayedLabel.label !== selectedOptionLabel) {
+    LoggerService.info(`${FILE_NAME}: FormSelectField: re-syncing displayed label`, { fieldId });
+    setDisplayedLabel({ label: selectedOptionLabel, revision: displayedLabel.revision + 1 });
+  }
+
   const handleValueChange = (nextValue: string): void => {
     LoggerService.info(`${FILE_NAME}: FormSelectField.handleValueChange: value changed`, { fieldId });
+    const nextLabel = findOptionLabel(options, nextValue);
+    setDisplayedLabel((previous) => ({ label: nextLabel, revision: previous.revision }));
     onValueChange(nextValue);
   };
 
@@ -73,9 +100,20 @@ export function FormSelectField({
       <FormControlLabel>
         <FormControlLabelText>{label}</FormControlLabelText>
       </FormControlLabel>
-      <Select selectedValue={value} onValueChange={handleValueChange} isDisabled={isDisabled}>
+      <Select
+        key={displayedLabel.revision}
+        selectedValue={value}
+        initialLabel={selectedOptionLabel ?? ''}
+        onValueChange={handleValueChange}
+        isDisabled={isDisabled}
+      >
         <SelectTrigger variant="outline" size="sm" testID={`${fieldId}-select`} opacity={isDisabled ? 0.6 : 1}>
-          <SelectInput placeholder={placeholder} accessibilityLabel={label} flex={1} />
+          <SelectInput
+            placeholder={placeholder}
+            accessibilityLabel={label}
+            flex={1}
+            testID={`${fieldId}-select-input`}
+          />
           <SelectIcon as={ChevronDownIcon} mr="$3" />
         </SelectTrigger>
         <SelectPortal>
