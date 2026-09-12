@@ -131,6 +131,7 @@
       "gpsMatch": "GPS సరిపోలిక: {{distance}}",
       "gpsAlert": "GPS హెచ్చరిక: {{distance}}",
       "distanceMeters": "చిరునామా నుండి {{distance}} మీటర్లు దూరంలో",
+      "distanceKilometers": "చిరునామా నుండి {{distance}} కి.మీ దూరంలో",
       "directionsComingSoon": "టర్న్-బై-టర్న్ దిశలు త్వరలో అందుబాటులోకి వస్తాయి."
     },
     "call": {

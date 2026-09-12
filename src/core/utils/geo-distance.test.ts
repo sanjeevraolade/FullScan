@@ -1,4 +1,4 @@
-import { calculateHaversineDistanceMeters } from './geo-distance';
+import { calculateHaversineDistanceMeters, resolveDistanceDisplayValue } from './geo-distance';
 
 /**
  * Reference values come from the same great-circle formula applied to
@@ -52,5 +52,29 @@ describe('calculateHaversineDistanceMeters', () => {
 
     // ~2.2km apart, not most of the way around the planet.
     expect(distance).toBeLessThan(3000);
+  });
+});
+
+describe('resolveDistanceDisplayValue', () => {
+  it('keeps sub-kilometre distances in whole metres', () => {
+    expect(resolveDistanceDisplayValue(42.4)).toEqual({ unit: 'meters', value: 42 });
+    expect(resolveDistanceDisplayValue(999.4)).toEqual({ unit: 'meters', value: 999 });
+  });
+
+  it('switches to kilometres at one kilometre', () => {
+    expect(resolveDistanceDisplayValue(1000)).toEqual({ unit: 'kilometers', value: 1 });
+  });
+
+  it('rounds kilometres to one decimal', () => {
+    expect(resolveDistanceDisplayValue(2100)).toEqual({ unit: 'kilometers', value: 2.1 });
+    expect(resolveDistanceDisplayValue(15_460)).toEqual({ unit: 'kilometers', value: 15.5 });
+  });
+
+  it('reports zero metres for a non-finite distance rather than NaN in the UI', () => {
+    expect(resolveDistanceDisplayValue(Number.NaN)).toEqual({ unit: 'meters', value: 0 });
+    expect(resolveDistanceDisplayValue(Number.POSITIVE_INFINITY)).toEqual({
+      unit: 'meters',
+      value: 0,
+    });
   });
 });

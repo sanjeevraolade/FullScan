@@ -58,3 +58,44 @@ export function calculateHaversineDistanceMeters(from: GeoCoordinates, to: GeoCo
   });
   return distanceMeters;
 }
+
+/**
+ * At and above this, a distance reads better in kilometres: "2.1 km from
+ * address" instead of a four-digit metre count nobody parses at a glance.
+ * Below it, metres stay the more precise and more useful unit — a geo-fence
+ * radius is tens or hundreds of metres, so "0.2 km" would lose the detail
+ * that matters when the executive is just outside the fence.
+ */
+const KILOMETER_DISPLAY_THRESHOLD_METERS = 1000;
+
+/** Which unit a distance should be shown in, and its value already rounded for that unit. */
+export interface DistanceDisplayValue {
+  readonly unit: 'meters' | 'kilometers';
+  readonly value: number;
+}
+
+/**
+ * Picks the unit a measured distance is displayed in. Presentation only —
+ * every stored, submitted and evaluated distance stays in metres.
+ */
+export function resolveDistanceDisplayValue(distanceMeters: number): DistanceDisplayValue {
+  LoggerService.info(`${FILE_NAME}: resolveDistanceDisplayValue: entry`, { distanceMeters });
+
+  if (!Number.isFinite(distanceMeters)) {
+    LoggerService.warn(
+      `${FILE_NAME}: resolveDistanceDisplayValue: non-finite distance — reporting 0m`,
+    );
+    return { unit: 'meters', value: 0 };
+  }
+
+  if (Math.abs(distanceMeters) < KILOMETER_DISPLAY_THRESHOLD_METERS) {
+    const value = Math.round(distanceMeters);
+    LoggerService.info(`${FILE_NAME}: resolveDistanceDisplayValue: resolved to metres`, { value });
+    return { unit: 'meters', value };
+  }
+
+  // One decimal: 100m of precision is all a kilometre-scale distance needs.
+  const value = Math.round(distanceMeters / 100) / 10;
+  LoggerService.info(`${FILE_NAME}: resolveDistanceDisplayValue: resolved to kilometres`, { value });
+  return { unit: 'kilometers', value };
+}

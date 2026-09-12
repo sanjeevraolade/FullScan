@@ -23,6 +23,7 @@ import { useTranslation } from 'react-i18next';
 import { LoggerService } from '@/infrastructure/logger';
 import { DirectionsIcon, MapPinIcon, RefreshIcon } from '@/shared/components';
 import type { GeoCoordinates } from '@/core/types';
+import { resolveDistanceDisplayValue } from '@/core/utils';
 import type { DistanceMethod } from '@/infrastructure/distance';
 import type { GeocodingFailureReason } from '@/infrastructure/geocoding';
 
@@ -211,14 +212,27 @@ export function CaseLocationSection({
     });
   }
 
+  /*
+   * Metres below a kilometre, kilometres above it — a distance outside the
+   * fence is often kilometre-scale, where a raw metre count reads badly.
+   * Only the label changes: the measured value stays in metres everywhere.
+   */
+  const distanceDisplay = distanceMeters === null ? null : resolveDistanceDisplayValue(distanceMeters);
   const distanceLabel =
-    distanceMeters === null
+    distanceDisplay === null
       ? null
-      : t('caseDetails.location.distanceMeters', { distance: Math.round(distanceMeters) });
+      : t(
+          distanceDisplay.unit === 'kilometers'
+            ? 'caseDetails.location.distanceKilometers'
+            : 'caseDetails.location.distanceMeters',
+          { distance: distanceDisplay.value },
+        );
 
   LoggerService.info(`${FILE_NAME}: CaseLocationSection: resolved distance label`, {
     hasDistanceLabel: distanceLabel !== null,
     distanceMeters,
+    distanceUnit: distanceDisplay?.unit ?? null,
+    distanceValue: distanceDisplay?.value ?? null,
   });
 
   return (

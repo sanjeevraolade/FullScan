@@ -86,7 +86,7 @@ describe('CaseLocationSection', () => {
 
     expect(
       screen.getByText(
-        'GPS Alert: 2100m from address. You must be within 200m of the address to continue.',
+        'GPS Alert: 2.1 km from address. You must be within 200m of the address to continue.',
       ),
     ).toBeTruthy();
 

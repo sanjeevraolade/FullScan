@@ -131,6 +131,7 @@
       "gpsMatch": "GPS Match: {{distance}}",
       "gpsAlert": "GPS Alert: {{distance}}",
       "distanceMeters": "{{distance}}m from address",
+      "distanceKilometers": "{{distance}} km from address",
       "directionsComingSoon": "Turn-by-turn directions are coming soon."
     },
     "call": {

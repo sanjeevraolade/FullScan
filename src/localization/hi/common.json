@@ -131,6 +131,7 @@
       "gpsMatch": "जीपीएस मेल: {{distance}}",
       "gpsAlert": "जीपीएस चेतावनी: {{distance}}",
       "distanceMeters": "पते से {{distance}} मीटर दूर",
+      "distanceKilometers": "पते से {{distance}} किमी दूर",
       "directionsComingSoon": "टर्न-बाय-टर्न दिशा-निर्देश जल्द ही उपलब्ध होंगे।"
     },
     "call": {
