@@ -118,7 +118,13 @@ export function CaseCameraScreen(): ReactElement {
     // session's captures) — CaseDetails treats params as its source of
     // truth rather than accumulating locally, so a partial/delta payload
     // here would silently drop everything captured before this visit.
-    navigation.navigate(ROUTE_NAMES.CASE_DETAILS, {
+    //
+    // `popTo`, never `navigate`: since React Navigation 7 `navigate` pushes a
+    // second Case Details on top of this camera instead of returning to the
+    // one that opened it, which leaves the camera underneath and makes the
+    // next Back re-open it. `popTo` unwinds to the existing screen and hands
+    // it these params.
+    navigation.popTo(ROUTE_NAMES.CASE_DETAILS, {
       caseId: params.caseId,
       capturedPhotos: [
         ...params.existingPhotos,

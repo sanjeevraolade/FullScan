@@ -1,6 +1,7 @@
 import { LoggerService } from '@/infrastructure/logger';
 import { KeyValueStorageService } from '@/infrastructure/storage';
-import type { ResidenceType, AddressType, CapturedPhotoEvidence } from '@/domain/case';
+import type { ResidenceType, AddressType } from '@/domain/case';
+import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import type { GeoFenceBypassConsent } from '@/domain/geo-fence';
 
 const FILE_NAME = 'draft-storage.ts';
@@ -19,7 +20,13 @@ export interface CaseDraft {
   readonly respondentRelation: string;
   readonly isSignatureCaptured: boolean;
   readonly selectedPhotoTag: string;
-  readonly capturedPhotos: readonly CapturedPhotoEvidence[];
+  /*
+   * Kept in the JSON-safe navigation shape rather than the domain entity: a
+   * draft round-trips through MMKV as JSON, which would turn a `Date` into a
+   * string, and this is exactly the shape Case Details hands back to the
+   * screen's navigation params on restore.
+   */
+  readonly capturedPhotos: readonly SerializedCapturedPhotoEvidence[];
   readonly geoFenceBypassConsent: GeoFenceBypassConsent | null;
   readonly savedAt: string;
 }

@@ -3,6 +3,7 @@ import { act, renderHook, waitFor } from '@testing-library/react-native';
 import * as caseRepository from '@/repositories/case-repository';
 import { useReferenceDataStore } from '@/store/reference-data';
 import type { Case, CaseDetail } from '@/domain/case';
+import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import type { ReferenceData } from '@/domain/reference-data';
 
 import { DraftStorageService } from '../services/draft-storage';
@@ -10,6 +11,9 @@ import type { CaseDraft } from '../services/draft-storage';
 import { useCaseDetails } from './use-case-details';
 
 jest.mock('@/repositories/case-repository');
+
+/** A case with no evidence captured this session — a stable reference so the hook does not re-render on it. */
+const NO_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
 
 const mockReferenceData: ReferenceData = {
   verificationTypeStatuses: [
@@ -100,7 +104,7 @@ describe('useCaseDetails', () => {
       buildCaseDetail({ selectedVerificationStatus: 'utv', respondent: { name: 'Anita', relation: 'Mother' } }),
     );
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.caseDetail?.caseRef).toBe('FS-2026-00001');
@@ -112,7 +116,7 @@ describe('useCaseDetails', () => {
   it('defaults the status and photo tag to the first reference-data option when none is set', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.verificationStatus).toBe('verified_clear');
@@ -122,7 +126,7 @@ describe('useCaseDetails', () => {
   it('surfaces a network error key when loading fails', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockRejectedValue(new Error('boom'));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.loadError).toBe('network');
@@ -132,7 +136,7 @@ describe('useCaseDetails', () => {
   it('shows the Insufficient section only when that status is selected', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isInsufficientSectionVisible).toBe(false);
@@ -150,7 +154,7 @@ describe('useCaseDetails', () => {
       buildCaseDetail({ coordinates: null }),
     );
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -164,7 +168,7 @@ describe('useCaseDetails', () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
     jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -189,7 +193,7 @@ describe('useCaseDetails', () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
     jest.mocked(caseRepository.submitVerificationOutcome).mockRejectedValue(new Error('boom'));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const onSubmitted = jest.fn();
@@ -206,7 +210,7 @@ describe('useCaseDetails', () => {
   it('identifies a new bucket case and hides detail form sections', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isNewCase).toBe(true);
@@ -217,7 +221,7 @@ describe('useCaseDetails', () => {
   it('marks a pending bucket case as editable with all sections visible', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'pending' }));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isNewCase).toBe(false);
@@ -228,7 +232,7 @@ describe('useCaseDetails', () => {
   it('marks a beyondTat bucket case as editable with all sections visible', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'beyondTat' }));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isNewCase).toBe(false);
@@ -239,12 +243,131 @@ describe('useCaseDetails', () => {
   it('marks a completed bucket case as read-only with all sections visible', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1'));
+    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     expect(result.current.isNewCase).toBe(false);
     expect(result.current.shouldShowDetailFormSections).toBe(true);
     expect(result.current.isReadOnly).toBe(true);
+  });
+
+  describe('unsaved changes tracking', () => {
+    afterEach(() => {
+      DraftStorageService.deleteDraft('case-1');
+    });
+
+    it('reports a freshly loaded case as clean', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('reports unsaved changes once an answer is entered', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.setRespondentName('Anita');
+      });
+
+      expect(result.current.hasUnsavedChanges).toBe(true);
+    });
+
+    it('goes back to clean after the draft is saved', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.selectUtvReason('shifted');
+      });
+      expect(result.current.hasUnsavedChanges).toBe(true);
+
+      await act(async () => {
+        result.current.saveDraft();
+      });
+
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('reports changes again when the form moves away from the saved draft', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.saveDraft();
+      });
+      await act(async () => {
+        result.current.setUtvRemarks('Nobody at the address.');
+      });
+
+      expect(result.current.hasUnsavedChanges).toBe(true);
+    });
+
+    it('treats a restored draft as the saved state, not as unsaved work', async () => {
+      DraftStorageService.saveDraft({
+        caseId: 'case-1',
+        verificationStatus: 'utv',
+        utvReason: 'shifted',
+        utvRemarks: 'Family moved out.',
+        insufficientReason: '',
+        insufficientRemarks: '',
+        residenceType: 'rented',
+        addressType: 'present',
+        respondentName: 'Anita',
+        respondentRelation: 'Mother',
+        isSignatureCaptured: false,
+        selectedPhotoTag: 'door_number',
+        capturedPhotos: [],
+        geoFenceBypassConsent: null,
+        savedAt: '2026-09-10T10:00:00.000Z',
+      });
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.hasDraft).toBe(true));
+
+      expect(result.current.utvRemarks).toBe('Family moved out.');
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('never reports unsaved changes on a read-only case', async () => {
+      jest
+        .mocked(caseRepository.fetchCaseDetail)
+        .mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.setRespondentName('Anita');
+      });
+
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
+
+    it('never reports unsaved changes on a not-yet-accepted case', async () => {
+      jest
+        .mocked(caseRepository.fetchCaseDetail)
+        .mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.setRespondentName('Anita');
+      });
+
+      expect(result.current.hasUnsavedChanges).toBe(false);
+    });
   });
 
   describe('completed (view-only) case', () => {
@@ -280,7 +403,7 @@ describe('useCaseDetails', () => {
         }),
       );
 
-      const { result } = await renderHook(() => useCaseDetails('case-1'));
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       expect(result.current.verificationStatus).toBe('verified_clear');
@@ -292,7 +415,7 @@ describe('useCaseDetails', () => {
     it('refuses to submit or save a draft', async () => {
       jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'completed' }));
 
-      const { result } = await renderHook(() => useCaseDetails('case-1'));
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       const onSubmitted = jest.fn();

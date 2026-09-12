@@ -7,7 +7,8 @@ import {
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
 } from '@/domain/case';
-import type { AddressType, CaseDetail, ResidenceType, CapturedPhotoEvidence } from '@/domain/case';
+import type { AddressType, CaseDetail, ResidenceType } from '@/domain/case';
+import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import { useReferenceDataStore } from '@/store/reference-data';
 import { useLocationStore } from '@/store/location';
 import type { ReferenceData } from '@/domain/reference-data';
@@ -24,6 +25,66 @@ const FILE_NAME = 'use-case-details.ts';
 
 const DEFAULT_RESIDENCE_TYPE: ResidenceType = 'rented';
 const DEFAULT_ADDRESS_TYPE: AddressType = 'present';
+
+/**
+ * The editable verification-outcome fields of a case, captured as one value so
+ * the current form can be compared against the last saved state. Photo
+ * evidence is deliberately not part of it: captured photos live in navigation
+ * params, and the screen folds them into its own unsaved-changes check.
+ */
+interface CaseFormSnapshot {
+  readonly verificationStatus: string;
+  readonly utvReason: string;
+  readonly utvRemarks: string;
+  readonly insufficientReason: string;
+  readonly insufficientRemarks: string;
+  readonly residenceType: ResidenceType;
+  readonly addressType: AddressType;
+  readonly respondentName: string;
+  readonly respondentRelation: string;
+  readonly isSignatureCaptured: boolean;
+  readonly selectedPhotoTag: string;
+}
+
+/**
+ * Whether two form snapshots hold the same answers. Field-by-field rather than
+ * a serialized comparison so a future field can never silently escape the
+ * unsaved-changes check.
+ */
+function areFormSnapshotsEqual(left: CaseFormSnapshot, right: CaseFormSnapshot): boolean {
+  const isEqual =
+    left.verificationStatus === right.verificationStatus &&
+    left.utvReason === right.utvReason &&
+    left.utvRemarks === right.utvRemarks &&
+    left.insufficientReason === right.insufficientReason &&
+    left.insufficientRemarks === right.insufficientRemarks &&
+    left.residenceType === right.residenceType &&
+    left.addressType === right.addressType &&
+    left.respondentName === right.respondentName &&
+    left.respondentRelation === right.respondentRelation &&
+    left.isSignatureCaptured === right.isSignatureCaptured &&
+    left.selectedPhotoTag === right.selectedPhotoTag;
+  // Field values are respondent PII — only the verdict is logged.
+  LoggerService.info(`${FILE_NAME}: areFormSnapshotsEqual: compared form snapshots`, { isEqual });
+  return isEqual;
+}
+
+/**
+ * A comparable fingerprint of a case's captured evidence, so photos count
+ * towards unsaved changes without the snapshot having to deep-compare them.
+ * Order-independent: the same photos in a different order are the same
+ * evidence. File paths are the identity here and are never logged.
+ */
+function buildCapturedPhotoKey(capturedPhotos: readonly SerializedCapturedPhotoEvidence[]): string {
+  LoggerService.info(`${FILE_NAME}: buildCapturedPhotoKey: fingerprinting captured photos`, {
+    count: capturedPhotos.length,
+  });
+  return capturedPhotos
+    .map((photo) => `${photo.filePath}|${photo.documentTypeCode}`)
+    .slice()
+    .sort()
+    .join('\n');
+}
 
 export type CaseDetailsLoadErrorKey = 'network';
 export type CaseDetailsSubmitErrorKey = 'network';
@@ -47,10 +108,23 @@ export interface UseCaseDetailsResult {
   readonly hasDraft: boolean;
   /** ISO timestamp of when the draft was last saved, or null if no draft. */
   readonly draftSavedAt: string | null;
-  /** Save current form state as a draft. */
+  /** Save the current form state — captured photos included — as a draft. */
   readonly saveDraft: () => void;
+  /**
+   * Photos held in a restored draft that the screen has not yet put back into
+   * its navigation params, or null when there is nothing to restore. The
+   * screen owns the params, so it performs the hand-back.
+   */
+  readonly draftPhotosToRestore: readonly SerializedCapturedPhotoEvidence[] | null;
   /** Clear the saved draft for this case. */
   readonly clearDraft: () => void;
+  /**
+   * Whether the form or the captured evidence holds anything that is not in
+   * the saved draft (or, for a case opened without one, not in what the
+   * backend returned). Drives the back-navigation confirmation — a read-only
+   * or not-yet-accepted case is never dirty.
+   */
+  readonly hasUnsavedChanges: boolean;
 
   readonly verificationStatus: string;
   readonly selectVerificationStatus: (status: string) => void;
@@ -92,8 +166,14 @@ export interface UseCaseDetailsResult {
  * hook only — no networking or business rules (e.g. which sections a status
  * reveals) happen in the screen.
  */
-export function useCaseDetails(caseId: string): UseCaseDetailsResult {
-  LoggerService.info(`${FILE_NAME}: useCaseDetails: hook invoked`, { caseId });
+export function useCaseDetails(
+  caseId: string,
+  capturedPhotos: readonly SerializedCapturedPhotoEvidence[],
+): UseCaseDetailsResult {
+  LoggerService.info(`${FILE_NAME}: useCaseDetails: hook invoked`, {
+    caseId,
+    capturedPhotoCount: capturedPhotos.length,
+  });
   const referenceData = useReferenceDataStore((state) => state.referenceData);
   const [caseDetail, setCaseDetail] = useState<CaseDetail | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -116,6 +196,52 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
 
   const [hasDraft, setHasDraft] = useState(false);
   const [draftSavedAt, setDraftSavedAt] = useState<string | null>(null);
+  /*
+   * The form as it stood at the last point it was persisted — the freshly
+   * loaded case, the restored draft, or the last "Save as Draft". Everything
+   * typed after that is an unsaved change.
+   */
+  const [baselineSnapshot, setBaselineSnapshot] = useState<CaseFormSnapshot | null>(null);
+  /** The captured-evidence fingerprint as of that same saved baseline. */
+  const [baselinePhotoKey, setBaselinePhotoKey] = useState('');
+  const [draftPhotosToRestore, setDraftPhotosToRestore] = useState<
+    readonly SerializedCapturedPhotoEvidence[] | null
+  >(null);
+
+  const capturedPhotoKey = useMemo(
+    () => buildCapturedPhotoKey(capturedPhotos),
+    [capturedPhotos],
+  );
+
+  /**
+   * Push a snapshot into the form and treat it as the new saved baseline.
+   * Used by both entry points into the form — the initial load and a restored
+   * draft — so neither can leave the screen looking dirty before the field
+   * executive has touched anything.
+   */
+  const applyFormSnapshot = useCallback(
+    (snapshot: CaseFormSnapshot, photoKey: string): void => {
+      LoggerService.info(`${FILE_NAME}: applyFormSnapshot: applying form snapshot as baseline`, {
+        caseId,
+        verificationStatus: snapshot.verificationStatus,
+        selectedPhotoTag: snapshot.selectedPhotoTag,
+      });
+      setVerificationStatus(snapshot.verificationStatus);
+      setUtvReason(snapshot.utvReason);
+      setUtvRemarks(snapshot.utvRemarks);
+      setInsufficientReason(snapshot.insufficientReason);
+      setInsufficientRemarks(snapshot.insufficientRemarks);
+      setResidenceType(snapshot.residenceType);
+      setAddressType(snapshot.addressType);
+      setRespondentName(snapshot.respondentName);
+      setRespondentRelation(snapshot.respondentRelation);
+      setIsSignatureCaptured(snapshot.isSignatureCaptured);
+      setSelectedPhotoTag(snapshot.selectedPhotoTag);
+      setBaselineSnapshot(snapshot);
+      setBaselinePhotoKey(photoKey);
+    },
+    [caseId],
+  );
 
   const loadCaseDetail = useCallback((): void => {
     LoggerService.info(`${FILE_NAME}: loadCaseDetail: fetching`, { caseId });
@@ -152,10 +278,26 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         }
         setCaseDetail(detail);
         LoggerService.info(`${FILE_NAME}: case detail: case detail applied`, { detail });
-        setVerificationStatus(detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '');
-        setRespondentName(detail.respondent?.name ?? '');
-        setRespondentRelation(detail.respondent?.relation ?? '');
-        setSelectedPhotoTag(referenceData?.photoTypes[0]?.code ?? '');
+        applyFormSnapshot({
+          verificationStatus:
+            detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '',
+          utvReason: '',
+          utvRemarks: '',
+          insufficientReason: '',
+          insufficientRemarks: '',
+          residenceType: DEFAULT_RESIDENCE_TYPE,
+          addressType: DEFAULT_ADDRESS_TYPE,
+          respondentName: detail.respondent?.name ?? '',
+          respondentRelation: detail.respondent?.relation ?? '',
+          isSignatureCaptured: false,
+          selectedPhotoTag: referenceData?.photoTypes[0]?.code ?? '',
+          /*
+           * Deliberately empty rather than whatever the screen currently
+           * holds: a case that arrives with photos — a re-mount on the way
+           * back from the camera — is carrying evidence nothing has saved
+           * yet, and losing it silently is the whole point of the guard.
+           */
+        }, '');
         LoggerService.info(`${FILE_NAME}: loadCaseDetail: loaded`, { caseId });
       })
       .catch((error: unknown) => {
@@ -169,7 +311,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         LoggerService.info(`${FILE_NAME}: loadCaseDetail: fetch settled`, { caseId });
         setIsLoading(false);
       });
-  }, [caseId, referenceData]);
+  }, [applyFormSnapshot, caseId, referenceData]);
 
   useEffect(() => {
     LoggerService.info(`${FILE_NAME}: useCaseDetails: load effect running`);
@@ -220,6 +362,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
       LoggerService.info(`${FILE_NAME}: useCaseDetails: read-only case — skipping draft restore`, { caseId });
       setHasDraft(false);
       setDraftSavedAt(null);
+      setDraftPhotosToRestore(null);
       return;
     }
     LoggerService.info(`${FILE_NAME}: useCaseDetails: checking for draft`, { caseId });
@@ -229,25 +372,33 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         caseId,
         savedAt: draft.savedAt,
       });
-      setVerificationStatus(draft.verificationStatus || '');
-      setUtvReason(draft.utvReason || '');
-      setUtvRemarks(draft.utvRemarks || '');
-      setInsufficientReason(draft.insufficientReason || '');
-      setInsufficientRemarks(draft.insufficientRemarks || '');
-      setResidenceType(draft.residenceType || 'rented');
-      setAddressType(draft.addressType || 'present');
-      setRespondentName(draft.respondentName || '');
-      setRespondentRelation(draft.respondentRelation || '');
-      setIsSignatureCaptured(draft.isSignatureCaptured || false);
-      setSelectedPhotoTag(draft.selectedPhotoTag || '');
+      applyFormSnapshot({
+        verificationStatus: draft.verificationStatus || '',
+        utvReason: draft.utvReason || '',
+        utvRemarks: draft.utvRemarks || '',
+        insufficientReason: draft.insufficientReason || '',
+        insufficientRemarks: draft.insufficientRemarks || '',
+        residenceType: draft.residenceType || DEFAULT_RESIDENCE_TYPE,
+        addressType: draft.addressType || DEFAULT_ADDRESS_TYPE,
+        respondentName: draft.respondentName || '',
+        respondentRelation: draft.respondentRelation || '',
+        isSignatureCaptured: draft.isSignatureCaptured || false,
+        selectedPhotoTag: draft.selectedPhotoTag || '',
+      }, buildCapturedPhotoKey(draft.capturedPhotos ?? []));
+      // The screen owns the navigation params the photos live in, so it puts
+      // them back; nothing to hand over when the draft has none.
+      setDraftPhotosToRestore(
+        (draft.capturedPhotos ?? []).length > 0 ? draft.capturedPhotos : null,
+      );
       setHasDraft(true);
       setDraftSavedAt(draft.savedAt || null);
     } else {
       LoggerService.info(`${FILE_NAME}: useCaseDetails: no draft found`, { caseId });
       setHasDraft(false);
       setDraftSavedAt(null);
+      setDraftPhotosToRestore(null);
     }
-  }, [caseId, caseDetail]);
+  }, [applyFormSnapshot, caseId, caseDetail]);
 
   const isReadOnly = useMemo(() => {
     if (!caseDetail) {
@@ -283,6 +434,69 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     });
     return value;
   }, [caseDetail]);
+
+  const currentFormSnapshot = useMemo<CaseFormSnapshot>(
+    () => ({
+      verificationStatus,
+      utvReason,
+      utvRemarks,
+      insufficientReason,
+      insufficientRemarks,
+      residenceType,
+      addressType,
+      respondentName,
+      respondentRelation,
+      isSignatureCaptured,
+      selectedPhotoTag,
+    }),
+    [
+      addressType,
+      insufficientReason,
+      insufficientRemarks,
+      isSignatureCaptured,
+      residenceType,
+      respondentName,
+      respondentRelation,
+      selectedPhotoTag,
+      utvReason,
+      utvRemarks,
+      verificationStatus,
+    ],
+  );
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (isReadOnly || isNewCaseValue) {
+      LoggerService.info(
+        `${FILE_NAME}: hasUnsavedChanges: case is not editable — no unsaved changes`,
+        { caseId, isReadOnly, isNewCase: isNewCaseValue },
+      );
+      return false;
+    }
+    if (baselineSnapshot === null) {
+      LoggerService.info(`${FILE_NAME}: hasUnsavedChanges: no baseline yet — nothing entered`, {
+        caseId,
+      });
+      return false;
+    }
+    const hasFormChanges = !areFormSnapshotsEqual(currentFormSnapshot, baselineSnapshot);
+    const hasPhotoChanges = capturedPhotoKey !== baselinePhotoKey;
+    const value = hasFormChanges || hasPhotoChanges;
+    LoggerService.info(`${FILE_NAME}: hasUnsavedChanges: resolved`, {
+      caseId,
+      hasFormChanges,
+      hasPhotoChanges,
+      value,
+    });
+    return value;
+  }, [
+    baselinePhotoKey,
+    baselineSnapshot,
+    capturedPhotoKey,
+    caseId,
+    currentFormSnapshot,
+    isNewCaseValue,
+    isReadOnly,
+  ]);
 
   LoggerService.info(`${FILE_NAME}: useCaseDetails: invoking geo-fence check`, {
     caseId,
@@ -419,6 +633,8 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
         .then(() => {
           LoggerService.info(`${FILE_NAME}: submit: outcome submitted`, { caseId });
           DraftStorageService.deleteDraft(caseId);
+          setBaselineSnapshot(currentFormSnapshot);
+          setBaselinePhotoKey(capturedPhotoKey);
           LoggerService.info(`${FILE_NAME}: submit: draft cleared after successful submission`, {
             caseId,
           });
@@ -438,7 +654,9 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     },
     [
       addressType,
+      capturedPhotoKey,
       caseId,
+      currentFormSnapshot,
       geoFence.bypassConsent,
       geoFence.distanceMeters,
       insufficientReason,
@@ -470,40 +688,30 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     const savedAt = new Date().toISOString();
     DraftStorageService.saveDraft({
       caseId,
-      verificationStatus,
-      utvReason,
-      utvRemarks,
-      insufficientReason,
-      insufficientRemarks,
-      residenceType,
-      addressType,
-      respondentName,
-      respondentRelation,
-      isSignatureCaptured,
-      selectedPhotoTag,
-      capturedPhotos: ([] as readonly CapturedPhotoEvidence[]),
+      ...currentFormSnapshot,
+      capturedPhotos,
       geoFenceBypassConsent: geoFence.bypassConsent,
       savedAt,
     });
     setHasDraft(true);
     setDraftSavedAt(savedAt);
-    LoggerService.info(`${FILE_NAME}: saveDraft: draft saved`, { caseId, savedAt });
+    // What was just written is the new "saved" state, so the screen stops
+    // treating these answers — or these photos — as unsaved.
+    setBaselineSnapshot(currentFormSnapshot);
+    setBaselinePhotoKey(capturedPhotoKey);
+    LoggerService.info(`${FILE_NAME}: saveDraft: draft saved`, {
+      caseId,
+      savedAt,
+      capturedPhotoCount: capturedPhotos.length,
+    });
   }, [
+    capturedPhotoKey,
+    capturedPhotos,
     caseDetail,
     caseId,
-    isReadOnly,
-    verificationStatus,
-    utvReason,
-    utvRemarks,
-    insufficientReason,
-    insufficientRemarks,
-    residenceType,
-    addressType,
-    respondentName,
-    respondentRelation,
-    isSignatureCaptured,
-    selectedPhotoTag,
+    currentFormSnapshot,
     geoFence.bypassConsent,
+    isReadOnly,
   ]);
 
   const clearDraft = useCallback((): void => {
@@ -511,6 +719,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     DraftStorageService.deleteDraft(caseId);
     setHasDraft(false);
     setDraftSavedAt(null);
+    setDraftPhotosToRestore(null);
     LoggerService.info(`${FILE_NAME}: clearDraft: draft cleared`, { caseId });
   }, [caseId]);
 
@@ -537,6 +746,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     isSubmitting,
     hasSubmitError: submitError !== null,
     hasDraft,
+    hasUnsavedChanges,
   });
 
   return {
@@ -587,5 +797,7 @@ export function useCaseDetails(caseId: string): UseCaseDetailsResult {
     draftSavedAt,
     saveDraft,
     clearDraft,
+    draftPhotosToRestore,
+    hasUnsavedChanges,
   };
 }

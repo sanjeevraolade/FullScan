@@ -1,7 +1,8 @@
 import React from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { NavigationContainer, createNavigationContainerRef } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react-native';
+import { Text } from 'react-native';
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
@@ -15,6 +16,9 @@ import type { DeviceLocation } from '@/infrastructure/location';
 import { useLocationStore } from '@/store/location';
 import { useGeoFenceBypassStore } from '@/store/geo-fence';
 import { useReferenceDataStore } from '@/store/reference-data';
+import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
+
+import { DraftStorageService } from '../services/draft-storage';
 
 import { CaseDetailsScreen } from './case-details-screen';
 
@@ -146,6 +150,48 @@ async function renderCaseDetails(): Promise<void> {
       </NavigationContainer>
     </ThemeProvider>,
   );
+}
+
+const navigationRef = createNavigationContainerRef<RootStackParamList>();
+
+const CAPTURED_PHOTO: SerializedCapturedPhotoEvidence = {
+  filePath: '/data/user/0/com.fullscan/files/case-1/house-photo-1.jpg',
+  latitude: 17.4461,
+  longitude: 78.3821,
+  accuracyMeters: 6,
+  isMockLocation: false,
+  capturedAtIso: '2026-09-04T09:05:00.000Z',
+  documentTypeCode: 'house_photo_1',
+};
+
+/** Stand-in for the case list, so Case Details has somewhere to go back to. */
+function PreviousScreen(): React.ReactElement {
+  return <Text>Case List</Text>;
+}
+
+/**
+ * Renders Case Details pushed on top of another screen, which is what the back
+ * button (and the unsaved-changes guard) needs to act on.
+ */
+async function renderCaseDetailsOverPreviousScreen(
+  capturedPhotos?: readonly SerializedCapturedPhotoEvidence[],
+): Promise<void> {
+  await render(
+    <ThemeProvider>
+      <NavigationContainer ref={navigationRef}>
+        <Stack.Navigator initialRouteName={ROUTE_NAMES.MAIN}>
+          <Stack.Screen name={ROUTE_NAMES.MAIN} component={PreviousScreen} />
+          <Stack.Screen name={ROUTE_NAMES.CASE_DETAILS} component={CaseDetailsScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
+    </ThemeProvider>,
+  );
+  await act(async () => {
+    navigationRef.navigate(
+      ROUTE_NAMES.CASE_DETAILS,
+      capturedPhotos ? { caseId: 'case-1', capturedPhotos } : { caseId: 'case-1' },
+    );
+  });
 }
 
 describe('CaseDetailsScreen geo-fence gating', () => {
@@ -438,5 +484,172 @@ describe('CaseDetailsScreen geo-fence gating', () => {
 
     await waitFor(() => expect(screen.getByTestId('case-details-accept-button')).toBeTruthy());
     expect(screen.queryByText('Masked Phone Actions')).toBeNull();
+  });
+});
+
+describe('CaseDetailsScreen unsaved-changes back guard', () => {
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await LocalizationEngine.initialize();
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    seedGeoFenceSettings(200);
+    useGeoFenceBypassStore.getState().clearConsents();
+    useLocationStore.setState({
+      status: 'ready',
+      location: DEVICE_LOCATION,
+      errorReason: null,
+      isEvaluating: false,
+      evaluate: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    LocalizationEngine.dispose();
+    useLocationStore.getState().reset();
+    DraftStorageService.deleteDraft('case-1');
+  });
+
+  it('goes back without asking when nothing has been entered', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await act(async () => {
+      navigationRef.goBack();
+    });
+
+    expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+  });
+
+  it('asks for confirmation and stays on the case when answers are unsaved', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.changeText(
+      screen.getByTestId('case-details-respondent-name-input'),
+      'Anita Sharma',
+    );
+    await act(async () => {
+      navigationRef.goBack();
+    });
+
+    await waitFor(() => expect(screen.getByTestId('case-unsaved-changes-dialog')).toBeTruthy());
+    expect(screen.getByTestId('case-details-submit-button')).toBeTruthy();
+
+    await fireEvent.press(screen.getByTestId('case-unsaved-changes-keep-editing-button'));
+
+    await waitFor(() => expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull());
+    expect(screen.getByTestId('case-details-submit-button')).toBeTruthy();
+  });
+
+  it('leaves the case once the field executive confirms the discard', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.changeText(
+      screen.getByTestId('case-details-respondent-name-input'),
+      'Anita Sharma',
+    );
+    await act(async () => {
+      navigationRef.goBack();
+    });
+    await waitFor(() => expect(screen.getByTestId('case-unsaved-changes-dialog')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-unsaved-changes-discard-button'));
+
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+  });
+
+  it('stops asking once the answers are saved as a draft', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.changeText(
+      screen.getByTestId('case-details-respondent-name-input'),
+      'Anita Sharma',
+    );
+    await fireEvent.press(screen.getByTestId('case-details-save-draft-button'));
+    await act(async () => {
+      navigationRef.goBack();
+    });
+
+    expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+  });
+
+  it('saves the answers as a draft and leaves when asked to', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.changeText(
+      screen.getByTestId('case-details-respondent-name-input'),
+      'Anita Sharma',
+    );
+    await act(async () => {
+      navigationRef.goBack();
+    });
+    await waitFor(() => expect(screen.getByTestId('case-unsaved-changes-dialog')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-unsaved-changes-save-draft-button'));
+
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+    expect(DraftStorageService.loadDraft('case-1')?.respondentName).toBe('Anita Sharma');
+  });
+
+  it('brings a draft\u2019s captured photos back on to the screen', async () => {
+    DraftStorageService.saveDraft({
+      caseId: 'case-1',
+      verificationStatus: 'verified_clear',
+      utvReason: '',
+      utvRemarks: '',
+      insufficientReason: '',
+      insufficientRemarks: '',
+      residenceType: 'rented',
+      addressType: 'present',
+      respondentName: 'Anita Sharma',
+      respondentRelation: 'Mother',
+      isSignatureCaptured: false,
+      selectedPhotoTag: 'house_photo_1',
+      capturedPhotos: [CAPTURED_PHOTO],
+      geoFenceBypassConsent: null,
+      savedAt: '2026-09-10T10:00:00.000Z',
+    });
+
+    await renderCaseDetailsOverPreviousScreen();
+
+    await waitFor(() =>
+      expect(screen.getByTestId(`case-photo-thumbnail-${CAPTURED_PHOTO.filePath}`)).toBeTruthy(),
+    );
+    // Restored, not re-entered — leaving must not prompt.
+    await act(async () => {
+      navigationRef.goBack();
+    });
+    expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull();
+  });
+
+  it('treats a captured photo as unsaved work', async () => {
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await act(async () => {
+      navigationRef.goBack();
+    });
+
+    await waitFor(() => expect(screen.getByTestId('case-unsaved-changes-dialog')).toBeTruthy());
+  });
+
+  it('keeps captured photos in the draft, so saving stops the prompt', async () => {
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-save-draft-button'));
+    await act(async () => {
+      navigationRef.goBack();
+    });
+
+    expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull();
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+    expect(DraftStorageService.loadDraft('case-1')?.capturedPhotos).toHaveLength(1);
   });
 });

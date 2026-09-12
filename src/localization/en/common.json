@@ -115,6 +115,13 @@
     "acceptConfirmation": {
       "message": "Are you sure you want to accept this case? Once accepted, you will be able to view and edit all case details."
     },
+    "unsavedChanges": {
+      "title": "Discard unsaved changes?",
+      "message": "You have entered case details that have not been saved yet. Save them as a draft to continue later, or go back and lose them.",
+      "saveDraft": "Save as Draft & Go Back",
+      "discard": "Discard & Go Back",
+      "keepEditing": "Keep Editing"
+    },
     "info": {
       "title": "Case Information",
       "sla": "SLA: {{tatDue}}",

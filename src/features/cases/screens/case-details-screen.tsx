@@ -1,7 +1,7 @@
-import React, { useLayoutEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactElement } from 'react';
 import { useNavigation, useRoute } from '@react-navigation/native';
-import type { RouteProp } from '@react-navigation/native';
+import type { NavigationAction, RouteProp } from '@react-navigation/native';
 import type { NativeStackNavigationProp } from '@react-navigation/native-stack';
 import {
   Alert,
@@ -32,7 +32,7 @@ import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { ROUTE_NAMES } from '@/navigation/routes';
-import type { RootStackParamList } from '@/navigation/routes';
+import type { RootStackParamList, SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import type { CapturedPhotoEvidence } from '@/domain/case';
 
 import { CaseInfoSection } from '../components/case-info-section';
@@ -42,10 +42,14 @@ import { CaseLocationSection } from '../components/case-location-section';
 import { CaseMaskedCallSection } from '../components/case-masked-call-section';
 import { CasePhotoEvidenceSection } from '../components/case-photo-evidence-section';
 import { CaseVerificationOutcomeSection } from '../components/case-verification-outcome-section';
+import { CaseUnsavedChangesDialog } from '../components/case-unsaved-changes-dialog';
 import { CaseVerifiedResidenceSection } from '../components/case-verified-residence-section';
 import { useCaseDetails } from '../hooks/use-case-details';
 
 const FILE_NAME = 'case-details-screen.tsx';
+
+/** Stable empty list, so a case with no captured evidence does not churn the hook's inputs. */
+const NO_CAPTURED_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
 
 type CaseDetailsRoute = RouteProp<RootStackParamList, typeof ROUTE_NAMES.CASE_DETAILS>;
 
@@ -66,19 +70,31 @@ export function CaseDetailsScreen(): ReactElement {
   const [noticeKey, setNoticeKey] = useState<string | null>(null);
   const [showAcceptConfirmation, setShowAcceptConfirmation] = useState(false);
   const [showForceProceedConsent, setShowForceProceedConsent] = useState(false);
+  /*
+   * The back/pop action held back while the unsaved-changes dialog is up. It
+   * is re-dispatched verbatim on Discard so the user lands wherever they were
+   * actually heading — header back, hardware back or a swipe.
+   */
+  const [pendingExitAction, setPendingExitAction] = useState<NavigationAction | null>(null);
+  /*
+   * A ref, not state: the `beforeRemove` listener has to see this the moment
+   * it is set (during the same dispatch), which a state update cannot promise.
+   */
+  const isExitConfirmedRef = useRef(false);
   // Params — not local state — are the source of truth for captured photos:
   // CaseCamera always hands back the complete set (see `CaseDetailsRouteParams`
   // doc), so there's nothing here that could go stale or reset independently.
+  const serializedCapturedPhotos = params.capturedPhotos ?? NO_CAPTURED_PHOTOS;
   const capturedPhotos = useMemo<readonly CapturedPhotoEvidence[]>(() => {
     // File paths are evidence URIs and never logged — only how many there are.
     LoggerService.info(`${FILE_NAME}: capturedPhotos: rehydrating captured photos from params`, {
-      count: (params.capturedPhotos ?? []).length,
+      count: serializedCapturedPhotos.length,
     });
-    return (params.capturedPhotos ?? []).map(({ capturedAtIso, ...rest }) => ({
+    return serializedCapturedPhotos.map(({ capturedAtIso, ...rest }) => ({
       ...rest,
       capturedAt: new Date(capturedAtIso),
     }));
-  }, [params.capturedPhotos]);
+  }, [serializedCapturedPhotos]);
   const {
     caseDetail,
     referenceData,
@@ -121,7 +137,9 @@ export function CaseDetailsScreen(): ReactElement {
     hasDraft,
     draftSavedAt,
     saveDraft,
-  } = useCaseDetails(params.caseId);
+    draftPhotosToRestore,
+    hasUnsavedChanges,
+  } = useCaseDetails(params.caseId, serializedCapturedPhotos);
 
   /**
    * The single gate for "show the rest of the case": the geo-fence passed, or
@@ -153,6 +171,101 @@ export function CaseDetailsScreen(): ReactElement {
       },
     });
   }, [caseDetail, navigation, t]);
+
+  /*
+   * Photos restored from a draft have to go back into the navigation params,
+   * which are this screen's source of truth for captured evidence. Runs once
+   * per restore — the hook stops offering them as soon as they are back.
+   */
+  useEffect(() => {
+    if (draftPhotosToRestore === null) {
+      LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: no draft photos to restore`, {
+        caseId: params.caseId,
+      });
+      return;
+    }
+    if (serializedCapturedPhotos.length > 0) {
+      LoggerService.info(
+        `${FILE_NAME}: CaseDetailsScreen: keeping this session's photos over the draft's`,
+        { caseId: params.caseId, count: serializedCapturedPhotos.length },
+      );
+      return;
+    }
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: restoring draft photos into params`, {
+      caseId: params.caseId,
+      count: draftPhotosToRestore.length,
+    });
+    navigation.setParams({ capturedPhotos: draftPhotosToRestore });
+  }, [draftPhotosToRestore, navigation, params.caseId, serializedCapturedPhotos.length]);
+
+  useEffect(() => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: back-guard effect running`, {
+      caseId: params.caseId,
+      hasUnsavedChanges,
+    });
+    const unsubscribeFromBeforeRemove = navigation.addListener('beforeRemove', (event) => {
+      if (isExitConfirmedRef.current || !hasUnsavedChanges) {
+        LoggerService.info(`${FILE_NAME}: CaseDetailsScreen: leaving case without prompting`, {
+          caseId: params.caseId,
+          isExitConfirmed: isExitConfirmedRef.current,
+          hasUnsavedChanges,
+        });
+        return;
+      }
+      LoggerService.warn(
+        `${FILE_NAME}: CaseDetailsScreen: back blocked — unsaved answers, asking for confirmation`,
+        { caseId: params.caseId },
+      );
+      event.preventDefault();
+      setPendingExitAction(event.data.action);
+    });
+    return unsubscribeFromBeforeRemove;
+  }, [hasUnsavedChanges, navigation, params.caseId]);
+
+  const handleKeepEditing = useCallback((): void => {
+    LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleKeepEditing: staying on the case`, {
+      caseId: params.caseId,
+    });
+    setPendingExitAction(null);
+  }, [params.caseId]);
+
+  const handleDiscardChanges = useCallback((): void => {
+    if (pendingExitAction === null) {
+      LoggerService.warn(
+        `${FILE_NAME}: CaseDetailsScreen.handleDiscardChanges: no pending exit action to replay`,
+        { caseId: params.caseId },
+      );
+      return;
+    }
+    LoggerService.warn(
+      `${FILE_NAME}: CaseDetailsScreen.handleDiscardChanges: discarding unsaved answers and leaving`,
+      { caseId: params.caseId },
+    );
+    // Let the very next `beforeRemove` through, then replay the original
+    // action so back / swipe / hardware back all land where they meant to.
+    isExitConfirmedRef.current = true;
+    setPendingExitAction(null);
+    navigation.dispatch(pendingExitAction);
+  }, [navigation, params.caseId, pendingExitAction]);
+
+  const handleSaveDraftAndExit = useCallback((): void => {
+    if (pendingExitAction === null) {
+      LoggerService.warn(
+        `${FILE_NAME}: CaseDetailsScreen.handleSaveDraftAndExit: no pending exit action to replay`,
+        { caseId: params.caseId },
+      );
+      return;
+    }
+    LoggerService.info(
+      `${FILE_NAME}: CaseDetailsScreen.handleSaveDraftAndExit: saving draft before leaving`,
+      { caseId: params.caseId },
+    );
+    // Synchronous local write — the draft is on disk before the screen pops.
+    saveDraft();
+    isExitConfirmedRef.current = true;
+    setPendingExitAction(null);
+    navigation.dispatch(pendingExitAction);
+  }, [navigation, params.caseId, pendingExitAction, saveDraft]);
 
   const handleGetDirections = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleGetDirections: directions not implemented yet`);
@@ -267,6 +380,8 @@ export function CaseDetailsScreen(): ReactElement {
       LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submitted — navigating back`, {
         caseId: params.caseId,
       });
+      // The answers are with the backend now — no discard prompt on the way out.
+      isExitConfirmedRef.current = true;
       navigation.goBack();
     });
   };
@@ -313,6 +428,7 @@ export function CaseDetailsScreen(): ReactElement {
     isUtvSectionVisible,
     isInsufficientSectionVisible,
     isVerifiedResidenceSectionVisible,
+    hasUnsavedChanges,
     hasNotice: noticeKey !== null,
     hasSubmitError: submitError !== null,
     capturedPhotoCount: capturedPhotos.length,
@@ -500,6 +616,13 @@ export function CaseDetailsScreen(): ReactElement {
         isOpen={showForceProceedConsent}
         onCancel={handleForceProceedCancelled}
         onAgree={handleForceProceedAgreed}
+      />
+
+      <CaseUnsavedChangesDialog
+        isOpen={pendingExitAction !== null}
+        onKeepEditing={handleKeepEditing}
+        onSaveDraft={handleSaveDraftAndExit}
+        onDiscard={handleDiscardChanges}
       />
 
       <AlertDialog
