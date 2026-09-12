@@ -10,8 +10,8 @@
  * close to the limit), and addresses/locations are whole hand-written values checked
  * against their limit. Coded columns (bucket, statuses, address/residence type) and dates
  * keep valid values — CHECK constraints and dropdown codes reject free text there. Masked
- * phones stay real-looking numbers. Target coordinates are real (around Hyderabad) so the
- * app never has to geocode.
+ * phones stay real-looking numbers. Target coordinates are placed around TEST_CENTRE rather
+ * than geocoded from the address, so the cases sit near whoever is testing.
  *
  * Buckets are split evenly: New cases are unassigned (New is a random draw from the whole
  * pool); Pending / Beyond TAT / Completed cases are assigned to fe-001.
@@ -60,16 +60,16 @@ const ORGANISATION_WORDS = [
   'Financial', 'Solutions', 'Private', 'Limited', 'India', 'Holdings', 'Enterprises',
 ];
 const ADDRESSES = [
-  'Flat No. 1204, Tower 7B, Prestige Lakeside Habitat, Road No. 12, Banjara Hills, Near GVK One, Opposite Old Hanuman Temple, Hyderabad, Telangana 500034',
-  'Plot No. 45/A, Survey No. 118/2, Kukatpally Housing Board Colony, Near Green Overhead Water Tank and RTC Bus Depot, Hyderabad, Telangana 500072',
-  'H.No. 8-3-231/B/12, Floor 1, Sri Krishna Nagar, Lane Opposite Vijaya Diagnostic Centre, Yousufguda Main Road, Ameerpet, Hyderabad, Telangana 500045',
-  'Door No. 2-48/7, Second Floor, Sai Residency Apartments, Beside Ratnadeep Supermarket, Madhapur Main Road, Gachibowli, Hyderabad, Telangana 500081',
+  'Flat No. 1204, Tower 7B, Mythri Square Apartments, Beside Miyapur Metro Station, Mythri Nagar, Miyapur, Hyderabad, Telangana 500049',
+  'Plot No. 45/A, Survey No. 118/2, Near Chanda Nagar Railway Station, Pragathi Nagar, Chanda Nagar, Hyderabad, Telangana 500050',
+  'H.No. 8-3-231/B/12, Floor 1, Sri Krishna Nagar, Near Nizampet Cross Roads, JP Nagar, Nizampet, Hyderabad, Telangana 500090',
+  'Door No. 2-48/7, Second Floor, Sai Residency, Near Hafeezpet Railway Station, Kondapur Road, Hafeezpet, Hyderabad, Telangana 500049',
 ];
 const LOCATIONS = [
-  'Banjara Hills, Near City Centre Mall, Hyderabad, Telangana',
-  'Kukatpally Housing Board Colony, Hyderabad, Telangana',
-  'Ameerpet, Near Metro Pillar 1120, Hyderabad, Telangana',
-  'Madhapur, Near Hitech City Station, Hyderabad, Telangana',
+  'Miyapur, Near Metro Station, Hyderabad, Telangana',
+  'Chanda Nagar, Near Railway Station, Hyderabad, Telangana',
+  'Nizampet, Near Cross Roads, Hyderabad, Telangana',
+  'Hafeezpet, Near Kondapur Road, Hyderabad, Telangana',
 ];
 const NOTE_SENTENCES = [
   'Candidate confirmed continuous residence at this address since early childhood.',
@@ -82,7 +82,7 @@ const NOTE_SENTENCES = [
   'Visit only between 10 AM and 6 PM.',
   'Candidate lives with parents and two younger siblings.',
   'Street name board must be visible in one photograph.',
-  'Landmark is the old Hanuman temple.',
+  'Landmark is the Mythri Nagar community hall.',
   'Do not accept photocopies of address proof.',
   'Owner confirmed the rental agreement.',
   'Ask for the electricity bill.',
@@ -92,7 +92,20 @@ const RELATIONS = ['Paternal uncle living nearby', 'Neighbour for over 20 years'
 const COMPONENT_STATUSES_IN_PROGRESS = ['component_accepted', 'insuff_raised', 'cost_approval_requested', 'addl_doc_requested'];
 const ADDRESS_TYPES = ['present', 'permanent', 'previous'];
 const RESIDENCE_TYPES = ['owned', 'rented', 'hostel', 'paying_guest', 'company_quarters', 'relative_owned'];
-const HYDERABAD = { latitude: 17.385, longitude: 78.4867 };
+/** The tester's own position — seeded cases sit within MAX_DISTANCE_KM of it. */
+const TEST_CENTRE = { latitude: 17.493971, longitude: 78.324914 };
+const MAX_DISTANCE_KM = 5;
+const KM_PER_DEGREE = 111.32;
+
+/** A point `distanceKm` from the centre along `bearingDegrees`, so cases fan out around the tester. */
+function offsetFromCentre(distanceKm, bearingDegrees) {
+  const bearing = (bearingDegrees * Math.PI) / 180;
+  const latitude = TEST_CENTRE.latitude + (distanceKm * Math.cos(bearing)) / KM_PER_DEGREE;
+  const longitude =
+    TEST_CENTRE.longitude +
+    (distanceKm * Math.sin(bearing)) / (KM_PER_DEGREE * Math.cos((latitude * Math.PI) / 180));
+  return { latitude: Number(latitude.toFixed(6)), longitude: Number(longitude.toFixed(6)) };
+}
 
 /** Whole hand-written values are used as-is, so fail loudly rather than seed an over-limit one. */
 function assertWithinLimit(values, maxLength, label) {
@@ -155,6 +168,10 @@ for (let i = 0; i < RECORD_COUNT; i++) {
   const isNew = bucket === 'new';
   const isCompleted = bucket === 'completed';
   const addressType = ADDRESS_TYPES[i % ADDRESS_TYPES.length];
+  // The first case sits inside the 200 m geofence so a passing check can be tested; the rest fan
+  // out to MAX_DISTANCE_KM on a golden-angle spiral, giving a spread of distances and bearings.
+  const distanceKm = i === 0 ? 0.08 : (i / (RECORD_COUNT - 1)) * MAX_DISTANCE_KM;
+  const target = offsetFromCentre(distanceKm, i * 137.5);
   const receivedDate = addDays('2026-08-20', i % 10);
   const tatDue = bucket === 'pending' ? addDays('2026-09-15', i % 10) : addDays(receivedDate, 7);
 
@@ -191,8 +208,8 @@ for (let i = 0; i < RECORD_COUNT; i++) {
     assignedFieldExecutiveId: isNew ? null : ASSIGNED_FIELD_EXECUTIVE_ID,
     assignedToName: fillUnits(PERSON_WORDS, MAX_LENGTH.assignedToName, i * 3 + 11),
     tatDueAt: `${tatDue} 18:00:00`,
-    targetLatitude: Number((HYDERABAD.latitude + ((i % 10) - 5) * 0.01).toFixed(6)),
-    targetLongitude: Number((HYDERABAD.longitude + ((Math.floor(i / 10) % 10) - 5) * 0.01).toFixed(6)),
+    targetLatitude: target.latitude,
+    targetLongitude: target.longitude,
     maskedPrimaryPhone: `+91-9XXXXX${String(4300 + i).padStart(4, '0')}`,
     maskedSecondaryPhone: `+91-8XXXXX${String(2100 + i).padStart(4, '0')}`,
     clientInstructions: fillUnits(NOTE_SENTENCES, MAX_LENGTH.clientInstructions, i + 9),

@@ -216,7 +216,19 @@ For UI layout checks there are also 12 test cases (`case-uitest-001` … `012`, 
 moderately long text in every free-text field — up to 50 characters for candidate and father/spouse
 names, 60 for employer and client, 150 for address and remarks, 200 for client instructions and FE
 notes. 3 are in the New pool; 3 each of Pending, Beyond TAT and Completed are assigned to `fe001`.
-The migration deletes and re-inserts every `uitest` case, so re-running it resets them.
+The migration deletes and re-inserts every `uitest` case, so re-running it resets them. Their target
+coordinates fan out 0.08-5 km around the test area at 17.493971, 78.324914 (the first one sits inside
+the 200 m geofence, so a passing check can be exercised); change `TEST_CENTRE` in the generator to
+move them.
+
+Migration `019_set_case_locations_hyderabad.sql` then puts every *other* component in Hyderabad,
+Telangana: address, location and target coordinates all come from the same one of 16 real localities
+(Miyapur, Chanda Nagar, Nizampet, Kukatpally, Gachibowli, Patancheru...), so the text and the map
+position agree. It replaces a backlog that mixed Bangalore/Noida/Pune/Nagpur addresses, placeholder
+text, 17 blank addresses and 535 blank locations, with coordinates scattered across India or left at
+the `0,0` "not geocoded yet" sentinel — those components are no longer geocoded from their address by
+the app. Every locality sits within ~13 km of the same centre. Placement is derived from `rowid`, so a
+rebuilt database puts each component back at the same address and coordinates.
 
 Every seeded account shares the same password:
 
