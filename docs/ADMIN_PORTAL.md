@@ -2,7 +2,7 @@
 
 This document describes the Admin User feature added to **FullScanServer**: the database schema and
 seed data, the authentication design, the guarded Admin Portal at `/admin`, its navigation drawer,
-the Mobile App Settings page, and how to extend any of it.
+its pages — Cases, Field Executive History and Mobile App Settings — and how to extend any of it.
 
 It also covers **delivery of those settings to the React Native app** (`FullScanApp`), which rides on
 the existing post-login reference-data call — see [§8.5](#85-delivering-settings-to-the-mobile-app).
@@ -20,12 +20,14 @@ the existing post-login reference-data call — see [§8.5](#85-delivering-setti
 7. [Navigation drawer & how to extend it](#7-navigation-drawer--how-to-extend-it)
 8. [Mobile App Settings page](#8-mobile-app-settings-page)
    - [8.5 Delivering settings to the mobile app](#85-delivering-settings-to-the-mobile-app)
-9. [Changes to existing behaviour](#9-changes-to-existing-behaviour)
-10. [Testing](#10-testing)
-11. [Running it](#11-running-it)
-12. [Security posture & known limits](#12-security-posture--known-limits)
-13. [Design decisions and the alternatives rejected](#13-design-decisions-and-the-alternatives-rejected)
-14. [File manifest](#14-file-manifest)
+9. [Cases page](#9-cases-page)
+10. [Field Executive History page](#10-field-executive-history-page)
+11. [Changes to existing behaviour](#11-changes-to-existing-behaviour)
+12. [Testing](#12-testing)
+13. [Running it](#13-running-it)
+14. [Security posture & known limits](#14-security-posture--known-limits)
+15. [Design decisions and the alternatives rejected](#15-design-decisions-and-the-alternatives-rejected)
+16. [File manifest](#16-file-manifest)
 
 ---
 
@@ -46,6 +48,10 @@ the existing post-login reference-data call — see [§8.5](#85-delivering-setti
 | Send settings to the mobile app, existing calls only | Added to the existing `GET /reference-data` payload; typed resolver + hooks on the app side              |
 | `locationRetryCount` control, validated 3-10         | Seed row in migration `015`; portal renders the bounded input with no front-end change                  |
 | `geo_fence_radius_meters` validated 10-2000m         | Bounds tightened in `015`; pre-existing out-of-range values clamped                                     |
+| Drawer: Cases, category-wise                         | `assets/js/pages/cases.js` — bucket tabs with live counts, search, assignee filter, paging               |
+| Drawer: New Case                                     | Same page's editor, empty — `POST /api/v1/admin/cases` creates the case and its components              |
+| Drawer: Update existing Case                         | Same editor, loaded — `PUT /api/v1/admin/cases/:caseId` updates the case and upserts its components     |
+| Drawer: Field Executive History, case-wise           | `assets/js/pages/field-executive-history.js` — one headed table per category (no New), detections expanding in place with times and device detail |
 
 **Zero new npm dependencies.** Everything uses packages already in `package.json` — including
 `express-rate-limit`, which was previously an unused dependency and is now wired up on admin login.
@@ -83,6 +89,8 @@ public HTTP API.
                     ┌──────────────────────────────────────────┐
                     │ /api/v1/admin/auth/*                     │
                     │ /api/v1/admin/mobile-app-settings        │
+                    │ /api/v1/admin/cases                      │
+                    │ /api/v1/admin/field-executives           │
                     │   authenticateAdmin → 401                │
                     └──────────────────────────────────────────┘
 ```
@@ -206,7 +214,7 @@ nothing about *which* API the bearer may use. Both directions are closed:
 - `verifyAdminToken()` requires `scope === 'admin'` **and** a present `adminUserId`, so a
   field-executive token is rejected on admin routes.
 - `authenticate` (the existing mobile middleware) now requires a `fieldExecutiveId` claim, so an
-  admin token is rejected on mobile routes. See [§9](#9-changes-to-existing-behaviour).
+  admin token is rejected on mobile routes. See [§11](#11-changes-to-existing-behaviour).
 
 `verifyAdminToken()` also **re-reads the admin row on every request** and rejects the token if the
 account has been deleted or deactivated since it was issued. An admin disabled mid-session loses
@@ -364,6 +372,137 @@ Errors name the offending setting by its human label, e.g.
 **The write is atomic.** All values are validated before anything is written, and the write itself
 runs inside a `better-sqlite3` transaction — one bad entry rejects the whole batch and changes
 nothing, so the mobile app can never read a half-applied configuration. There is a test for this.
+
+### `GET /api/v1/admin/cases`
+
+Requires admin auth. Every case component, filtered and paged.
+
+Query: `bucket` (`new` | `pending` | `beyond_tat` | `completed`), `search` (case ref, candidate,
+client or address), `fieldExecutiveId`, `limit` (1–200, default 25), `offset`.
+
+```jsonc
+{
+  "items": [
+    {
+      "id": "comp-uitest-001",            // case component id — the mobile app's unit of work
+      "caseId": "case-uitest-001",        // parent case; what the editor loads
+      "caseRef": "UITEST-QUATH00009001",
+      "clientName": "…", "candidateName": "…",
+      "bucket": "new", "verificationType": "Present Address Verification",
+      "addressType": "present", "address": "…",
+      "componentStatus": "new_component", "actionStatus": null, "profileStatus": "bgv_profile_created",
+      "assignedFieldExecutiveId": null, "assignedFieldExecutiveName": null, "assignedToName": "…",
+      "tatDueAt": "2026-08-27 18:00:00", "updatedAt": "2026-09-12 09:30:22"
+    }
+  ],
+  "total": 662,                            // matches the filter, bucket included
+  "categories": [                          // counts ignore the bucket filter, so tabs stay stable
+    { "bucket": "new", "count": 255 }, { "bucket": "pending", "count": 130 },
+    { "bucket": "beyond_tat", "count": 164 }, { "bucket": "completed", "count": 113 }
+  ],
+  "limit": 25, "offset": 0
+}
+```
+
+Every bucket appears in `categories` even at zero, so a tab never vanishes.
+
+### `GET /api/v1/admin/cases/form-options`
+
+Requires admin auth. The vocabularies the editor's selects are built from: `buckets`, `addressTypes`
+and `residenceTypes` (mirroring the `case_components` CHECK constraints), plus `componentStatuses`,
+`actionStatuses` and `profileStatuses` as `{ code, label }` from `dropdown_options`.
+
+### `GET /api/v1/admin/cases/:caseId`
+
+Requires admin auth. One case with every component beneath it. **`:caseId` is a case id here**,
+unlike the mobile `/api/v1/cases/:caseId` routes, where it is a component id.
+
+### `POST /api/v1/admin/cases`
+
+Requires admin auth. Creates a case and its components; answers `201` with the created case.
+
+```jsonc
+{
+  "caseRef": "FS-2026-00500", "clientName": "Acme Corp", "candidateName": "Rahul Sharma",
+  "fatherOrSpouseName": "…", "employerName": "…",
+  "primaryContactNumber": "…", "secondaryContactNumber": "…",
+  "profileStatus": "bgv_profile_created",
+  "components": [                         // at least one, at most 20
+    {
+      "bucket": "new", "componentStatus": "new_component", "actionStatus": null,
+      "verificationType": "Address", "addressType": "present", "residenceType": "rented",
+      "address": "Flat 204, Green Heights, Madhapur, Hyderabad", "location": "Madhapur",
+      "assignedFieldExecutiveId": "fe-001", "tatDueAt": "2026-10-01 18:00:00",
+      "targetLatitude": 17.4483, "targetLongitude": 78.3915,
+      "maskedPrimaryPhone": "+91-9XXXXX0001", "clientInstructions": "…"
+    }
+  ]
+}
+```
+
+### `PUT /api/v1/admin/cases/:caseId`
+
+Requires admin auth. Same body. **Upserts**: a component entry carrying an `id` updates that
+component, one without adds a new one, and components of the case left out of the payload are
+untouched. Returns the full updated case.
+
+Both writes run in one SQLite transaction, and both validate status codes against `dropdown_options`
+and assignees against `field_executives` — see [§9.4](#94-what-the-server-enforces).
+
+### `GET /api/v1/admin/field-executives`
+
+Requires admin auth. The roster — `id`, `name`, `email`, `role`, `username`, `isDeviceBound`,
+`assignedComponentCount`, `mockLocationEventCount`, `lastMockLocationDetectedAt` — ordered with
+detections first. Optional `search` over name, username and email. Never carries a password hash.
+
+### `GET /api/v1/admin/field-executives/:fieldExecutiveId/history`
+
+Requires admin auth. One executive's case-wise history.
+
+```jsonc
+{
+  "fieldExecutive": { /* the roster entry above */ },
+  "summary": {
+    "assignedComponentCount": 10, "mockLocationEventCount": 5,
+    "firstDetectedAt": "2026-09-12T13:08:24.214Z", "lastDetectedAt": "2026-09-12T14:51:40.062Z",
+    "distinctDeviceCount": 1
+  },
+  "caseGroups": [                          // always Pending, Beyond TAT, Completed — never New
+    {
+      "bucket": "pending",
+      "caseCount": 4,
+      "mockLocationEventCount": 1,
+      "cases": [
+        {
+          "componentId": "…", "caseId": "…", "caseRef": "…", "candidateName": "…", "clientName": "…",
+          "verificationType": "…", "addressType": "present", "address": "…",
+          "bucket": "pending", "componentStatus": "…", "actionStatus": null,
+          "tatDueAt": "…", "updatedAt": "…",
+          "mockLocationEvents": [
+            {
+              "id": "…", "detectionStage": "photo_capture",
+              "detectedAt": "2026-09-06T10:15:00.000Z",   // device clock — "mock enabled at"
+              "reportedAt": "2026-09-06 10:15:03",        // server clock; a gap means it was queued offline
+              "latitude": 17.4452, "longitude": 78.3821, "accuracyMeters": 8,
+              "fixCapturedAt": "…", "fixSource": "fresh",
+              "device": { "deviceId": "…", "model": "Pixel 7", "manufacturer": "Google",
+                          "osName": "Android", "osVersion": "14", "appVersion": "1.4.2",
+                          "isEmulator": false, "timeZone": "Asia/Kolkata" /* … */ }
+            }
+          ]
+        }
+      ]
+    },
+    { "bucket": "beyond_tat", "caseCount": 0, "mockLocationEventCount": 0, "cases": [] },
+    { "bucket": "completed",  "caseCount": 6, "mockLocationEventCount": 0, "cases": [ /* … */ ] }
+  ],
+  "unlinkedMockLocationEvents": [ /* detections with no case — see §10.3 */ ]
+}
+```
+
+Within each group, cases with detections sort first. The three standard groups are always present,
+even when empty; a fourth `new` group is appended only in the one case described in
+[§10.3](#103-three-cases-handled-deliberately). `404` when the executive does not exist.
 
 ---
 
@@ -585,7 +724,158 @@ pre-existing gap (no MMKV wrapper exists yet) and was left alone deliberately.
 
 ---
 
-## 9. Changes to existing behaviour
+## 9. Cases page
+
+`assets/js/pages/cases.js` — the portal's landing page, and the answer to "show all the cases,
+category-wise", "new case" and "update existing case".
+
+### 9.1 Why the list is component-level and the editor is case-level
+
+A **case** (one Case Ref Number) is the candidate/client record. It routinely holds several
+independent **components** — present address, permanent address, employment — and the *component* is
+what carries a workflow category (bucket), an assignee, a TAT and a status trail. The mobile app
+already works component-by-component for exactly that reason.
+
+So the list shows components (anything else could not be grouped by category at all), while create
+and update work on the whole case: opening a row loads that component's **parent case** with every
+component under it, so a candidate's verification record is edited in one place rather than one
+fragment at a time.
+
+### 9.2 The list
+
+- **Category tabs** — All / New / Pending / Beyond TAT / Completed, each with a live count.
+  The counts come from `categories` in the response and are computed *ignoring* the bucket filter, so
+  switching tabs never changes the numbers on the tabs.
+- **Search** across case reference, candidate, client and address, debounced 300 ms. The caret is
+  captured and restored across the re-render, so a reload mid-typing does not steal focus.
+- **Assignee filter** over the field executive roster, which the page already loads for the editor.
+- **Paging** at 25 rows, with an `x–y of N` status.
+- Rows are keyboard reachable (`tabindex="0"`, Enter opens) as well as clickable.
+
+### 9.3 The editor
+
+One form for both create and update; the only difference is whether a case was loaded into it.
+
+- **Case card** — reference, client, candidate, father/spouse, employer, both contact numbers and
+  profile status (a `<select>` built from `dropdown_options`).
+- **One card per component** — category, component status, action status, verification type, address
+  type, residence type, address, locality, assignee (roster `<select>`) or free-text assignee name,
+  TAT, target coordinates, both masked phone numbers, client instructions, field executive notes and
+  remarks.
+- **Add component** appends a blank card; a component that has not been saved yet can be removed
+  again. An existing component cannot be deleted from here — see §9.5.
+- Validation the browser can do happens before the round trip (reference, client, candidate, profile
+  status, and an address + verification type per component); everything else is the server's call and
+  surfaces in the page alert.
+
+Adding or removing a component rebuilds every card, so the form is read back into the draft first —
+otherwise whatever had been typed into the other cards would be discarded.
+
+### 9.4 What the server enforces
+
+| Rule                                                       | Where                              | Answer  |
+| ----------------------------------------------------------- | ---------------------------------- | ------- |
+| Case reference is unique                                    | `admin-case.service.ts`            | `409`   |
+| A new case carries at least one component                    | `admin-case.schema.ts`             | `400`   |
+| Component/action/profile status exists in `dropdown_options` | `admin-case.service.ts`            | `400`   |
+| Assignee exists in `field_executives`                        | `admin-case.service.ts`            | `400`   |
+| A component named in an update belongs to that case          | `admin-case.service.ts`            | `404`   |
+| Bucket, address type, residence type, coordinate ranges      | `admin-case.schema.ts` (zod)       | `400`   |
+
+Status codes are checked against the same `dropdown_options` rows `/reference-data` serves the app,
+so the portal can never store a status the device has no label for. Writes run inside one SQLite
+transaction: a payload whose second component is invalid leaves nothing behind.
+
+### 9.5 Two deliberate limits
+
+**`PUT` upserts, it does not replace.** A component entry carrying an `id` updates that component,
+one without adds a new one, and components of the case left out of the payload are untouched. A
+partial payload must never silently delete the rest of a candidate's verification trail.
+
+**The field executive's own outcome is never written from here.**
+`selected_verification_status`, the respondent, and the insuff/addl-doc/cost date trail are the
+record of what happened on site. The admin editor updates assignment and workflow state; it does not
+overwrite evidence.
+
+---
+
+## 10. Field Executive History page
+
+`assets/js/pages/field-executive-history.js` — case-wise activity for one executive, built to answer
+a single back-office question: *what have they been working on, and did anything look fraudulent
+while they did it?*
+
+### 10.1 Why history is case-wise
+
+Mock-location detections (`mock_location_events`, migration `016`) are the only per-executive audit
+trail the platform keeps today, and each one carries the component that was open when the faked fix
+was seen. Folding detections into the case they happened on is therefore strictly more informative
+than a flat log, and it is the shape the request asked for.
+
+**`mock_location_events.case_id` holds a case *component* id**, not a case id — the app reports
+whatever it is working on, and its unit of work is the component. History joins on `case_components`
+accordingly.
+
+### 10.2 What the page shows
+
+- A **picker** over the roster, floating executives with detections to the top, with its own search.
+- A **summary**: cases assigned, detections, handsets involved, first and last detection. The
+  detections tile turns red when the count is non-zero.
+- **One headed table per workflow category** — Pending, Beyond TAT, Completed — each heading carrying
+  its case count and, when non-zero, its detection count. All three are always rendered: an empty
+  Pending list is itself an answer, so it shows a muted "No pending cases assigned." rather than
+  disappearing.
+- **One row per case**, columns: Case (ref + client), Candidate, Component (verification type +
+  address type), Address, Status, TAT due, Detections. The category is on the heading, so the row
+  does not repeat it; within each table, cases with detections sort first and are tinted.
+- **Detections expand in place.** A case with detections gets a chevron in its first cell; opening it
+  reveals a second `<tr>` spanning the table with the full evidence. Keeping it in a real row rather
+  than a floating panel lets the table stay one scannable list with the detail one click away. Open
+  rows survive a re-render (the roster search re-renders the page), because the expanded component
+  ids are held in page state.
+- **Per detection**: when the mock was enabled (device clock) *and* when the report reached the
+  server — a wide gap means it was queued offline — the coordinates the fake provider claimed and
+  their accuracy, the fix source, the detection stage in plain English, and the full handset identity
+  (make, model, OS, app version and build, installer package, emulator flag, time zone, device id).
+
+Status codes are labelled from `dropdown_options` (the page loads `/admin/cases/form-options` for
+this), so the table shows "Insuff Raised" rather than `insuff_raised`.
+
+**TAT is formatted as wall-clock time.** `formatTimestamp` reads a stored value as UTC, which is
+right for `datetime('now')` audit stamps but wrong for a deadline: an 18:00 TAT is a commitment on
+the clock on the wall, and re-zoning it to 23:30 in IST would tell the admin something untrue. The
+TAT column uses `formatWallClockTimestamp` instead, which rebuilds the parts in the local zone so the
+same clock face renders everywhere.
+
+### 10.3 New cases are excluded
+
+A **New** component is an unclaimed entry in the shared pool, not work this executive has done: the
+mobile app re-draws that bucket at random on every `GET /cases` (see `case.service.ts`), and
+*accepting* a case is what actually claims it — which moves it to Pending. Listing New rows in a
+history view would therefore be noise, and misleading noise at that.
+
+So `findComponentsAssignedToFieldExecutive` filters `bucket != 'new'`, and the roster's
+`assignedComponentCount` does the same — the tile on the page and the lists under it count the same
+thing.
+
+### 10.4 Three cases handled deliberately
+
+**Detections with no case.** A detection reported right after login or on resume has no component to
+attach to. Those are listed under *Detections not tied to a case* rather than dropped — they are
+still evidence.
+
+**Detections on a reassigned case.** If a component a detection points at has since been assigned to
+someone else, it is pulled in by id and still listed in this executive's history. Reassigning a case
+must not hide where a fake fix was reported.
+
+**Detections on a New case.** Excluding noise must never mean hiding evidence. A New component can
+only reach the history attached to a detection (it is filtered out of the assigned query), and when
+one does, it comes back as a fourth `new` group appended *after* the standard three — labelled *New
+(unclaimed)*, so it reads as the exception it is.
+
+---
+
+## 11. Changes to existing behaviour
 
 Two deliberate changes outside the new files.
 
@@ -611,11 +901,11 @@ Everything else is additive: new migrations, new files, and new route mounts in 
 
 ---
 
-## 10. Testing
+## 12. Testing
 
 ### Server — `npx vitest run`
 
-**84 tests across 7 suites, all passing.** Config in `vitest.config.ts`; suites in `tests/`. `tests/helpers/test-app.ts` points `DB_PATH` at a fresh temp SQLite file and runs the
+**140 tests across 10 suites, all passing.** Config in `vitest.config.ts`; suites in `tests/`. `tests/helpers/test-app.ts` points `DB_PATH` at a fresh temp SQLite file and runs the
 migrations before importing the app, so tests never touch `./data/` and always start from known seed
 data. (These are the project's first tests — `vitest` and `supertest` were already dependencies but
 no suites existed.)
@@ -625,10 +915,13 @@ no suites existed.)
 | `admin-auth.test.ts`             | 19    | Login success/failure, no hash leakage, cookie flags, token scope, user enumeration, deactivated account, FE-at-admin-endpoint, validation, `/me` via cookie and Bearer, garbage/expired/orphaned tokens, **bidirectional token scope isolation**, logout |
 | `mobile-app-settings.test.ts`    | 22    | Read/write authorization, metadata and type coercion, enum options, batch update, `updated_by` audit, string trimming, min/max/enum/boolean/unknown-key/duplicate/empty rejection, **atomic rollback of a partly-invalid batch** |
 | `admin-portal.test.ts`           | 12    | Page guard redirects (root and deep, `next` preserved), **shell HTML never sent to anonymous browsers**, forged cookie rejected, shell served when signed in, `no-store`, login page reachable, signed-in bounce off login, asset serving, asset 404, portal CSP |
-| `admin-portal-menu.test.ts`      | 14    | Registry completeness and unique routes, role gating, section grouping, `escapeHtml` (incl. both quote styles, null/undefined), icon fallback and coverage |
+| `admin-portal-menu.test.ts`      | 18    | Registry completeness and unique routes, role gating, section grouping and ungrouped-first ordering, `escapeHtml` (incl. both quote styles, null/undefined), **`formatWallClockTimestamp` not re-zoning a TAT**, icon fallback and coverage |
 | `admin-login-rate-limit.test.ts` | 2     | 10 failures allowed then `429`; throttle uses the standard error envelope (isolated file — the limiter's store is per-process)      |
 | `reference-data-settings.test.ts` | 9    | Dropdown lists still intact, all settings carried, `locationRetryCount` under its camelCase key, values typed not stringified, portal-only metadata excluded, `updatedAt` is the latest change, **admin-edit → app-payload round trip**, rejected edits not served |
 | `mobile-app-settings-migration.test.ts` | 6 | Migration `015` on a staged database: adds `locationRetryCount` (default 3, range 3-10), narrows the geo-fence bounds, **clamps stored values above 2000 and below 10**, leaves in-range values alone, and does not reset an admin-saved value on replay |
+| `mock-location-report.test.ts`   | 7     | Mock-location reporting from the app: auth required, full detail persisted, idempotency on `clientEventId`, running totals |
+| `admin-cases.test.ts`            | 27    | List auth/shape/category counts, category filter leaving counts stable, search, unknown bucket and unknown assignee rejected, form options, create (multi-component, assignment, duplicate ref `409`, no components, unknown status/profile/assignee, **nothing written when one component is invalid**), update (case fields, in-place component, added component, foreign component `404`, taken ref `409`, missing case `404`), detail and its `404` |
+| `admin-field-executive-history.test.ts` | 18 | Roster auth/shape/search, **no password hash**, history `404`, empty-history shape, **one group per category in workflow order**, **New cases excluded although assigned**, assigned count matching the lists, detection filed under its case and rolled up onto its group, full detection detail incl. device, flagged cases sorted first within their list, unlinked detections, summary totals, **detection still visible after the case is reassigned**, **a New case surfacing as its own appended list when a detection points at it** |
 
 ### Mobile app — `npx jest`
 
@@ -656,7 +949,7 @@ Also verified:
 - Bounds exercised through the live API: `locationRetryCount` accepted at 3 and 10, rejected at 2 and
   11; `geo_fence_radius_meters` accepted at 10 and 2000, rejected at 9 and 2001. The saved value then
   appeared on `/reference-data` as a JSON number.
-- Mobile regression smoke test (see [§9](#9-changes-to-existing-behaviour)).
+- Mobile regression smoke test (see [§11](#11-changes-to-existing-behaviour)).
 
 `npm run lint` **fails, and did before this change**: ESLint 9 requires an `eslint.config.js` and the
 project has none. Left alone deliberately — adding one would lint the entire pre-existing codebase
@@ -664,7 +957,7 @@ and pull unrelated files into this change.
 
 ---
 
-## 11. Running it
+## 13. Running it
 
 ```bash
 cd FullScanServer
@@ -699,7 +992,7 @@ To reset: delete `./data/fullscan.sqlite` and restart.
 
 ---
 
-## 12. Security posture & known limits
+## 14. Security posture & known limits
 
 **In place:** bcrypt (cost 10) password storage; timing-equalised, non-enumerating login failures;
 deactivated-account rejection at login *and* on every subsequent request; admin-scoped tokens with
@@ -726,7 +1019,7 @@ response; no secret in any log line.
 
 ---
 
-## 13. Design decisions and the alternatives rejected
+## 15. Design decisions and the alternatives rejected
 
 **Static portal, not a React/Vite SPA.** The server had no front-end tooling at all. A SPA would have
 added a bundler, a framework, a build step, and a `dist` pipeline to a project whose brief was to
@@ -753,7 +1046,7 @@ no new dependency.
 
 ---
 
-## 14. File manifest
+## 16. File manifest
 
 ### New — server
 
@@ -776,6 +1069,17 @@ no new dependency.
 | `src/routes/mobile-app-setting.routes.ts`         | `/api/v1/admin/mobile-app-settings`                 |
 | `src/routes/admin-portal.routes.ts`               | `/admin` pages, assets, portal CSP                  |
 | `src/routes/schemas/admin.schema.ts`              | Zod schemas for both admin endpoints                |
+| `src/types/admin-case.types.ts`                   | Admin case list/detail/input types, bucket + type vocabularies |
+| `src/types/admin-field-executive.types.ts`        | Roster, case-wise history and detection types       |
+| `src/db/admin-case.dao.ts`                        | Admin case reads, filtered list, counts, transactional writes |
+| `src/db/admin-field-executive.dao.ts`             | Roster, assigned components, detections by executive |
+| `src/services/admin-case.service.ts`              | Case validation (ref, assignee, status codes), create/upsert |
+| `src/services/admin-field-executive.service.ts`   | Folds detections into the cases they happened on    |
+| `src/controllers/admin-case.controller.ts`        | list / form-options / get / create / update         |
+| `src/controllers/admin-field-executive.controller.ts` | list / history                                  |
+| `src/routes/admin-case.routes.ts`                 | `/api/v1/admin/cases`                               |
+| `src/routes/admin-field-executive.routes.ts`      | `/api/v1/admin/field-executives`                    |
+| `src/routes/schemas/admin-case.schema.ts`         | Zod schemas for the case and history endpoints      |
 
 ### New — portal & tests
 
@@ -786,22 +1090,26 @@ no new dependency.
 | `public/admin/assets/css/admin.css`                     | All portal styling               |
 | `public/admin/assets/js/{api,dom,icons,menu,drawer,router,app,login}.js` | Portal modules |
 | `public/admin/assets/js/pages/mobile-app-settings.js`   | Mobile App Settings page         |
+| `public/admin/assets/js/pages/cases.js`                 | Cases list + create/update editor |
+| `public/admin/assets/js/pages/field-executive-history.js` | Field Executive History page   |
 | `vitest.config.ts`                                      | Vitest config                    |
 | `tests/helpers/test-app.ts`                             | Temp-DB app bootstrap            |
 | `tests/admin-auth.test.ts`                              | 19 auth tests                    |
 | `tests/mobile-app-settings.test.ts`                     | 16 settings tests                |
 | `tests/admin-portal.test.ts`                            | 12 portal/guard tests            |
-| `tests/admin-portal-menu.test.ts`                       | 14 registry/escaping tests       |
+| `tests/admin-portal-menu.test.ts`                       | 18 registry/escaping/format tests |
 | `tests/admin-login-rate-limit.test.ts`                  | 2 throttling tests               |
 | `tests/reference-data-settings.test.ts`                 | 9 settings-delivery tests        |
 | `tests/mobile-app-settings-migration.test.ts`           | 6 migration-`015` tests          |
+| `tests/admin-cases.test.ts`                             | 27 admin case tests              |
+| `tests/admin-field-executive-history.test.ts`           | 18 history tests                 |
 
 ### Modified — server
 
 | File                                     | Change                                                                    |
 | ---------------------------------------- | ------------------------------------------------------------------------- |
-| `src/app.ts`                             | Mount `/api/v1/admin/auth`, `/api/v1/admin/mobile-app-settings`, `/admin` |
-| `src/middleware/authenticate.ts`         | Require a `fieldExecutiveId` claim — see [§9](#9-changes-to-existing-behaviour) |
+| `src/app.ts`                             | Mount `/api/v1/admin/auth`, `/api/v1/admin/mobile-app-settings`, `/api/v1/admin/cases`, `/api/v1/admin/field-executives`, `/admin` |
+| `src/middleware/authenticate.ts`         | Require a `fieldExecutiveId` claim — see [§11](#11-changes-to-existing-behaviour) |
 | `src/types/express.d.ts`                 | Add `adminUserId`, `adminRole` to `Request`                               |
 | `src/types/reference-data.types.ts`      | Add `MobileAppSettings` + `mobileAppSettings` on `ReferenceData`          |
 | `src/services/reference-data.service.ts` | Flatten admin settings into the reference-data payload                    |

@@ -29,12 +29,33 @@
 
 export const ADMIN_MENU = [
   {
+    id: 'cases',
+    route: 'cases',
+    label: 'Cases',
+    icon: 'briefcase',
+    title: 'Cases',
+    subtitle: 'Every case in the system, by workflow category — create new ones and edit existing ones.',
+    section: 'Operations',
+    loadPage: () => import('./pages/cases.js'),
+  },
+  {
+    id: 'field-executive-history',
+    route: 'field-executive-history',
+    label: 'Field Executive History',
+    icon: 'shield',
+    title: 'Field Executive History',
+    subtitle: 'Case-wise activity for one field executive, including every mock-location detection.',
+    section: 'Operations',
+    loadPage: () => import('./pages/field-executive-history.js'),
+  },
+  {
     id: 'mobile-app-settings',
     route: 'mobile-app-settings',
     label: 'Mobile App Settings',
     icon: 'sliders',
     title: 'Mobile App Settings',
     subtitle: 'Remote configuration the FullScan mobile app applies for every field executive.',
+    section: 'Configuration',
     loadPage: () => import('./pages/mobile-app-settings.js'),
   },
 

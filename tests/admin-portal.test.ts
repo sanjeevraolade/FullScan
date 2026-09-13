@@ -95,6 +95,8 @@ describe('admin portal assets', () => {
       '/admin/assets/js/icons.js',
       '/admin/assets/js/login.js',
       '/admin/assets/js/pages/mobile-app-settings.js',
+      '/admin/assets/js/pages/cases.js',
+      '/admin/assets/js/pages/field-executive-history.js',
     ]) {
       const response = await request(app).get(asset);
       expect(response.status, `${asset} should be served`).toBe(200);

@@ -30,6 +30,46 @@ export function renderAlert(container, alert) {
   }">${escapeHtml(alert.message)}</div>`;
 }
 
+/**
+ * Formats a stored **wall-clock** timestamp for display, without shifting it
+ * between time zones.
+ *
+ * `formatTimestamp` reads its input as UTC, which is right for `datetime('now')`
+ * audit stamps. A TAT deadline is not an instant, though — "27 Aug 18:00" is a
+ * commitment on the clock on the wall, and re-zoning it to 23:30 would be
+ * telling the admin something untrue. So the parts are read out and rebuilt in
+ * the local zone, which renders the same clock face everywhere.
+ */
+export function formatWallClockTimestamp(value) {
+  if (!value) {
+    return null;
+  }
+
+  const parts = /^(\d{4})-(\d{2})-(\d{2})(?:[T ](\d{2}):(\d{2}))?/.exec(value);
+
+  if (!parts) {
+    return value;
+  }
+
+  const [, year, month, day, hour, minute] = parts;
+  const parsed = new Date(
+    Number(year),
+    Number(month) - 1,
+    Number(day),
+    Number(hour ?? 0),
+    Number(minute ?? 0),
+  );
+
+  if (Number.isNaN(parsed.getTime())) {
+    return value;
+  }
+
+  return parsed.toLocaleString(undefined, {
+    dateStyle: 'medium',
+    ...(hour === undefined ? {} : { timeStyle: 'short' }),
+  });
+}
+
 /** Formats an ISO/SQLite timestamp for display, falling back to the raw value. */
 export function formatTimestamp(value) {
   if (!value) {

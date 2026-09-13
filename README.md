@@ -102,6 +102,13 @@ All routes are mounted under `/api/v1`:
 | `/admin/auth/me`                    | GET    | Current admin's profile (admin auth required)            |
 | `/admin/mobile-app-settings`        | GET    | Mobile app settings + render metadata (admin auth required) |
 | `/admin/mobile-app-settings`        | PUT    | Update mobile app settings (admin auth required)         |
+| `/admin/cases`                      | GET    | All case components, filtered/paged, + per-category counts (admin auth required) |
+| `/admin/cases`                      | POST   | Create a case and its components (admin auth required)   |
+| `/admin/cases/form-options`         | GET    | Status/type vocabularies for the case editor (admin auth required) |
+| `/admin/cases/:caseId`              | GET    | One case with all its components (admin auth required)   |
+| `/admin/cases/:caseId`              | PUT    | Update a case and upsert its components (admin auth required) |
+| `/admin/field-executives`           | GET    | Field executive roster + assignment/detection counts (admin auth required) |
+| `/admin/field-executives/:id/history` | GET  | One executive's case-wise history, with mock-location detections (admin auth required) |
 
 `POST /auth/login` returns a JWT (`{ token, fieldExecutive }`) only when both the username and
 password match a seeded field executive. Send it as `Authorization: Bearer <token>` on `/cases`
@@ -150,8 +157,9 @@ migration `009_create_case_components.sql`.
 
 The server also hosts a small back-office web portal at **`http://localhost:<PORT>/admin`** —
 dependency-free static HTML/CSS/ES modules under `public/admin/`, served and guarded by Express.
-Signing in reveals a navigation drawer whose only page today is **Mobile App Settings**, with
-**Logout** pinned at the bottom.
+Signing in reveals a navigation drawer with **Cases** and **Field Executive History** under
+*Operations* and **Mobile App Settings** under *Configuration*, with **Logout** pinned at the bottom.
+Cases is the landing page.
 
 - Pages are protected **server-side**: `/admin/*` runs through `authenticateAdminPage`, which
   redirects an anonymous browser to `/admin/login` before any HTML is sent.
@@ -162,6 +170,53 @@ Signing in reveals a navigation drawer whose only page today is **Mobile App Set
   in either direction, even though both are signed with `JWT_SECRET`.
 - Adding a drawer page means one entry in `public/admin/assets/js/menu.js` plus one page module —
   see `docs/ADMIN_PORTAL.md` for the full walkthrough.
+
+### Cases
+
+**Cases** lists every case component in the system, grouped by workflow category (New / Pending /
+Beyond TAT / Completed) with a live count on each tab, plus search across case reference, candidate,
+client and address, and a filter by assigned field executive. Opening a row loads that component's
+**parent case** — case-level identity fields plus every component under it — so a candidate's whole
+verification record is edited in one place. **New case** opens the same editor empty.
+
+The list is component-level because a component is what carries a category, an assignee and a TAT.
+Create/update are case-level: `POST /admin/cases` takes the case and at least one component (a case
+with no component would be invisible to the mobile app, which lists components).
+
+`PUT /admin/cases/:caseId` **upserts**: a component entry carrying an `id` updates that component, one
+without adds a new one, and components of the case left out of the payload are untouched — a partial
+payload must never silently delete the rest of a candidate's verification trail. The field
+executive's own outcome columns (`selected_verification_status`, respondent, the status date trail)
+are never written by the admin editor: they are the record of what happened on site.
+
+Status codes are validated against `dropdown_options` — the same rows `/reference-data` serves the
+app — so the portal can never store a status the device has no label for. Note `:caseId` on the admin
+routes is a **case** id, unlike the mobile `/cases/:caseId` routes, where it is a component id.
+
+### Field Executive History
+
+**Field Executive History** answers one back-office question: what has this executive been working
+on, and did anything look fraudulent while they did it? Pick an executive (the picker floats those
+with detections to the top) and the page shows a summary — cases assigned, detections, handsets
+involved, first/last detection — then **one headed table per workflow category**: Pending, Beyond
+TAT, Completed. Each table carries its own case and detection counts, one row per case (ref, client,
+candidate, component, address, status, TAT). A case with detections gets a chevron: opening it
+expands a row underneath with the evidence — when the mock was enabled (device clock) and when it
+reached the server, the coordinates the fake provider claimed, the detection stage, and the full
+handset identity.
+
+**New cases are not shown.** That bucket is the unclaimed shared pool the app re-draws at random on
+every `GET /cases`, so a New row says nothing about what this executive has done — accepting a case
+is what claims it, and that moves it to Pending. For the same reason `assignedComponentCount`
+excludes New.
+
+Detections reach `mock_location_events` with a `case_id` that is a **component** id, so history joins
+on `case_components`. Three cases are handled deliberately: a detection reported without a case (at
+login or on resume) is listed under *Detections not tied to a case* rather than dropped; a detection
+against a component since reassigned to someone else still appears in this executive's history —
+reassigning a case must not hide where a fake fix was reported; and a detection against a *New*
+component brings that component back as its own list appended after the standard three, because
+excluding noise must never mean hiding evidence.
 
 ### Mobile App Settings delivery
 

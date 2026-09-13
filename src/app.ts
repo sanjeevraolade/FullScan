@@ -15,6 +15,8 @@ import { meRoutes } from './routes/field-executive.routes.js';
 import { securityRoutes } from './routes/security.routes.js';
 import { adminAuthRoutes } from './routes/admin-auth.routes.js';
 import { mobileAppSettingRoutes } from './routes/mobile-app-setting.routes.js';
+import { adminCaseRoutes } from './routes/admin-case.routes.js';
+import { adminFieldExecutiveRoutes } from './routes/admin-field-executive.routes.js';
 import { adminPortalRoutes } from './routes/admin-portal.routes.js';
 
 export const app = express();
@@ -36,6 +38,8 @@ app.use('/api/v1/security', authenticate, securityRoutes);
 // Admin API (admin-scoped session) — everything but /auth requires a signed-in admin
 app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin/mobile-app-settings', authenticateAdmin, mobileAppSettingRoutes);
+app.use('/api/v1/admin/cases', authenticateAdmin, adminCaseRoutes);
+app.use('/api/v1/admin/field-executives', authenticateAdmin, adminFieldExecutiveRoutes);
 
 // Admin Portal — server-rendered static front end at /admin (pages guarded server-side)
 app.use('/admin', adminPortalRoutes);

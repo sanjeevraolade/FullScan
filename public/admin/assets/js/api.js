@@ -81,6 +81,20 @@ export async function apiRequest(path, options = {}) {
   return envelope.data;
 }
 
+/** Builds `?a=1&b=2` from an object, skipping empty/undefined entries. */
+function toQueryString(params) {
+  const query = new URLSearchParams();
+
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== '') {
+      query.set(key, String(value));
+    }
+  }
+
+  const serialized = query.toString();
+  return serialized ? `?${serialized}` : '';
+}
+
 export const adminApi = {
   /** Signs in. Not routed through apiRequest's 401 redirect — the form shows the error. */
   async login(username, password) {
@@ -105,5 +119,42 @@ export const adminApi = {
 
   async updateMobileAppSettings(settings) {
     return apiRequest('/mobile-app-settings', { method: 'PUT', body: { settings } });
+  },
+
+  /**
+   * Case components, filtered and paged. `filter` accepts `bucket`, `search`,
+   * `fieldExecutiveId`, `limit` and `offset`; blank entries are dropped so the
+   * query string only ever carries filters that are actually set.
+   */
+  async listCases(filter = {}) {
+    return apiRequest(`/cases${toQueryString(filter)}`);
+  },
+
+  /** Status vocabularies the case editor's selects are built from. */
+  async getCaseFormOptions() {
+    return apiRequest('/cases/form-options');
+  },
+
+  /** One case with every component beneath it — note this id is a case id, not a component id. */
+  async getCase(caseId) {
+    return apiRequest(`/cases/${encodeURIComponent(caseId)}`);
+  },
+
+  async createCase(payload) {
+    return apiRequest('/cases', { method: 'POST', body: payload });
+  },
+
+  async updateCase(caseId, payload) {
+    return apiRequest(`/cases/${encodeURIComponent(caseId)}`, { method: 'PUT', body: payload });
+  },
+
+  /** The field executive roster, with assignment and detection counts. */
+  async listFieldExecutives(search) {
+    return apiRequest(`/field-executives${toQueryString({ search })}`);
+  },
+
+  /** One executive's case-wise history, including every mock-location detection. */
+  async getFieldExecutiveHistory(fieldExecutiveId) {
+    return apiRequest(`/field-executives/${encodeURIComponent(fieldExecutiveId)}/history`);
   },
 };
