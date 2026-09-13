@@ -9,6 +9,10 @@
  *
  * Two views live in this one module — `list` and `editor` — because they share
  * the loaded form options and executive roster, and the router owns only routes.
+ *
+ * The editor is also mounted on its own by the Add New Case page (`new-case.js`,
+ * via `renderNewCase`), in create-only mode: no list behind it, and a save resets
+ * the form for the next case.
  */
 
 import { adminApi } from '../api.js';
@@ -91,6 +95,8 @@ function createInitialState() {
     draft: null,
     searchTimer: null,
     isSaving: false,
+    /** True on the Add New Case page: the editor is the whole page, with no list behind it. */
+    isCreateOnly: false,
   };
 }
 
@@ -254,7 +260,7 @@ function renderList() {
           ${renderOptions(fieldExecutiveOptions(), state.filter.fieldExecutiveId, 'All field executives')}
         </select>
       </div>
-      <button class="btn btn--primary" type="button" data-new-case>New case</button>
+      <a class="btn btn--primary" href="#/new-case">New case</a>
     </div>
     ${renderTabs(result.categories)}
     ${table}`;
@@ -419,9 +425,12 @@ function renderEditor() {
   state.container.innerHTML = `
     <div class="toolbar toolbar--editor">
       <button class="btn" type="button" data-back>Back to cases</button>
-      <p class="toolbar__title">${
-        isNew ? 'New case' : `Editing ${escapeHtml(draft.caseRef)}`
-      }</p>
+      ${
+        // On Add New Case the page header already names the view.
+        state.isCreateOnly
+          ? ''
+          : `<p class="toolbar__title">${isNew ? 'New case' : `Editing ${escapeHtml(draft.caseRef)}`}</p>`
+      }
     </div>
 
     <form data-case-form novalidate>
@@ -671,13 +680,27 @@ async function saveDraft() {
       ? await adminApi.updateCase(state.draft.id, payload)
       : await adminApi.createCase(payload);
 
+    const componentSummary = `${saved.components.length} component${
+      saved.components.length === 1 ? '' : 's'
+    }`;
+
+    if (state.isCreateOnly) {
+      // Stay on Add New Case with a fresh form, ready for the next one.
+      state.draft = buildBlankCase();
+      renderEditor();
+      window.scrollTo({ top: 0 });
+      state.setStatus({
+        variant: 'success',
+        message: `Case ${saved.caseRef} created with ${componentSummary}. The form is ready for the next case.`,
+      });
+      return;
+    }
+
     state.filter.offset = 0;
     await loadList();
     state.setStatus({
       variant: 'success',
-      message: `Case ${saved.caseRef} saved with ${saved.components.length} component${
-        saved.components.length === 1 ? '' : 's'
-      }.`,
+      message: `Case ${saved.caseRef} saved with ${componentSummary}.`,
     });
   } catch (error) {
     state.setStatus({ variant: 'error', message: error.message });
@@ -720,13 +743,12 @@ function onClick(event) {
     return;
   }
 
-  if (event.target.closest('[data-new-case]')) {
-    openEditor(null);
-    return;
-  }
-
   if (event.target.closest('[data-back]')) {
     state.setStatus(null);
+    if (state.isCreateOnly) {
+      window.location.hash = '#/cases';
+      return;
+    }
     refreshList();
     return;
   }
@@ -804,10 +826,21 @@ function onSubmit(event) {
 
 /* -------------------------------------------------------------- page module */
 
-export async function render(container, { setStatus }) {
+/** Cases page: the list, with the editor opened from a row. */
+export function render(container, context) {
+  return mount(container, context, { isCreateOnly: false });
+}
+
+/** Add New Case page: a blank editor on its own. */
+export function renderNewCase(container, context) {
+  return mount(container, context, { isCreateOnly: true });
+}
+
+async function mount(container, { setStatus }, { isCreateOnly }) {
   state = createInitialState();
   state.container = container;
   state.setStatus = setStatus;
+  state.isCreateOnly = isCreateOnly;
 
   // Both views need these, and the roster doubles as the list's assignee filter.
   const [formOptions, fieldExecutives] = await Promise.all([
@@ -823,6 +856,11 @@ export async function render(container, { setStatus }) {
   container.addEventListener('input', onInput);
   container.addEventListener('change', onChange);
   container.addEventListener('submit', onSubmit);
+
+  if (isCreateOnly) {
+    await openEditor(null);
+    return;
+  }
 
   await loadList();
 }

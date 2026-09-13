@@ -6,7 +6,7 @@ import pinoHttp from 'pino-http';
 import { logger } from './utils/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
 import { authenticate } from './middleware/authenticate.js';
-import { authenticateAdmin } from './middleware/authenticate-admin.js';
+import { authenticateAdmin, requireAdminRole } from './middleware/authenticate-admin.js';
 import { authRoutes } from './routes/auth.routes.js';
 import { uiConfigRoutes } from './routes/ui-config.routes.js';
 import { referenceDataRoutes } from './routes/reference-data.routes.js';
@@ -17,6 +17,7 @@ import { adminAuthRoutes } from './routes/admin-auth.routes.js';
 import { mobileAppSettingRoutes } from './routes/mobile-app-setting.routes.js';
 import { adminCaseRoutes } from './routes/admin-case.routes.js';
 import { adminFieldExecutiveRoutes } from './routes/admin-field-executive.routes.js';
+import { adminUserRoutes } from './routes/admin-user.routes.js';
 import { adminPortalRoutes } from './routes/admin-portal.routes.js';
 
 export const app = express();
@@ -35,11 +36,16 @@ app.use('/api/v1/cases', authenticate, caseRoutes);
 app.use('/api/v1/me', authenticate, meRoutes);
 app.use('/api/v1/security', authenticate, securityRoutes);
 
-// Admin API (admin-scoped session) — everything but /auth requires a signed-in admin
+// Admin API (admin-scoped session) — everything but /auth requires a signed-in admin.
+// Both roles: Cases (incl. Add New Case) and Field Executive History.
+// Super admin only: Mobile App Settings and admin-user management (Add New Admin).
+const requireSuperAdmin = requireAdminRole('super_admin');
+
 app.use('/api/v1/admin/auth', adminAuthRoutes);
-app.use('/api/v1/admin/mobile-app-settings', authenticateAdmin, mobileAppSettingRoutes);
+app.use('/api/v1/admin/mobile-app-settings', authenticateAdmin, requireSuperAdmin, mobileAppSettingRoutes);
 app.use('/api/v1/admin/cases', authenticateAdmin, adminCaseRoutes);
 app.use('/api/v1/admin/field-executives', authenticateAdmin, adminFieldExecutiveRoutes);
+app.use('/api/v1/admin/admin-users', authenticateAdmin, requireSuperAdmin, adminUserRoutes);
 
 // Admin Portal — server-rendered static front end at /admin (pages guarded server-side)
 app.use('/admin', adminPortalRoutes);

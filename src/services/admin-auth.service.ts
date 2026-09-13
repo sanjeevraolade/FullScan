@@ -25,7 +25,7 @@ const DUMMY_PASSWORD_HASH = '$2a$10$UDK0XJ6Bd3vhv7ScA0iiwuZ.tG3zuUmiq73Vx5DnscZo
 /** Single message for every credential failure — never reveals which half was wrong. */
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid username or password';
 
-function toAdminUser(row: AdminUserRow): AdminUser {
+export function toAdminUser(row: AdminUserRow): AdminUser {
   return {
     id: row.id,
     username: row.username,
@@ -38,10 +38,12 @@ function toAdminUser(row: AdminUserRow): AdminUser {
 
 /**
  * Validates admin credentials and issues an admin-scoped access token.
- * Rejects unknown usernames, wrong passwords and deactivated accounts alike.
+ * `username` may be the account's username or its email — admins added by a super
+ * admin are created with their email as username, and seeded admins can use either.
+ * Rejects unknown accounts, wrong passwords and deactivated accounts alike.
  */
 export function loginAdmin({ username, password }: AdminLoginInput): AdminLoginResult {
-  const row = adminUserDao.findAdminUserByUsername(username);
+  const row = adminUserDao.findAdminUserByLogin(username.trim());
   const isPasswordValid = bcrypt.compareSync(password, row?.password_hash || DUMMY_PASSWORD_HASH);
 
   if (!row || !isPasswordValid) {
@@ -94,7 +96,9 @@ export function verifyAdminToken(token: string): AdminJwtPayload | undefined {
     return undefined;
   }
 
-  return payload;
+  // Role comes from the row, not the token: a demoted super admin must lose
+  // super-admin access at once, not when their 8-hour token expires.
+  return { ...payload, role: row.role };
 }
 
 /** Current admin's profile, for the portal header. */

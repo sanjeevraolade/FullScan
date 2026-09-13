@@ -1012,10 +1012,12 @@ response; no secret in any log line.
   the damage; a real deployment should pin an allowlist of origins.
 - Logout cannot invalidate an already-issued Bearer token before expiry (stateless JWT). A denylist
   or refresh-token rotation is the fix if that is ever required.
-- There is no admin-user CRUD, password change/reset, MFA, or login audit table. Admins are seeded
-  by migration only.
-- `super_admin` is stored and exposed on `req.adminRole` but no endpoint restricts on it yet — the
-  hook is there for the first page that needs it.
+- There is no password change/reset, MFA, email delivery, or login audit table. A super admin can
+  add admins by email, promote/demote, deactivate/reactivate and delete them — see
+  [`super-admin-functionality.md`](./super-admin-functionality.md).
+- `super_admin` is now enforced: Mobile App Settings and admin-user management are super-admin-only
+  on the server (`requireAdminRole`) and in the drawer. See
+  [`super-admin-functionality.md`](./super-admin-functionality.md) for the role matrix.
 
 ---
 

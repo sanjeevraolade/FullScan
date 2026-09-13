@@ -23,8 +23,14 @@ const { app } = await import('../../src/app.js');
 
 export { app, closeDb, getDb };
 
-/** Test credentials seeded by migration 013. */
+/** Test credentials seeded by migration 013. `SEEDED_ADMIN` is the super admin. */
 export const SEEDED_ADMIN = { username: 'admin001', password: 'Admin@123!', id: 'admin-001' };
+export const SEEDED_REGULAR_ADMIN = {
+  username: 'admin002',
+  password: 'Admin@123!',
+  id: 'admin-002',
+  email: 'priya.nair@fullscan.test',
+};
 export const SEEDED_INACTIVE_ADMIN = { username: 'admin004', password: 'Admin@123!' };
 
 /** Pulls the admin session cookie out of a login response's Set-Cookie header. */

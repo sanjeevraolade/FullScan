@@ -3,6 +3,7 @@ import {
   ADMIN_MENU,
   DEFAULT_ROUTE,
   findMenuItemByRoute,
+  getDefaultRoute,
   getVisibleMenu,
   groupMenuBySection,
 } from '../public/admin/assets/js/menu.js';
@@ -16,16 +17,18 @@ import { renderIcon } from '../public/admin/assets/js/icons.js';
  */
 
 describe('drawer menu registry', () => {
-  it('lands on Cases, and resolves every shipped route', () => {
+  it('lands on Cases, and resolves every shipped route for a super admin', () => {
     expect(DEFAULT_ROUTE).toBe('cases');
 
-    expect(findMenuItemByRoute('cases', 'admin')?.label).toBe('Cases');
-    expect(findMenuItemByRoute('field-executive-history', 'admin')?.label).toBe(
+    expect(findMenuItemByRoute('cases', 'super_admin')?.label).toBe('Cases');
+    expect(findMenuItemByRoute('field-executive-history', 'super_admin')?.label).toBe(
       'Field Executive History',
     );
-    expect(findMenuItemByRoute('mobile-app-settings', 'admin')?.label).toBe(
+    expect(findMenuItemByRoute('new-case', 'super_admin')?.label).toBe('Add New Case');
+    expect(findMenuItemByRoute('mobile-app-settings', 'super_admin')?.label).toBe(
       'Mobile App Settings',
     );
+    expect(findMenuItemByRoute('admin-users', 'super_admin')?.label).toBe('Add New Admin');
   });
 
   it('gives every entry the fields the drawer and router need', () => {
@@ -48,12 +51,54 @@ describe('drawer menu registry', () => {
     expect(findMenuItemByRoute('not-a-page', 'super_admin')).toBeUndefined();
   });
 
-  it('shows unrestricted entries to every role', () => {
-    // No shipped entry declares `roles`, so both roles see the whole registry.
-    expect(getVisibleMenu('admin').map((item) => item.id)).toEqual(
-      ADMIN_MENU.map((item) => item.id),
-    );
-    expect(getVisibleMenu('super_admin').length).toBe(ADMIN_MENU.length);
+  it('shows a super admin every page', () => {
+    expect(getVisibleMenu('super_admin').map((item) => item.id)).toEqual([
+      'cases',
+      'field-executive-history',
+      'new-case',
+      'mobile-app-settings',
+      'admin-users',
+    ]);
+  });
+
+  it('shows an admin only Cases, Field Executive History and Add New Case', () => {
+    expect(getVisibleMenu('admin').map((item) => item.id)).toEqual([
+      'cases',
+      'field-executive-history',
+      'new-case',
+    ]);
+    expect(findMenuItemByRoute('mobile-app-settings', 'admin')).toBeUndefined();
+    expect(findMenuItemByRoute('admin-users', 'admin')).toBeUndefined();
+  });
+
+  it('shows an unknown role only the unrestricted pages', () => {
+    expect(getVisibleMenu(undefined).some((item) => item.roles)).toBe(false);
+  });
+
+  it('lands each role on a page that role can open', () => {
+    for (const role of ['admin', 'super_admin']) {
+      expect(getDefaultRoute(role), role).toBe('cases');
+      expect(findMenuItemByRoute(getDefaultRoute(role), role), role).toBeDefined();
+    }
+  });
+
+  it('never defaults a role to a page hidden from it, even if one is listed first', () => {
+    // A restricted first entry must not become an admin's fallback — the router
+    // would redirect to it, fail to resolve it, and loop.
+    const restrictedFirst = {
+      id: 'stand-in',
+      route: 'stand-in',
+      label: 'Stand-in',
+      roles: ['super_admin'],
+    };
+    ADMIN_MENU.unshift(restrictedFirst);
+
+    try {
+      expect(getDefaultRoute('super_admin')).toBe('stand-in');
+      expect(getDefaultRoute('admin')).toBe('cases');
+    } finally {
+      ADMIN_MENU.shift();
+    }
   });
 
   it('honours `roles` on an entry that declares it', () => {
@@ -71,12 +116,22 @@ describe('drawer menu registry', () => {
   it('groups entries into drawer sections, preserving registry order', () => {
     const sections = groupMenuBySection('super_admin');
 
-    expect(sections.map((section) => section.label)).toEqual(['Operations', 'Configuration']);
+    expect(sections.map((section) => section.label)).toEqual([
+      'Operations',
+      'Configuration',
+      'Administration',
+    ]);
     expect(sections[0].items.map((item) => item.id)).toEqual([
       'cases',
       'field-executive-history',
+      'new-case',
     ]);
     expect(sections[1].items.map((item) => item.id)).toEqual(['mobile-app-settings']);
+    expect(sections[2].items.map((item) => item.id)).toEqual(['admin-users']);
+  });
+
+  it('drops a section entirely when a role can see none of its entries', () => {
+    expect(groupMenuBySection('admin').map((section) => section.label)).toEqual(['Operations']);
   });
 
   it('puts an ungrouped entry ahead of every section', () => {

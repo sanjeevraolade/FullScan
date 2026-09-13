@@ -6,15 +6,17 @@
  * before the next one renders.
  */
 
-import { DEFAULT_ROUTE, findMenuItemByRoute } from './menu.js';
+import { findMenuItemByRoute, getDefaultRoute } from './menu.js';
 import { escapeHtml, renderAlert } from './dom.js';
 
 /** `#/mobile-app-settings` -> `mobile-app-settings` */
-function readRouteFromHash() {
-  return window.location.hash.replace(/^#\/?/, '').split('?')[0] || DEFAULT_ROUTE;
+function readRouteFromHash(defaultRoute) {
+  return window.location.hash.replace(/^#\/?/, '').split('?')[0] || defaultRoute;
 }
 
 export function createRouter({ shell, adminUser, drawer }) {
+  // Role-aware: an admin must never be sent to a page only a super admin can open.
+  const defaultRoute = getDefaultRoute(adminUser.role);
   const outlet = shell.querySelector('[data-outlet]');
   const topbarTitle = shell.querySelector('[data-topbar-title]');
   const pageHeader = shell.querySelector('[data-page-header]');
@@ -36,13 +38,13 @@ export function createRouter({ shell, adminUser, drawer }) {
   }
 
   async function renderRoute() {
-    const route = readRouteFromHash();
+    const route = readRouteFromHash(defaultRoute);
     const item = findMenuItemByRoute(route, adminUser.role);
 
     // Unknown or not-permitted route: fall back to the default page rather than
     // leaving the admin on a blank screen. Rewriting the hash re-enters here.
     if (!item) {
-      window.location.replace(`#/${DEFAULT_ROUTE}`);
+      window.location.replace(`#/${defaultRoute}`);
       return;
     }
 
@@ -92,7 +94,7 @@ export function createRouter({ shell, adminUser, drawer }) {
       window.addEventListener('hashchange', renderRoute);
 
       if (!window.location.hash) {
-        window.location.replace(`#/${DEFAULT_ROUTE}`);
+        window.location.replace(`#/${defaultRoute}`);
         return;
       }
 

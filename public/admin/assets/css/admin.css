@@ -1246,6 +1246,85 @@ button {
   word-break: break-word;
 }
 
+/* ==========================================================================
+   Add New Admin (super admin only)
+   ========================================================================== */
+
+.card__footer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--border);
+}
+
+.card--success {
+  border-color: var(--success);
+  border-left-width: 3px;
+}
+
+/* A table sitting directly inside a card: the card already draws the frame. */
+.table-wrap--flush {
+  border: 0;
+  border-radius: 0 0 var(--radius-md) var(--radius-md);
+  box-shadow: none;
+}
+
+/* Read-only rows — nothing to open, so no pointer or hover affordance. */
+.table--static {
+  min-width: 720px;
+}
+
+.table--static tbody tr {
+  cursor: default;
+}
+
+.table--static tbody tr:hover {
+  background: none;
+}
+
+.table--actions {
+  min-width: 1040px;
+}
+
+.row-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.btn--sm {
+  padding: 5px 10px;
+  font-size: 12.5px;
+}
+
+.badge--super_admin {
+  color: var(--brand-600);
+  background: var(--brand-050);
+}
+
+.badge--admin,
+.badge--inactive {
+  color: var(--text-muted);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+}
+
+.credential__list {
+  margin-top: 12px;
+}
+
+.credential__secret {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  word-break: break-all;
+  user-select: all;
+}
+
 @media (max-width: 640px) {
   .toolbar__search,
   .toolbar__filter {

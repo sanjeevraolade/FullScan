@@ -59,7 +59,7 @@ form.addEventListener('submit', async (event) => {
     setFieldValidity(false);
     renderAlert(alertContainer, {
       variant: 'error',
-      message: 'Enter both your username and password.',
+      message: 'Enter both your username or email and your password.',
     });
     (username ? passwordInput : usernameInput).focus();
     return;

@@ -25,6 +25,13 @@
  *   section     optional drawer group label (entries without one come first)
  *   roles       optional array of admin roles allowed to see it; omit = all
  *   loadPage    () => import('./pages/<module>.js')
+ *
+ * Role access (see docs/super-admin-functionality.md):
+ *   super_admin  Cases · Field Executive History · Add New Case · Mobile App Settings · Add New Admin
+ *   admin        Cases · Field Executive History · Add New Case
+ *
+ * `roles` only hides the page. Any API it calls that must be restricted too needs
+ * `requireAdminRole(...)` on the server — the drawer is not a security boundary.
  */
 
 export const ADMIN_MENU = [
@@ -49,6 +56,16 @@ export const ADMIN_MENU = [
     loadPage: () => import('./pages/field-executive-history.js'),
   },
   {
+    id: 'new-case',
+    route: 'new-case',
+    label: 'Add New Case',
+    icon: 'plus',
+    title: 'Add New Case',
+    subtitle: 'Create a case with one or more verification components, ready to be assigned.',
+    section: 'Operations',
+    loadPage: () => import('./pages/new-case.js'),
+  },
+  {
     id: 'mobile-app-settings',
     route: 'mobile-app-settings',
     label: 'Mobile App Settings',
@@ -56,28 +73,38 @@ export const ADMIN_MENU = [
     title: 'Mobile App Settings',
     subtitle: 'Remote configuration the FullScan mobile app applies for every field executive.',
     section: 'Configuration',
+    roles: ['super_admin'],
     loadPage: () => import('./pages/mobile-app-settings.js'),
   },
-
-  // Future pages drop in here, e.g.:
-  // {
-  //   id: 'field-executives',
-  //   route: 'field-executives',
-  //   label: 'Field Executives',
-  //   icon: 'users',
-  //   title: 'Field Executives',
-  //   section: 'Operations',
-  //   roles: ['super_admin'],
-  //   loadPage: () => import('./pages/field-executives.js'),
-  // },
+  {
+    id: 'admin-users',
+    route: 'admin-users',
+    label: 'Add New Admin',
+    icon: 'userPlus',
+    title: 'Add New Admin',
+    subtitle: 'Add admins by email, promote or demote them, and deactivate or delete accounts.',
+    section: 'Administration',
+    roles: ['super_admin'],
+    loadPage: () => import('./pages/admin-users.js'),
+  },
 ];
 
-/** Route shown when the hash is empty or unrecognised. */
+/** The registry's first route. Every role can see it today — prefer `getDefaultRoute(role)`. */
 export const DEFAULT_ROUTE = ADMIN_MENU[0].route;
 
 /** Menu entries the given admin role may see. */
 export function getVisibleMenu(role) {
   return ADMIN_MENU.filter((item) => !item.roles || item.roles.includes(role));
+}
+
+/**
+ * Where a role lands when the hash is empty or names a page it cannot open.
+ * Always a route that role can see — falling back to a hidden route would make the
+ * router redirect to it, fail to resolve it, and redirect again forever.
+ */
+export function getDefaultRoute(role) {
+  const [first] = getVisibleMenu(role);
+  return first ? first.route : DEFAULT_ROUTE;
 }
 
 export function findMenuItemByRoute(route, role) {

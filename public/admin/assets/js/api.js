@@ -157,4 +157,27 @@ export const adminApi = {
   async getFieldExecutiveHistory(fieldExecutiveId) {
     return apiRequest(`/field-executives/${encodeURIComponent(fieldExecutiveId)}/history`);
   },
+
+  /** Every admin account. Super admin only — an admin gets 403. */
+  async listAdminUsers() {
+    return apiRequest('/admin-users');
+  },
+
+  /** Adds an admin by email; resolves to `{ adminUser, temporaryPassword }`. Super admin only. */
+  async createAdminUser({ name, email, role }) {
+    return apiRequest('/admin-users', { method: 'POST', body: { name, email, role } });
+  },
+
+  /** Promote/demote (`role`) and/or deactivate/reactivate (`isActive`) another admin. Super admin only. */
+  async updateAdminUser(adminUserId, changes) {
+    return apiRequest(`/admin-users/${encodeURIComponent(adminUserId)}`, {
+      method: 'PATCH',
+      body: changes,
+    });
+  },
+
+  /** Permanently deletes another admin; refused (409) when the account has audit history. Super admin only. */
+  async deleteAdminUser(adminUserId) {
+    return apiRequest(`/admin-users/${encodeURIComponent(adminUserId)}`, { method: 'DELETE' });
+  },
 };

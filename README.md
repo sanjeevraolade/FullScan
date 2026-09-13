@@ -100,8 +100,12 @@ All routes are mounted under `/api/v1`:
 | `/admin/auth/login`                 | POST   | Validate admin credentials, set session cookie + return token |
 | `/admin/auth/logout`                | POST   | Clear the admin session cookie (admin auth required)     |
 | `/admin/auth/me`                    | GET    | Current admin's profile (admin auth required)            |
-| `/admin/mobile-app-settings`        | GET    | Mobile app settings + render metadata (admin auth required) |
-| `/admin/mobile-app-settings`        | PUT    | Update mobile app settings (admin auth required)         |
+| `/admin/mobile-app-settings`        | GET    | Mobile app settings + render metadata (**super admin only**) |
+| `/admin/mobile-app-settings`        | PUT    | Update mobile app settings (**super admin only**)         |
+| `/admin/admin-users`                | GET    | Every admin account (**super admin only**)                |
+| `/admin/admin-users`                | POST   | Add an admin by email, returns a one-time temporary password (**super admin only**) |
+| `/admin/admin-users/:adminUserId`   | PATCH  | Promote/demote (`role`) and/or deactivate/reactivate (`isActive`) another admin (**super admin only**) |
+| `/admin/admin-users/:adminUserId`   | DELETE | Permanently delete another admin; refused if it has audit history (**super admin only**) |
 | `/admin/cases`                      | GET    | All case components, filtered/paged, + per-category counts (admin auth required) |
 | `/admin/cases`                      | POST   | Create a case and its components (admin auth required)   |
 | `/admin/cases/form-options`         | GET    | Status/type vocabularies for the case editor (admin auth required) |

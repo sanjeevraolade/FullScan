@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import { AppError } from '../utils/app-error.js';
 import { verifyAdminToken } from '../services/admin-auth.service.js';
 import { readAdminSessionCookie } from '../utils/admin-session-cookie.js';
+import type { AdminRole } from '../types/admin.types.js';
 
 /** Where the portal's login page lives, for redirecting unauthenticated page requests. */
 export const ADMIN_LOGIN_PATH = '/admin/login';
@@ -41,6 +42,23 @@ export function authenticateAdmin(req: Request, _res: Response, next: NextFuncti
   req.adminUserId = payload.adminUserId;
   req.adminRole = payload.role;
   next();
+}
+
+/**
+ * Restricts an admin API route to the given roles. Mount **after**
+ * `authenticateAdmin`, which populates `req.adminRole` from the live account row.
+ *
+ * Responds 403 (not 404): the caller is a signed-in admin, and the portal hides
+ * these pages from their role anyway, so there is nothing to conceal.
+ */
+export function requireAdminRole(...allowedRoles: AdminRole[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.adminRole || !allowedRoles.includes(req.adminRole)) {
+      next(new AppError(403, 'Your admin role does not have access to this feature'));
+      return;
+    }
+    next();
+  };
 }
 
 /**
