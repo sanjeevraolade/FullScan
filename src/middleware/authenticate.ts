@@ -18,9 +18,11 @@ export function authenticate(req: Request, res: Response, next: NextFunction): v
   try {
     const payload = jwt.verify(token, JWT_SECRET) as JwtPayload;
 
-    // Admin tokens are signed with the same secret, so verifying the signature is
-    // not enough — a field-executive route requires a field-executive claim.
-    if (!payload.fieldExecutiveId) {
+    // Admin and FE web-portal tokens are signed with the same secret, so verifying the
+    // signature is not enough. A mobile token carries a field-executive claim and no
+    // scope: a web token (`scope: 'fe_web'`) has the claim too, but was issued without
+    // device binding, so it must not reach the device-bound mobile API.
+    if (!payload.fieldExecutiveId || payload.scope !== undefined) {
       next(new AppError(401, 'Invalid or expired authentication token'));
       return;
     }

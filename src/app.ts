@@ -19,6 +19,13 @@ import { adminCaseRoutes } from './routes/admin-case.routes.js';
 import { adminFieldExecutiveRoutes } from './routes/admin-field-executive.routes.js';
 import { adminUserRoutes } from './routes/admin-user.routes.js';
 import { adminPortalRoutes } from './routes/admin-portal.routes.js';
+import { feWebAuthRoutes } from './routes/fe-web-auth.routes.js';
+import { feWebCaseRoutes } from './routes/fe-web-case.routes.js';
+import { feWebProfileRoutes } from './routes/fe-web-profile.routes.js';
+import { feWebDeviceChangeRoutes } from './routes/fe-web-device-change.routes.js';
+import { adminDeviceChangeRoutes } from './routes/admin-device-change.routes.js';
+import { authenticateFeWeb } from './middleware/authenticate-fe-web.js';
+import { feWebPortalRoutes } from './routes/fe-web-portal.routes.js';
 
 export const app = express();
 
@@ -45,10 +52,21 @@ app.use('/api/v1/admin/auth', adminAuthRoutes);
 app.use('/api/v1/admin/mobile-app-settings', authenticateAdmin, requireSuperAdmin, mobileAppSettingRoutes);
 app.use('/api/v1/admin/cases', authenticateAdmin, adminCaseRoutes);
 app.use('/api/v1/admin/field-executives', authenticateAdmin, adminFieldExecutiveRoutes);
+app.use('/api/v1/admin/device-change-requests', authenticateAdmin, adminDeviceChangeRoutes);
 app.use('/api/v1/admin/admin-users', authenticateAdmin, requireSuperAdmin, adminUserRoutes);
+
+// Field executive web API (web-scoped session cookie, no device binding). Web tokens
+// are refused by the mobile routes above, and mobile tokens by these.
+app.use('/api/v1/fe-web/auth', feWebAuthRoutes);
+app.use('/api/v1/fe-web/cases', authenticateFeWeb, feWebCaseRoutes);
+app.use('/api/v1/fe-web/profile', authenticateFeWeb, feWebProfileRoutes);
+app.use('/api/v1/fe-web/device-change', authenticateFeWeb, feWebDeviceChangeRoutes);
 
 // Admin Portal — server-rendered static front end at /admin (pages guarded server-side)
 app.use('/admin', adminPortalRoutes);
+
+// Field Executive web portal — static front end at /fe (pages guarded server-side)
+app.use('/fe', feWebPortalRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

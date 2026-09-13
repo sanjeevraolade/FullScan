@@ -27,8 +27,8 @@
  *   loadPage    () => import('./pages/<module>.js')
  *
  * Role access (see docs/super-admin-functionality.md):
- *   super_admin  Cases · Field Executive History · Add New Case · Mobile App Settings · Add New Admin
- *   admin        Cases · Field Executive History · Add New Case
+ *   super_admin  Cases · Field Executive History · Device Change Requests · Add New Case · Mobile App Settings · Add New Admin
+ *   admin        Cases · Field Executive History · Device Change Requests · Add New Case
  *
  * `roles` only hides the page. Any API it calls that must be restricted too needs
  * `requireAdminRole(...)` on the server — the drawer is not a security boundary.
@@ -54,6 +54,16 @@ export const ADMIN_MENU = [
     subtitle: 'Case-wise activity for one field executive, including every mock-location detection.',
     section: 'Operations',
     loadPage: () => import('./pages/field-executive-history.js'),
+  },
+  {
+    id: 'device-change-requests',
+    route: 'device-change-requests',
+    label: 'Device Change Requests',
+    icon: 'phone',
+    title: 'Device Change Requests',
+    subtitle: 'Field executives asking to use the FullScan app on another phone — approve or reject.',
+    section: 'Operations',
+    loadPage: () => import('./pages/device-change-requests.js'),
   },
   {
     id: 'new-case',

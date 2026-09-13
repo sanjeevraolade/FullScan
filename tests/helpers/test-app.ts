@@ -33,12 +33,21 @@ export const SEEDED_REGULAR_ADMIN = {
 };
 export const SEEDED_INACTIVE_ADMIN = { username: 'admin004', password: 'Admin@123!' };
 
-/** Pulls the admin session cookie out of a login response's Set-Cookie header. */
-export function extractSessionCookie(setCookieHeader: string[] | undefined): string {
-  const cookie = (setCookieHeader || []).find((value) => value.startsWith('fs_admin_session='));
+/** Field executive seeded by migrations 002/007 — also the account the mobile app uses. */
+export const SEEDED_FIELD_EXECUTIVE = { username: 'fe001', password: 'Password123!', id: 'fe-001' };
+
+/**
+ * Pulls a session cookie (`name=value`) out of a login response's Set-Cookie header.
+ * Defaults to the admin cookie; pass `fs_fe_session` for the field executive web portal.
+ */
+export function extractSessionCookie(
+  setCookieHeader: string[] | undefined,
+  cookieName = 'fs_admin_session',
+): string {
+  const cookie = (setCookieHeader || []).find((value) => value.startsWith(`${cookieName}=`));
 
   if (!cookie) {
-    throw new Error('No fs_admin_session cookie was set');
+    throw new Error(`No ${cookieName} cookie was set`);
   }
 
   return cookie.split(';')[0];

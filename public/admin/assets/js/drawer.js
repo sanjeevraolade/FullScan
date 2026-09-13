@@ -3,10 +3,12 @@
  *
  * Docked permanently at >=1024px and off-canvas below that (CSS decides which);
  * this module only owns the open/closed state, the markup built from the menu
- * registry, and the pinned Logout action at the bottom.
+ * sections it is given, and the pinned Logout action at the bottom.
+ *
+ * Shared by both browser portals: the Admin Portal and the Field Executive web
+ * portal each pass their own account details and menu sections.
  */
 
-import { groupMenuBySection } from './menu.js';
 import { renderIcon } from './icons.js';
 import { escapeHtml } from './dom.js';
 
@@ -22,12 +24,9 @@ function toInitials(name) {
     .join('');
 }
 
-function formatRole(role) {
-  return role.replace(/_/g, ' ');
-}
-
-function renderMenuMarkup(role) {
-  return groupMenuBySection(role)
+/** `sections` is `[{ label: string | null, items: [{ route, icon, label }] }]`. */
+function renderMenuMarkup(sections) {
+  return sections
     .map((section) => {
       const label = section.label
         ? `<p class="drawer__section-label">${escapeHtml(section.label)}</p>`
@@ -50,7 +49,14 @@ function renderMenuMarkup(role) {
     .join('');
 }
 
-export function createDrawer({ shell, adminUser, onSignOut }) {
+/**
+ * @param {object} options
+ * @param {HTMLElement} options.shell
+ * @param {{ name: string, subtitle: string }} options.account  Drawer header account block.
+ * @param {Array} options.sections  Menu sections to render, in order.
+ * @param {(event: Event) => void} options.onSignOut
+ */
+export function createDrawer({ shell, account, sections, onSignOut }) {
   const drawer = shell.querySelector('[data-drawer]');
   const nav = shell.querySelector('[data-drawer-nav]');
   const scrim = shell.querySelector('[data-scrim]');
@@ -59,11 +65,11 @@ export function createDrawer({ shell, adminUser, onSignOut }) {
   const logoutButton = shell.querySelector('[data-logout]');
   const mobileQuery = window.matchMedia(MOBILE_BREAKPOINT);
 
-  shell.querySelector('[data-account-avatar]').textContent = toInitials(adminUser.name);
-  shell.querySelector('[data-account-name]').textContent = adminUser.name;
-  shell.querySelector('[data-account-role]').textContent = formatRole(adminUser.role);
+  shell.querySelector('[data-account-avatar]').textContent = toInitials(account.name);
+  shell.querySelector('[data-account-name]').textContent = account.name;
+  shell.querySelector('[data-account-role]').textContent = account.subtitle;
 
-  nav.innerHTML = renderMenuMarkup(adminUser.role);
+  nav.innerHTML = renderMenuMarkup(sections);
   logoutButton.insertAdjacentHTML('afterbegin', renderIcon('logout'));
   toggleButton.innerHTML = renderIcon('menu', 20);
   closeButton.innerHTML = renderIcon('close', 20);

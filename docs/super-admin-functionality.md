@@ -186,8 +186,8 @@ That default used to be `ADMIN_MENU[0].route`, the first entry **regardless of r
 were ever super-admin-only, an admin would be redirected to it, fail to resolve it, and be redirected
 again, forever.
 
-`menu.js` now exports `getDefaultRoute(role)`: the first entry **that role can see**. The router uses
-it for both fallbacks. Today both roles land on Cases, but the guarantee no longer depends on
+`menu.js` now exports `getDefaultRoute(role)`: the first entry **that role can see**. `app.js` passes
+it to the router as `defaultRoute`, which uses it for both fallbacks. Today both roles land on Cases, but the guarantee no longer depends on
 registry order. A test puts a super-admin-only entry first and checks that an admin still lands on
 Cases.
 

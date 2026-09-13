@@ -557,7 +557,14 @@ Notes on the front end:
 ## 7. Navigation drawer & how to extend it
 
 The drawer is rendered from a **declarative registry**, not from markup. `index.html` ships an empty
-`<div data-drawer-nav>`; `drawer.js` fills it from `menu.js`.
+`<div data-drawer-nav>`; `app.js` groups the role's visible `menu.js` entries and hands them to
+`drawer.js`, which fills it.
+
+`drawer.js` and `router.js` are generic: they do not import `menu.js` or know about admin roles.
+Each portal's `app.js` passes in its account block, menu sections, route lookup, default route, app
+name and page context. The Field Executive web portal (`/fe`) reuses both modules with its own menu,
+see [`field-executive-web-login.md`](./field-executive-web-login.md). A change to either module
+affects both portals.
 
 ### Registry entry shape
 

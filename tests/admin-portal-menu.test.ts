@@ -55,16 +55,18 @@ describe('drawer menu registry', () => {
     expect(getVisibleMenu('super_admin').map((item) => item.id)).toEqual([
       'cases',
       'field-executive-history',
+      'device-change-requests',
       'new-case',
       'mobile-app-settings',
       'admin-users',
     ]);
   });
 
-  it('shows an admin only Cases, Field Executive History and Add New Case', () => {
+  it('shows an admin only Cases, Field Executive History, Device Change Requests and Add New Case', () => {
     expect(getVisibleMenu('admin').map((item) => item.id)).toEqual([
       'cases',
       'field-executive-history',
+      'device-change-requests',
       'new-case',
     ]);
     expect(findMenuItemByRoute('mobile-app-settings', 'admin')).toBeUndefined();
@@ -124,6 +126,7 @@ describe('drawer menu registry', () => {
     expect(sections[0].items.map((item) => item.id)).toEqual([
       'cases',
       'field-executive-history',
+      'device-change-requests',
       'new-case',
     ]);
     expect(sections[1].items.map((item) => item.id)).toEqual(['mobile-app-settings']);

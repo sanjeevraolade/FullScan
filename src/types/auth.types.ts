@@ -25,4 +25,6 @@ export interface LoginResult {
 
 export interface JwtPayload {
   readonly fieldExecutiveId: string;
+  /** Absent on mobile tokens. Present on admin (`admin`) and FE web (`fe_web`) tokens. */
+  readonly scope?: string;
 }

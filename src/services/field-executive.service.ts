@@ -1,6 +1,11 @@
 import * as fieldExecutiveDao from '../db/field-executive.dao.js';
 import { AppError } from '../utils/app-error.js';
-import type { FieldExecutive } from '../types/field-executive.types.js';
+import type { FieldExecutive, FieldExecutiveRow } from '../types/field-executive.types.js';
+
+/** Public profile shape — never carries the password hash or device binding. */
+export function toFieldExecutive(row: FieldExecutiveRow): FieldExecutive {
+  return { id: row.id, name: row.name, email: row.email, role: row.role };
+}
 
 export function getCurrentFieldExecutive(fieldExecutiveId: string): FieldExecutive {
   const row = fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
@@ -9,5 +14,5 @@ export function getCurrentFieldExecutive(fieldExecutiveId: string): FieldExecuti
     throw new AppError(404, 'No field executive session found');
   }
 
-  return { id: row.id, name: row.name, email: row.email, role: row.role };
+  return toFieldExecutive(row);
 }

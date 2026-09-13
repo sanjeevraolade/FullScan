@@ -1,7 +1,7 @@
-import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import * as adminUserDao from '../db/admin-user.dao.js';
 import { AppError } from '../utils/app-error.js';
+import { verifyPassword } from '../utils/password.js';
 import type {
   AdminJwtPayload,
   AdminLoginInput,
@@ -14,13 +14,6 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 
 /** Admin sessions are shorter-lived than the mobile app's 12h field-executive token. */
 export const ADMIN_TOKEN_EXPIRY_SECONDS = 8 * 60 * 60;
-
-/**
- * Compared against when the username does not exist, so a missing account costs
- * the same time as a wrong password and cannot be probed for user enumeration.
- * (bcrypt hash of a value no one can submit.)
- */
-const DUMMY_PASSWORD_HASH = '$2a$10$UDK0XJ6Bd3vhv7ScA0iiwuZ.tG3zuUmiq73Vx5DnscZo7lKQlymua';
 
 /** Single message for every credential failure — never reveals which half was wrong. */
 const INVALID_CREDENTIALS_MESSAGE = 'Invalid username or password';
@@ -44,7 +37,7 @@ export function toAdminUser(row: AdminUserRow): AdminUser {
  */
 export function loginAdmin({ username, password }: AdminLoginInput): AdminLoginResult {
   const row = adminUserDao.findAdminUserByLogin(username.trim());
-  const isPasswordValid = bcrypt.compareSync(password, row?.password_hash || DUMMY_PASSWORD_HASH);
+  const isPasswordValid = verifyPassword(password, row?.password_hash);
 
   if (!row || !isPasswordValid) {
     throw new AppError(401, INVALID_CREDENTIALS_MESSAGE);

@@ -1,0 +1,49 @@
+/* ==========================================================================
+   FullScan Field Executive web portal
+   Layered on top of /admin/assets/css/admin.css, which supplies every design
+   token, the drawer shell and all shared components. Only what the FE pages add
+   lives here. No inline styles: the portal CSP forbids them.
+   ========================================================================== */
+
+.fe-profile {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px 24px;
+  margin: 12px 0 0;
+}
+
+.fe-note {
+  margin-top: 14px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* Device change section inside the Mobile app device card */
+
+.fe-device-change {
+  padding-top: 16px;
+  margin-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
+.fe-device-change__title {
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 650;
+}
+
+.fe-status {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 10px;
+  align-items: baseline;
+  font-size: 13px;
+}
+
+.fe-textarea {
+  resize: vertical;
+}
+
+.fe-actions {
+  margin-top: 14px;
+}

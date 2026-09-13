@@ -188,8 +188,8 @@ function renderAdminRow(adminUser) {
       <td><span class="badge ${adminUser.isActive ? 'badge--completed' : 'badge--inactive'}">${
         adminUser.isActive ? 'Active' : 'Deactivated'
       }</span></td>
-      <td class="cell__muted">${escapeHtml(lastLogin || 'Never')}</td>
-      <td class="cell__muted">${escapeHtml(createdAt || '—')}</td>
+      <td><span class="cell__muted">${escapeHtml(lastLogin || 'Never')}</span></td>
+      <td><span class="cell__muted">${escapeHtml(createdAt || '—')}</span></td>
       <td>${renderActions(adminUser)}</td>
     </tr>`;
 }

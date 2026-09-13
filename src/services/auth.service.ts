@@ -2,6 +2,7 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import * as fieldExecutiveDao from '../db/field-executive.dao.js';
 import { AppError } from '../utils/app-error.js';
+import { recordMobileDeviceLogin } from './device-change.service.js';
 import type { LoginInput, LoginResult } from '../types/auth.types.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
@@ -50,14 +51,13 @@ export function login({ username, password, deviceId, deviceDetails }: LoginInpu
     }
     throw new AppError(
       403,
-      `This account is already logged in from ${previousDeviceName}. Please contact admin to change device binding.`,
+      `This account is already logged in from ${previousDeviceName}. Request a device change from the FullScan web portal, or contact admin to change device binding.`,
     );
   }
 
-  // Store or update device binding on first login or when device is updated
-  if (!row.device_id || row.device_id !== deviceId) {
-    fieldExecutiveDao.updateFieldExecutiveDeviceBinding(row.id, deviceId, JSON.stringify(deviceDetails));
-  }
+  // Bind this device on the account's first login (or its first since an approved
+  // device change), or stamp the login on the bound device — both kept in device history.
+  recordMobileDeviceLogin(row, deviceId, JSON.stringify(deviceDetails));
 
   const token = jwt.sign({ fieldExecutiveId: row.id }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 

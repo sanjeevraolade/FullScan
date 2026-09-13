@@ -158,6 +158,27 @@ export const adminApi = {
     return apiRequest(`/field-executives/${encodeURIComponent(fieldExecutiveId)}/history`);
   },
 
+  /** Device change requests, newest first, plus per-status counts. `filter`: `status`, `fieldExecutiveId`. */
+  async listDeviceChangeRequests(filter = {}) {
+    return apiRequest(`/device-change-requests${toQueryString(filter)}`);
+  },
+
+  /** Approves a request, releasing the executive's device binding. */
+  async approveDeviceChangeRequest(requestId, note) {
+    return apiRequest(`/device-change-requests/${encodeURIComponent(requestId)}/approve`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
+  /** Rejects a request; the note (optional) is shown to the executive. */
+  async rejectDeviceChangeRequest(requestId, note) {
+    return apiRequest(`/device-change-requests/${encodeURIComponent(requestId)}/reject`, {
+      method: 'POST',
+      body: note ? { note } : {},
+    });
+  },
+
   /** Every admin account. Super admin only — an admin gets 403. */
   async listAdminUsers() {
     return apiRequest('/admin-users');

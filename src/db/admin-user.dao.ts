@@ -90,6 +90,8 @@ export interface AdminAuditReferences {
   readonly settingsChanged: number;
   /** Admin accounts this admin added. */
   readonly adminsAdded: number;
+  /** Device change requests this admin approved or rejected. */
+  readonly deviceChangesDecided: number;
 }
 
 /** Rows that point at this admin through a foreign key — deleting it would orphan them. */
@@ -101,8 +103,15 @@ export function countAdminAuditReferences(id: string): AdminAuditReferences {
   const adminsAdded = db
     .prepare('SELECT COUNT(*) AS total FROM admin_users WHERE created_by = ?')
     .get(id) as { total: number };
+  const deviceChangesDecided = db
+    .prepare('SELECT COUNT(*) AS total FROM device_change_requests WHERE decided_by = ?')
+    .get(id) as { total: number };
 
-  return { settingsChanged: settingsChanged.total, adminsAdded: adminsAdded.total };
+  return {
+    settingsChanged: settingsChanged.total,
+    adminsAdded: adminsAdded.total,
+    deviceChangesDecided: deviceChangesDecided.total,
+  };
 }
 
 export function deleteAdminUser(id: string): void {

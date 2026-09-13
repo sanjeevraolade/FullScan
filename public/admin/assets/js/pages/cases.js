@@ -195,7 +195,7 @@ function renderRow(item) {
         BUCKET_LABELS[item.bucket] || item.bucket,
       )}</span></td>
       <td>${escapeHtml(labelForCode(state.formOptions.componentStatuses, item.componentStatus))}</td>
-      <td class="cell__muted">${escapeHtml(formatTimestamp(item.updatedAt) || '—')}</td>
+      <td><span class="cell__muted">${escapeHtml(formatTimestamp(item.updatedAt) || '—')}</span></td>
     </tr>`;
 }
 

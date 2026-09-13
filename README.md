@@ -97,6 +97,16 @@ All routes are mounted under `/api/v1`:
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
 | `/security/mock-location`           | POST   | Record a faked/mocked device location detected by the app (auth required) |
+| `/fe-web/auth/login`                | POST   | Field executive **web** sign-in (no device binding), sets `fs_fe_session` cookie |
+| `/fe-web/auth/logout`               | POST   | Clear the FE web session cookie (FE web session required) |
+| `/fe-web/auth/me`                   | GET    | Current field executive's profile (FE web session required) |
+| `/fe-web/cases`                     | GET    | The FE's own Pending / Beyond TAT / Completed cases, grouped, read-only (FE web session required) |
+| `/fe-web/profile`                   | GET    | The FE's profile + the mobile device their account is bound to, or `null` (FE web session required) |
+| `/fe-web/device-change`             | GET    | Whether the FE can request a device change now, plus their request and phone history (FE web session required) |
+| `/fe-web/device-change/requests`    | POST   | Request a device change for the bound phone; limited by mobile app settings (FE web session required) |
+| `/admin/device-change-requests`     | GET    | Device change requests by status/executive, with per-status counts (admin auth required) |
+| `/admin/device-change-requests/:requestId/approve` | POST | Approve: release the FE's phone binding so they can sign in on any phone (admin auth required) |
+| `/admin/device-change-requests/:requestId/reject`  | POST | Reject, with an optional note for the FE; binding unchanged (admin auth required) |
 | `/admin/auth/login`                 | POST   | Validate admin credentials, set session cookie + return token |
 | `/admin/auth/logout`                | POST   | Clear the admin session cookie (admin auth required)     |
 | `/admin/auth/me`                    | GET    | Current admin's profile (admin auth required)            |
@@ -157,12 +167,43 @@ Component/action/profile status codes come from `dropdown_options` (categories `
 `action_status`, `profile_status`), fetched via `/reference-data` like every other dropdown — see
 migration `009_create_case_components.sql`.
 
+## Field Executive Web Portal
+
+Field executives can also sign in from a browser at **`http://localhost:<PORT>/fe`** — the same
+accounts and passwords as the mobile app (`fe001` … `fe051` / `Password123!`). It is a
+dependency-free static front end under `public/fe/`, built the same way as the Admin Portal and
+sharing its stylesheet and DOM helpers. After sign-in it has the same navigation drawer as the Admin
+Portal (it reuses the admin drawer and router modules), with **Profile** (the landing page: account details, plus the phone
+the account is bound to if the FE has signed in to the mobile app, a **Request device change** option
+and the FE's request and phone history — see
+[`docs/device-change-requests.md`](docs/device-change-requests.md)) and **Cases**, the executive's own cases in three read-only tables (Pending, Beyond TAT, Completed; New
+is not shown), and Logout pinned at the bottom. Opening or working on a case still happens in the mobile app.
+
+- **No device binding.** `POST /api/v1/fe-web/auth/login` takes only `username` + `password`. A
+  browser has no stable device identity, so web sign-in neither checks nor changes the account's
+  mobile `device_id` — signing in on the web never locks an FE out of their handset, and a handset
+  binding never blocks the web.
+- **Web tokens are scoped `fe_web`** and isolated in every direction: the mobile API
+  (`authenticate`) now refuses any token carrying a `scope` claim, so a web session cannot be used
+  to reach the device-bound mobile routes; the web API refuses mobile and admin tokens; the admin
+  API refuses web tokens.
+- **Cookie-only session.** The token is set in an httpOnly, `SameSite=Strict` cookie
+  (`fs_fe_session`, 8 h) and is **not** returned in the response body, and the web API does not
+  accept a Bearer header. The cookie name differs from the admin cookie, so both portals can be
+  signed in in one browser.
+- Pages are guarded server-side (`authenticateFeWebPage` redirects to `/fe/login`), portal HTML is
+  `no-store`, the portal CSP matches `/admin`, `?next=` only honours paths inside `/fe`, and login is
+  rate limited at 10 failures per IP per 15 minutes — in a window separate from admin login.
+- Unknown usernames and wrong passwords get the same timing-equalised `401`.
+
+Full design, API reference and test coverage: [`docs/field-executive-web-login.md`](docs/field-executive-web-login.md).
+
 ## Admin Portal
 
 The server also hosts a small back-office web portal at **`http://localhost:<PORT>/admin`** —
 dependency-free static HTML/CSS/ES modules under `public/admin/`, served and guarded by Express.
-Signing in reveals a navigation drawer with **Cases** and **Field Executive History** under
-*Operations* and **Mobile App Settings** under *Configuration*, with **Logout** pinned at the bottom.
+Signing in reveals a navigation drawer with **Cases**, **Field Executive History** and
+**Device Change Requests** under *Operations* and **Mobile App Settings** under *Configuration*, with **Logout** pinned at the bottom.
 Cases is the landing page.
 
 - Pages are protected **server-side**: `/admin/*` runs through `authenticateAdminPage`, which
@@ -304,14 +345,16 @@ src/
   services/              Business logic per resource
   db/                    SQLite connection, DAOs, migrations (*.sql)
   routes/                 Route definitions + Zod request schemas
-  middleware/             validate (Zod), error-handler, authenticate, authenticate-admin
+  middleware/             validate (Zod), error-handler, authenticate, authenticate-admin,
+                          authenticate-fe-web, login rate limit, portal CSP
   types/                  Domain/DTO types per resource
   constants/              Mock session (pre-auth stand-in)
-  utils/                  Logger, AppError, admin session cookie
+  utils/                  Logger, AppError, password check, session cookies (admin + FE web)
 public/
   admin/                  Admin Portal front end (static HTML/CSS/ES modules)
     assets/js/menu.js     Drawer menu registry — the portal's extension point
     assets/js/pages/      One module per drawer page
+  fe/                     Field Executive web portal (login + signed-in home; reuses admin CSS/DOM helpers)
 tests/                    Vitest + Supertest suites
 ```
 

@@ -1,12 +1,14 @@
 /**
- * Hash router over the drawer menu registry.
+ * Hash router over a drawer menu registry.
  *
  * Page modules are imported lazily on first visit and cached, so adding a page
- * costs nothing until an admin opens it. The previous page's `destroy()` runs
+ * costs nothing until someone opens it. The previous page's `destroy()` runs
  * before the next one renders.
+ *
+ * Shared by both browser portals: each passes its own menu lookup, default route,
+ * app name and the context its page modules receive.
  */
 
-import { findMenuItemByRoute, getDefaultRoute } from './menu.js';
 import { escapeHtml, renderAlert } from './dom.js';
 
 /** `#/mobile-app-settings` -> `mobile-app-settings` */
@@ -14,9 +16,18 @@ function readRouteFromHash(defaultRoute) {
   return window.location.hash.replace(/^#\/?/, '').split('?')[0] || defaultRoute;
 }
 
-export function createRouter({ shell, adminUser, drawer }) {
-  // Role-aware: an admin must never be sent to a page only a super admin can open.
-  const defaultRoute = getDefaultRoute(adminUser.role);
+/**
+ * @param {object} options
+ * @param {HTMLElement} options.shell
+ * @param {{ setActiveRoute(route: string): void }} options.drawer
+ * @param {(route: string) => object | undefined} options.findMenuItem
+ *   Resolves a route to a menu entry the current user may open, or undefined.
+ * @param {string} options.defaultRoute  Must be a route `findMenuItem` resolves —
+ *   falling back to an unresolvable route would redirect forever.
+ * @param {string} options.appName  Suffix for `document.title`.
+ * @param {object} options.pageContext  Merged with `{ setStatus }` and passed to every page's `render`.
+ */
+export function createRouter({ shell, drawer, findMenuItem, defaultRoute, appName, pageContext }) {
   const outlet = shell.querySelector('[data-outlet]');
   const topbarTitle = shell.querySelector('[data-topbar-title]');
   const pageHeader = shell.querySelector('[data-page-header]');
@@ -39,10 +50,10 @@ export function createRouter({ shell, adminUser, drawer }) {
 
   async function renderRoute() {
     const route = readRouteFromHash(defaultRoute);
-    const item = findMenuItemByRoute(route, adminUser.role);
+    const item = findMenuItem(route);
 
     // Unknown or not-permitted route: fall back to the default page rather than
-    // leaving the admin on a blank screen. Rewriting the hash re-enters here.
+    // leaving the user on a blank screen. Rewriting the hash re-enters here.
     if (!item) {
       window.location.replace(`#/${defaultRoute}`);
       return;
@@ -55,7 +66,7 @@ export function createRouter({ shell, adminUser, drawer }) {
     }
     activePage = null;
 
-    document.title = `${item.title} · FullScan Admin`;
+    document.title = `${item.title} · ${appName}`;
     topbarTitle.textContent = item.title;
     drawer.setActiveRoute(item.route);
     setStatus(null);
@@ -78,7 +89,7 @@ export function createRouter({ shell, adminUser, drawer }) {
       const container = document.createElement('div');
       outlet.replaceChildren(container);
 
-      await pageModule.render(container, { adminUser, setStatus });
+      await pageModule.render(container, { ...pageContext, setStatus });
       activePage = pageModule;
     } catch (error) {
       if (token !== renderToken) {

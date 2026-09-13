@@ -16,6 +16,7 @@
 import { adminApi } from '../api.js';
 import { escapeHtml, formatTimestamp, formatWallClockTimestamp } from '../dom.js';
 import { renderIcon } from '../icons.js';
+import { renderDeviceHistoryTable, renderRequestHistoryTable } from '../device-change.js';
 
 const SEARCH_DEBOUNCE_MS = 300;
 
@@ -213,7 +214,7 @@ function renderCaseRow(entry) {
       </td>
       <td class="cell__wrap">${escapeHtml(entry.address || '—')}</td>
       <td>${escapeHtml(labelForComponentStatus(entry.componentStatus))}</td>
-      <td class="cell__muted">${escapeHtml(formatWallClockTimestamp(entry.tatDueAt) || '—')}</td>
+      <td><span class="cell__muted">${escapeHtml(formatWallClockTimestamp(entry.tatDueAt) || '—')}</span></td>
       <td>${detections}</td>
     </tr>
     ${detailRow}`;
@@ -332,8 +333,42 @@ function renderHistory(history) {
       <div class="card__body">${renderSummary(history)}</div>
     </section>
 
+    ${renderDeviceRecords(history)}
     ${history.caseGroups.map(renderGroup).join('')}
     ${unlinked}`;
+}
+
+/** Every phone the account was bound to, and every device change request with its outcome. */
+function renderDeviceRecords(history) {
+  const phones =
+    history.deviceHistory.length === 0
+      ? '<p class="case-group__empty">No phone has been linked to this account yet.</p>'
+      : renderDeviceHistoryTable(history.deviceHistory);
+
+  const requests =
+    history.deviceChangeRequests.length === 0
+      ? '<p class="case-group__empty">No device change requests.</p>'
+      : renderRequestHistoryTable(history.deviceChangeRequests, { showDecidedBy: true });
+
+  return `
+    <section class="case-group">
+      <header class="case-group__header">
+        <h2 class="case-group__title">Linked phones</h2>
+        <span class="case-group__count">${history.deviceHistory.length} phone link${
+          history.deviceHistory.length === 1 ? '' : 's'
+        }</span>
+      </header>
+      ${phones}
+    </section>
+    <section class="case-group">
+      <header class="case-group__header">
+        <h2 class="case-group__title">Device change requests</h2>
+        <span class="case-group__count">${history.deviceChangeRequests.length} request${
+          history.deviceChangeRequests.length === 1 ? '' : 's'
+        }</span>
+      </header>
+      ${requests}
+    </section>`;
 }
 
 function executiveOptionLabel(executive) {

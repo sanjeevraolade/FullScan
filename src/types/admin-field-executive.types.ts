@@ -1,4 +1,5 @@
 import type { CaseBucket } from './case.types.js';
+import type { AdminFieldExecutiveDeviceRecords } from './device-change.types.js';
 
 /**
  * Admin-facing field executive types.
@@ -98,7 +99,8 @@ export interface FieldExecutiveHistorySummary {
   readonly distinctDeviceCount: number;
 }
 
-export interface FieldExecutiveHistory {
+/** Also carries `deviceHistory` and `deviceChangeRequests` — see `device-change.types.ts`. */
+export interface FieldExecutiveHistory extends AdminFieldExecutiveDeviceRecords {
   readonly fieldExecutive: AdminFieldExecutiveListItem;
   readonly summary: FieldExecutiveHistorySummary;
   /** One list per workflow category, in display order — Pending, Beyond TAT, Completed. */

@@ -158,12 +158,16 @@ function pluralize(count: number, noun: string): string {
  */
 export function deleteAdminUser(targetAdminUserId: string, actingAdminUserId: string): void {
   const row = findManageableAdmin(targetAdminUserId, actingAdminUserId);
-  const { settingsChanged, adminsAdded } = adminUserDao.countAdminAuditReferences(row.id);
+  const { settingsChanged, adminsAdded, deviceChangesDecided } =
+    adminUserDao.countAdminAuditReferences(row.id);
 
-  if (settingsChanged > 0 || adminsAdded > 0) {
+  if (settingsChanged > 0 || adminsAdded > 0 || deviceChangesDecided > 0) {
     const history = [
       settingsChanged > 0 ? `last changed ${pluralize(settingsChanged, 'mobile app setting')}` : null,
       adminsAdded > 0 ? `added ${pluralize(adminsAdded, 'admin')}` : null,
+      deviceChangesDecided > 0
+        ? `decided ${pluralize(deviceChangesDecided, 'device change request')}`
+        : null,
     ]
       .filter(Boolean)
       .join(' and ');

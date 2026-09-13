@@ -1,4 +1,5 @@
 import * as adminFieldExecutiveDao from '../db/admin-field-executive.dao.js';
+import { getDeviceRecordsForAdmin } from './device-change.service.js';
 import { AppError } from '../utils/app-error.js';
 import type { CaseBucket } from '../types/case.types.js';
 import type { MockLocationEventRow } from '../types/mock-location.types.js';
@@ -219,5 +220,7 @@ export function getFieldExecutiveHistory(fieldExecutiveId: string): FieldExecuti
     },
     caseGroups: groupCasesByBucket(cases),
     unlinkedMockLocationEvents,
+    // Every phone the account has been bound to and every device change request — never deleted.
+    ...getDeviceRecordsForAdmin(fieldExecutiveId),
   };
 }

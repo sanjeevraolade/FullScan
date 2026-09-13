@@ -11,10 +11,15 @@
 import { adminApi, ApiError, LOGIN_PATH } from './api.js';
 import { createDrawer } from './drawer.js';
 import { createRouter } from './router.js';
+import { findMenuItemByRoute, getDefaultRoute, groupMenuBySection } from './menu.js';
 import { renderAlert } from './dom.js';
 
 const shell = document.querySelector('[data-shell]');
 const bootAlert = shell.querySelector('[data-boot-alert]');
+
+function formatRole(role) {
+  return role.replace(/_/g, ' ');
+}
 
 async function signOut(event) {
   const button = event.currentTarget;
@@ -46,8 +51,22 @@ async function startPortal() {
     return;
   }
 
-  const drawer = createDrawer({ shell, adminUser, onSignOut: signOut });
-  const router = createRouter({ shell, adminUser, drawer });
+  const drawer = createDrawer({
+    shell,
+    account: { name: adminUser.name, subtitle: formatRole(adminUser.role) },
+    sections: groupMenuBySection(adminUser.role),
+    onSignOut: signOut,
+  });
+
+  // Role-aware: an admin must never be sent to a page only a super admin can open.
+  const router = createRouter({
+    shell,
+    drawer,
+    findMenuItem: (route) => findMenuItemByRoute(route, adminUser.role),
+    defaultRoute: getDefaultRoute(adminUser.role),
+    appName: 'FullScan Admin',
+    pageContext: { adminUser },
+  });
 
   await router.start();
 }
