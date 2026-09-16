@@ -101,6 +101,10 @@ All routes are mounted under `/api/v1`:
 | `/fe-web/auth/logout`               | POST   | Clear the FE web session cookie (FE web session required) |
 | `/fe-web/auth/me`                   | GET    | Current field executive's profile (FE web session required) |
 | `/fe-web/cases`                     | GET    | The FE's own Pending / Beyond TAT / Completed cases, grouped, read-only (FE web session required) |
+| `/fe-web/cases/:componentId`        | GET    | One of the FE's own case components, read-only; 404 for anything else (FE web session required) |
+| `/fe-web/cases/:componentId/evidence` | GET  | Evidence uploaded from the web for that component (FE web session required) |
+| `/admin/cases/:caseId/evidence`     | GET    | Web-uploaded evidence across a case's components, with uploader (admin session required) |
+| `/fe-web/cases/:componentId/evidence` | POST | Multipart image upload (`files`, JPEG/PNG/WebP, ≤10 files, ≤10 MB each); Pending/Beyond TAT only (FE web session required) |
 | `/fe-web/profile`                   | GET    | The FE's profile + the mobile device their account is bound to, or `null` (FE web session required) |
 | `/fe-web/device-change`             | GET    | Whether the FE can request a device change now, plus their request and phone history (FE web session required) |
 | `/fe-web/device-change/requests`    | POST   | Request a device change for the bound phone; limited by mobile app settings (FE web session required) |
@@ -197,6 +201,43 @@ is not shown), and Logout pinned at the bottom. Opening or working on a case sti
 - Unknown usernames and wrong passwords get the same timing-equalised `401`.
 
 Full design, API reference and test coverage: [`docs/field-executive-web-login.md`](docs/field-executive-web-login.md).
+
+## Field Executive Web App (React)
+
+A React + TypeScript app in [`web-fe/`](web-fe/) (Vite, Tailwind, Zustand, React Router, Zod) that
+runs next to the static `/fe` portal on the same `/api/v1/fe-web/*` API and cookie session. It adds
+a dashboard, a filterable assignment list, assignment detail, and **evidence upload** from the browser.
+
+```bash
+npm run build:web      # install + build web-fe/ -> web-fe/dist, served at http://localhost:<PORT>/app
+npm run dev:web        # Vite dev server at http://localhost:5173/app, proxying /api to :3000 (run `npm run dev` too)
+npm run test:web       # client unit tests
+```
+
+- `/app/*` pages are guarded server-side like `/fe` (anonymous → `/app/login?next=…`), with the same
+  portal CSP. `/app` answers `503` until `web-fe` has been built.
+- **Web evidence is an exception to camera-only.** Uploads are stored with `source = 'web_upload'`,
+  have no GPS or watermark, and are type-checked by magic bytes on the server.
+
+Details: [`docs/field-executive-web-app.md`](docs/field-executive-web-app.md).
+
+## Admin Web App (React)
+
+[`web-admin/`](web-admin/): the same stack as `web-fe`, next to the static `/admin` portal and using the same
+admin API and `fs_admin_session` cookie. It has the same pages and role rules (Cases and the case editor, Add
+New Case, Field Executive History, Device Change Requests, and for super admins Mobile App Settings and Add
+New Admin). The case editor also lists each component's web-uploaded evidence.
+
+```bash
+npm run build:admin-web   # build web-admin/ -> served at http://localhost:<PORT>/admin-app
+npm run dev:admin-web     # Vite dev server at http://localhost:5174/admin-app (run `npm run dev` too)
+npm run test:admin-web
+```
+
+> ⚠️ Saving a case in the static `/admin` editor currently blanks `additional_verification_instructions`
+> and `additional_verification_remarks` (the form never sends them). The React editor keeps them.
+
+Details: [`docs/admin-web-app.md`](docs/admin-web-app.md).
 
 ## Admin Portal
 
@@ -355,6 +396,8 @@ public/
     assets/js/menu.js     Drawer menu registry — the portal's extension point
     assets/js/pages/      One module per drawer page
   fe/                     Field Executive web portal (login + signed-in home; reuses admin CSS/DOM helpers)
+web-fe/                   Field Executive React app (Vite) — built to web-fe/dist, served at /app
+web-admin/                Admin React app (Vite) — built to web-admin/dist, served at /admin-app
 tests/                    Vitest + Supertest suites
 ```
 

@@ -5,11 +5,17 @@
   "main": "dist/index.js",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:web": "npm --prefix web-fe run dev",
+    "dev:admin-web": "npm --prefix web-admin run dev",
     "build": "tsc && npm run copy:migrations",
     "copy:migrations": "node -e \"const fs = require('fs'); const path = require('path'); const src = 'src/db/migrations'; const dest = 'dist/db/migrations'; if(!fs.existsSync(dest)) fs.mkdirSync(dest, {recursive: true}); fs.readdirSync(src).forEach(f => fs.copyFileSync(path.join(src, f), path.join(dest, f)));\"",
+    "build:web": "npm --prefix web-fe ci && npm --prefix web-fe run build",
+    "build:admin-web": "npm --prefix web-admin ci && npm --prefix web-admin run build",
     "start": "node dist/index.js",
     "test": "vitest",
     "test:run": "vitest run",
+    "test:web": "npm --prefix web-fe test",
+    "test:admin-web": "npm --prefix web-admin test",
     "lint": "eslint src/",
     "migrate": "tsx src/db/migrate.ts"
   },

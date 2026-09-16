@@ -1,5 +1,6 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as adminCaseService from '../services/admin-case.service.js';
+import * as evidenceService from '../services/fe-web-evidence.service.js';
 import { logger } from '../utils/logger.js';
 import type { CaseBucket } from '../types/case.types.js';
 import type { AdminCaseListFilter } from '../types/admin-case.types.js';
@@ -100,6 +101,18 @@ export function updateCase(req: Request, res: Response, next: NextFunction): voi
     );
 
     res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/admin/cases/:caseId/evidence
+ * Web-uploaded evidence for every component of the case, with who uploaded it.
+ */
+export function getCaseEvidence(req: Request, res: Response, next: NextFunction): void {
+  try {
+    res.json({ success: true, data: evidenceService.getEvidenceForAdminCase(req.params.caseId) });
   } catch (err) {
     next(err);
   }

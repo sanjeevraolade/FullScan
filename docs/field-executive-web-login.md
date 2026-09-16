@@ -505,6 +505,11 @@ open-redirect protection; `no-store` on portal HTML; no password or token in log
 
 ## 10. Open question: case work on the web
 
+> **Update:** a read-only case detail endpoint and web evidence upload now exist, used by the React
+> app at `/app`. Web uploads are a deliberate, recorded exception to camera-only evidence — see
+> [`field-executive-web-app.md`](field-executive-web-app.md). Changing a case's status from the web is
+> still not built.
+
 The portal now shows an FE's profile and read-only lists of their cases. Going further (opening a
 case's details, or working on a case from the web) needs a product decision first, because the mobile
 workflow's rules are hard to meet in a browser:

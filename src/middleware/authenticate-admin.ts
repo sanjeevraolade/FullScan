@@ -62,20 +62,27 @@ export function requireAdminRole(...allowedRoles: AdminRole[]) {
 }
 
 /**
- * Guards admin **page** routes. An unauthenticated browser is redirected to the
- * login page (carrying `next` so it lands back where it was headed) instead of
+ * Builds a guard for admin **page** routes. An unauthenticated browser is redirected
+ * to `loginPath` (carrying `next` so it lands back where it was headed) instead of
  * being shown a JSON error.
  */
-export function authenticateAdminPage(req: Request, res: Response, next: NextFunction): void {
-  const token = extractAdminToken(req);
-  const payload = token ? verifyAdminToken(token) : undefined;
+export function createAdminPageGuard(
+  loginPath: string,
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const token = extractAdminToken(req);
+    const payload = token ? verifyAdminToken(token) : undefined;
 
-  if (!payload) {
-    res.redirect(`${ADMIN_LOGIN_PATH}?next=${encodeURIComponent(req.originalUrl)}`);
-    return;
-  }
+    if (!payload) {
+      res.redirect(`${loginPath}?next=${encodeURIComponent(req.originalUrl)}`);
+      return;
+    }
 
-  req.adminUserId = payload.adminUserId;
-  req.adminRole = payload.role;
-  next();
+    req.adminUserId = payload.adminUserId;
+    req.adminRole = payload.role;
+    next();
+  };
 }
+
+/** Page guard for the static Admin Portal at `/admin`. */
+export const authenticateAdminPage = createAdminPageGuard(ADMIN_LOGIN_PATH);

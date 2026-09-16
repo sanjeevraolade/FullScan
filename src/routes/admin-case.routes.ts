@@ -24,5 +24,8 @@ adminCaseRoutes.get('/form-options', controller.getCaseFormOptions);
 // GET /api/v1/admin/cases/:caseId — one case with all its components (case id, not component id)
 adminCaseRoutes.get('/:caseId', validate(getAdminCaseSchema), controller.getCase);
 
+// GET /api/v1/admin/cases/:caseId/evidence — web-uploaded evidence across the case's components (read-only)
+adminCaseRoutes.get('/:caseId/evidence', validate(getAdminCaseSchema), controller.getCaseEvidence);
+
 // PUT /api/v1/admin/cases/:caseId — update case fields and upsert its components
 adminCaseRoutes.put('/:caseId', validate(updateAdminCaseSchema), controller.updateCase);

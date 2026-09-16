@@ -13,6 +13,7 @@ import path from 'path';
 const testDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fullscan-server-test-'));
 
 process.env.DB_PATH = path.join(testDbDir, 'test.sqlite');
+process.env.UPLOAD_DIR = path.join(testDbDir, 'uploads');
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.NODE_ENV = 'test';
 
@@ -21,7 +22,7 @@ initDb();
 
 const { app } = await import('../../src/app.js');
 
-export { app, closeDb, getDb };
+export { app, closeDb, getDb, testDbDir };
 
 /** Test credentials seeded by migration 013. `SEEDED_ADMIN` is the super admin. */
 export const SEEDED_ADMIN = { username: 'admin001', password: 'Admin@123!', id: 'admin-001' };

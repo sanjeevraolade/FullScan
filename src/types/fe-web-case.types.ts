@@ -40,3 +40,42 @@ export interface FeWebCaseList {
   /** Always Pending, Beyond TAT, Completed — in that order, even when empty. */
   readonly caseGroups: readonly FeWebCaseGroup[];
 }
+
+/** Another component of the same case — enough context to show what else the case covers. */
+export interface FeWebSiblingComponent {
+  readonly componentId: string;
+  readonly verificationType: string;
+  readonly addressType: string | null;
+  readonly componentStatusLabel: string;
+  /** Only components this executive holds can be opened on the web. */
+  readonly isAssignedToYou: boolean;
+}
+
+/**
+ * One case component's details as the FE sees them on the web. Still read-only
+ * case data: no contact numbers, GPS targets, respondent or fraud-detection fields.
+ */
+export interface FeWebCaseDetail {
+  readonly componentId: string;
+  readonly caseId: string;
+  readonly caseRef: string;
+  readonly bucket: FeWebCaseBucket;
+  readonly clientName: string;
+  readonly candidateName: string;
+  readonly fatherOrSpouseName: string;
+  readonly employerName: string;
+  readonly verificationType: string;
+  readonly addressType: string | null;
+  readonly residenceType: string | null;
+  readonly address: string;
+  /** Locality line, e.g. "Chanda Nagar, Hyderabad, Telangana". */
+  readonly location: string;
+  readonly componentStatus: string;
+  readonly componentStatusLabel: string;
+  readonly clientInstructions: string;
+  readonly tatDueAt: string;
+  readonly updatedAt: string;
+  /** Evidence can be added while the component is Pending or Beyond TAT, never once Completed. */
+  readonly canUploadEvidence: boolean;
+  readonly siblingComponents: readonly FeWebSiblingComponent[];
+}

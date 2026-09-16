@@ -26,6 +26,8 @@ import { feWebDeviceChangeRoutes } from './routes/fe-web-device-change.routes.js
 import { adminDeviceChangeRoutes } from './routes/admin-device-change.routes.js';
 import { authenticateFeWeb } from './middleware/authenticate-fe-web.js';
 import { feWebPortalRoutes } from './routes/fe-web-portal.routes.js';
+import { feWebAppRoutes } from './routes/fe-web-app.routes.js';
+import { adminAppRoutes } from './routes/admin-app.routes.js';
 
 export const app = express();
 
@@ -65,8 +67,14 @@ app.use('/api/v1/fe-web/device-change', authenticateFeWeb, feWebDeviceChangeRout
 // Admin Portal — server-rendered static front end at /admin (pages guarded server-side)
 app.use('/admin', adminPortalRoutes);
 
+// Admin React app — Vite build of web-admin/ at /admin-app (pages guarded server-side)
+app.use('/admin-app', adminAppRoutes);
+
 // Field Executive web portal — static front end at /fe (pages guarded server-side)
 app.use('/fe', feWebPortalRoutes);
+
+// Field Executive React app — Vite build of web-fe/ at /app (pages guarded server-side)
+app.use('/app', feWebAppRoutes);
 
 // Error handler (must be last)
 app.use(errorHandler);

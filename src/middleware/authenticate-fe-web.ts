@@ -31,18 +31,25 @@ export function authenticateFeWeb(req: Request, _res: Response, next: NextFuncti
 }
 
 /**
- * Guards field executive web **page** routes. An unauthenticated browser is
- * redirected to the login page (carrying `next`) instead of being shown JSON.
+ * Builds a guard for field executive web **page** routes. An unauthenticated browser
+ * is redirected to `loginPath` (carrying `next`) instead of being shown JSON.
  */
-export function authenticateFeWebPage(req: Request, res: Response, next: NextFunction): void {
-  const token = readFeWebSessionCookie(req);
-  const payload = token ? verifyFeWebToken(token) : undefined;
+export function createFeWebPageGuard(
+  loginPath: string,
+): (req: Request, res: Response, next: NextFunction) => void {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const token = readFeWebSessionCookie(req);
+    const payload = token ? verifyFeWebToken(token) : undefined;
 
-  if (!payload) {
-    res.redirect(`${FE_WEB_LOGIN_PATH}?next=${encodeURIComponent(req.originalUrl)}`);
-    return;
-  }
+    if (!payload) {
+      res.redirect(`${loginPath}?next=${encodeURIComponent(req.originalUrl)}`);
+      return;
+    }
 
-  req.fieldExecutiveId = payload.fieldExecutiveId;
-  next();
+    req.fieldExecutiveId = payload.fieldExecutiveId;
+    next();
+  };
 }
+
+/** Page guard for the static portal at `/fe`. */
+export const authenticateFeWebPage = createFeWebPageGuard(FE_WEB_LOGIN_PATH);
