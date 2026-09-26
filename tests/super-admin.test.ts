@@ -4,7 +4,7 @@ import bcrypt from 'bcryptjs';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_ADMIN,
   SEEDED_INACTIVE_ADMIN,
@@ -53,9 +53,8 @@ function buildCase(): Record<string, unknown> {
   };
 }
 
-function countAdminUsers(): number {
-  return (getDb().prepare('SELECT COUNT(*) AS total FROM admin_users').get() as { total: number })
-    .total;
+function countAdminUsers(): Promise<number> {
+  return getCollection('admin_users').countDocuments();
 }
 
 beforeAll(async () => {
@@ -63,8 +62,8 @@ beforeAll(async () => {
   adminCookie = await signIn(SEEDED_REGULAR_ADMIN.username, SEEDED_REGULAR_ADMIN.password);
 });
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 describe('super admin access', () => {
@@ -109,10 +108,8 @@ describe('admin access', () => {
       .set('Cookie', adminCookie)
       .send({ settings: [{ key: 'geo_fence_radius_meters', value: 1500 }] });
 
-    const row = getDb()
-      .prepare("SELECT setting_value FROM mobile_app_settings WHERE setting_key = 'geo_fence_radius_meters'")
-      .get() as { setting_value: string };
-    expect(row.setting_value).not.toBe('1500');
+    const row = await getCollection('mobile_app_settings').findOne({ _id: 'geo_fence_radius_meters' });
+    expect(row?.setting_value).not.toBe('1500');
   });
 
   it('is refused the role check before body validation, so a bad body still gets 403', async () => {
@@ -121,7 +118,7 @@ describe('admin access', () => {
   });
 
   it('is refused the admin list and cannot add an admin', async () => {
-    const before = countAdminUsers();
+    const before = await countAdminUsers();
 
     const list = await request(app).get(ADMIN_USERS).set('Cookie', adminCookie);
     expect(list.status).toBe(403);
@@ -131,7 +128,7 @@ describe('admin access', () => {
       .set('Cookie', adminCookie)
       .send({ name: 'Sneaky Escalation', email: 'sneaky@fullscan.test', role: 'super_admin' });
     expect(create.status).toBe(403);
-    expect(countAdminUsers()).toBe(before);
+    expect(await countAdminUsers()).toBe(before);
   });
 
   it('can view Cases and Field Executive History', async () => {
@@ -158,17 +155,17 @@ describe('admin access', () => {
 describe('role changes take effect on the next request', () => {
   it('promotes and demotes an already signed-in admin without a new sign-in', async () => {
     const cookie = await signIn('admin003', 'Admin@123!');
-    const db = getDb();
+    const adminUsers = getCollection('admin_users');
 
     expect((await request(app).get(SETTINGS).set('Cookie', cookie)).status).toBe(403);
 
-    db.prepare("UPDATE admin_users SET role = 'super_admin' WHERE id = 'admin-003'").run();
+    await adminUsers.updateOne({ _id: 'admin-003' }, { $set: { role: 'super_admin' } });
     try {
       expect((await request(app).get(SETTINGS).set('Cookie', cookie)).status).toBe(200);
       const me = await request(app).get('/api/v1/admin/auth/me').set('Cookie', cookie);
       expect(me.body.data.role).toBe('super_admin');
     } finally {
-      db.prepare("UPDATE admin_users SET role = 'admin' WHERE id = 'admin-003'").run();
+      await adminUsers.updateOne({ _id: 'admin-003' }, { $set: { role: 'admin' } });
     }
 
     // The token still says super_admin; the row no longer does.
@@ -228,13 +225,12 @@ describe(`POST ${ADMIN_USERS}`, () => {
     const response = await createAdmin({ name: 'Hash Check', email: 'hash.check@fullscan.test' });
     const { adminUser, temporaryPassword } = response.body.data;
 
-    const row = getDb()
-      .prepare('SELECT password_hash FROM admin_users WHERE id = ?')
-      .get(adminUser.id) as { password_hash: string };
+    const row = await getCollection('admin_users').findOne({ _id: adminUser.id });
+    const passwordHash = String(row?.password_hash);
 
-    expect(row.password_hash).not.toContain(temporaryPassword);
-    expect(bcrypt.compareSync(temporaryPassword, row.password_hash)).toBe(true);
-    expect(JSON.stringify(response.body)).not.toContain(row.password_hash);
+    expect(passwordHash).not.toContain(temporaryPassword);
+    expect(bcrypt.compareSync(temporaryPassword, passwordHash)).toBe(true);
+    expect(JSON.stringify(response.body)).not.toContain(passwordHash);
   });
 
   it('lets the new admin sign in with their email and temporary password, with admin access only', async () => {
@@ -277,12 +273,12 @@ describe(`POST ${ADMIN_USERS}`, () => {
   });
 
   it('refuses an email that is already in use, whatever its case', async () => {
-    const before = countAdminUsers();
+    const before = await countAdminUsers();
     const response = await createAdmin({ name: 'Duplicate', email: SEEDED_REGULAR_ADMIN.email.toUpperCase() });
 
     expect(response.status).toBe(409);
     expect(response.body.error).toBe('An admin with this email already exists');
-    expect(countAdminUsers()).toBe(before);
+    expect(await countAdminUsers()).toBe(before);
   });
 
   it('rejects an invalid email, a too-short name and an unknown role', async () => {
@@ -384,10 +380,12 @@ function deleteAdmin(adminUserId: string, cookie = superAdminCookie) {
   return request(app).delete(`${ADMIN_USERS}/${adminUserId}`).set('Cookie', cookie);
 }
 
-function findAdminRow(adminUserId: string) {
-  return getDb().prepare('SELECT role, is_active FROM admin_users WHERE id = ?').get(adminUserId) as
-    | { role: string; is_active: number }
-    | undefined;
+async function findAdminRow(adminUserId: string): Promise<{ role: string; is_active: number } | undefined> {
+  const row = await getCollection('admin_users').findOne(
+    { _id: adminUserId },
+    { projection: { _id: 0, role: 1, is_active: 1 } },
+  );
+  return (row as { role: string; is_active: number } | null) ?? undefined;
 }
 
 describe(`PATCH ${ADMIN_USERS}/:adminUserId — role`, () => {
@@ -457,7 +455,7 @@ describe(`PATCH ${ADMIN_USERS}/:adminUserId — deactivate / reactivate`, () => 
     const response = await patchAdmin(target.id, { role: 'admin', isActive: false });
 
     expect(response.body.data).toMatchObject({ role: 'admin', isActive: false });
-    expect(findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 0 });
+    expect(await findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 0 });
   });
 });
 
@@ -467,7 +465,7 @@ describe(`PATCH ${ADMIN_USERS}/:adminUserId — refusals`, () => {
 
     expect((await patchAdmin(target.id, { role: 'super_admin' }, adminCookie)).status).toBe(403);
     expect((await request(app).patch(`${ADMIN_USERS}/${target.id}`).send({ isActive: false })).status).toBe(401);
-    expect(findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 1 });
+    expect(await findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 1 });
   });
 
   it('refuses a super admin demoting or deactivating themselves', async () => {
@@ -477,7 +475,7 @@ describe(`PATCH ${ADMIN_USERS}/:adminUserId — refusals`, () => {
     expect(demote.status).toBe(409);
     expect(demote.body.error).toContain('your own');
     expect(deactivate.status).toBe(409);
-    expect(findAdminRow(SEEDED_ADMIN.id)).toEqual({ role: 'super_admin', is_active: 1 });
+    expect(await findAdminRow(SEEDED_ADMIN.id)).toEqual({ role: 'super_admin', is_active: 1 });
   });
 
   it('can never leave the portal without an active super admin', async () => {
@@ -489,7 +487,7 @@ describe(`PATCH ${ADMIN_USERS}/:adminUserId — refusals`, () => {
     expect((await patchAdmin(second.id, { role: 'admin' }, first.cookie)).status).toBe(200);
     expect((await patchAdmin(first.id, { role: 'admin' }, second.cookie)).status).toBe(403);
     expect((await patchAdmin(first.id, { isActive: false }, first.cookie)).status).toBe(409);
-    expect(findAdminRow(first.id)).toEqual({ role: 'super_admin', is_active: 1 });
+    expect(await findAdminRow(first.id)).toEqual({ role: 'super_admin', is_active: 1 });
   });
 
   it('answers 404 for an unknown admin', async () => {
@@ -503,7 +501,7 @@ describe(`PATCH ${ADMIN_USERS}/:adminUserId — refusals`, () => {
       const response = await patchAdmin(target.id, body);
       expect(response.status, JSON.stringify(body)).toBe(400);
     }
-    expect(findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 1 });
+    expect(await findAdminRow(target.id)).toEqual({ role: 'admin', is_active: 1 });
   });
 });
 
@@ -515,7 +513,7 @@ describe(`DELETE ${ADMIN_USERS}/:adminUserId`, () => {
 
     expect(response.status).toBe(200);
     expect(response.body.data).toEqual({ deleted: true, id: target.id });
-    expect(findAdminRow(target.id)).toBeUndefined();
+    expect(await findAdminRow(target.id)).toBeUndefined();
 
     const list = await request(app).get(ADMIN_USERS).set('Cookie', superAdminCookie);
     expect(list.body.data.map((admin: { id: string }) => admin.id)).not.toContain(target.id);
@@ -543,7 +541,7 @@ describe(`DELETE ${ADMIN_USERS}/:adminUserId`, () => {
     expect(response.status).toBe(409);
     expect(response.body.error).toContain('mobile app setting');
     expect(response.body.error).toContain('Deactivate it instead');
-    expect(findAdminRow(target.id)).toBeDefined();
+    expect(await findAdminRow(target.id)).toBeDefined();
 
     // Deactivation is the way out, and it works.
     expect((await patchAdmin(target.id, { isActive: false })).status).toBe(200);
@@ -566,7 +564,7 @@ describe(`DELETE ${ADMIN_USERS}/:adminUserId`, () => {
     const response = await deleteAdmin(SEEDED_ADMIN.id);
 
     expect(response.status).toBe(409);
-    expect(findAdminRow(SEEDED_ADMIN.id)).toBeDefined();
+    expect(await findAdminRow(SEEDED_ADMIN.id)).toBeDefined();
   });
 
   it('is refused to an admin and to an unauthenticated caller', async () => {
@@ -574,7 +572,7 @@ describe(`DELETE ${ADMIN_USERS}/:adminUserId`, () => {
 
     expect((await deleteAdmin(target.id, adminCookie)).status).toBe(403);
     expect((await request(app).delete(`${ADMIN_USERS}/${target.id}`)).status).toBe(401);
-    expect(findAdminRow(target.id)).toBeDefined();
+    expect(await findAdminRow(target.id)).toBeDefined();
   });
 
   it('answers 404 for an unknown admin', async () => {

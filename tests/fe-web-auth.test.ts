@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_ADMIN,
   SEEDED_FIELD_EXECUTIVE,
@@ -12,8 +12,8 @@ import {
 
 const FE_COOKIE = 'fs_fe_session';
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(): Promise<string> {
@@ -29,10 +29,10 @@ function tokenFromCookie(cookie: string): string {
   return decodeURIComponent(cookie.slice(`${FE_COOKIE}=`.length));
 }
 
-function readDeviceBinding(fieldExecutiveId: string): { device_id: string | null } {
-  return getDb()
-    .prepare('SELECT device_id FROM field_executives WHERE id = ?')
-    .get(fieldExecutiveId) as { device_id: string | null };
+async function readDeviceBinding(fieldExecutiveId: string): Promise<{ device_id: string | null }> {
+  const row = await getCollection('field_executives')
+    .findOne({ _id: fieldExecutiveId }, { projection: { device_id: 1 } });
+  return { device_id: (row?.device_id as string | null | undefined) ?? null };
 }
 
 describe('POST /api/v1/fe-web/auth/login', () => {
@@ -82,26 +82,24 @@ describe('POST /api/v1/fe-web/auth/login', () => {
   });
 
   it('does not require a device and leaves the mobile device binding untouched', async () => {
-    getDb()
-      .prepare("UPDATE field_executives SET device_id = 'handset-123' WHERE id = ?")
-      .run(SEEDED_FIELD_EXECUTIVE.id);
+    await getCollection('field_executives')
+      .updateOne({ _id: SEEDED_FIELD_EXECUTIVE.id }, { $set: { device_id: 'handset-123' } });
 
     const response = await request(app)
       .post('/api/v1/fe-web/auth/login')
       .send({ username: SEEDED_FIELD_EXECUTIVE.username, password: SEEDED_FIELD_EXECUTIVE.password });
 
     expect(response.status).toBe(200);
-    expect(readDeviceBinding(SEEDED_FIELD_EXECUTIVE.id).device_id).toBe('handset-123');
+    expect((await readDeviceBinding(SEEDED_FIELD_EXECUTIVE.id)).device_id).toBe('handset-123');
 
-    getDb().prepare('UPDATE field_executives SET device_id = NULL WHERE id = ?').run(
-      SEEDED_FIELD_EXECUTIVE.id,
-    );
+    await getCollection('field_executives')
+      .updateOne({ _id: SEEDED_FIELD_EXECUTIVE.id }, { $set: { device_id: null } });
   });
 
   it('does not bind an unbound account to anything', async () => {
     await signIn();
 
-    expect(readDeviceBinding(SEEDED_FIELD_EXECUTIVE.id).device_id).toBeNull();
+    expect((await readDeviceBinding(SEEDED_FIELD_EXECUTIVE.id)).device_id).toBeNull();
   });
 
   it('rejects a wrong password with a generic message', async () => {

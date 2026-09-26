@@ -24,7 +24,7 @@ function extractAdminToken(req: Request): string | undefined {
  * Guards admin **API** routes. Responds 401 so the portal's fetch layer can react,
  * rather than redirecting.
  */
-export function authenticateAdmin(req: Request, _res: Response, next: NextFunction): void {
+export async function authenticateAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
   const token = extractAdminToken(req);
 
   if (!token) {
@@ -32,7 +32,14 @@ export function authenticateAdmin(req: Request, _res: Response, next: NextFuncti
     return;
   }
 
-  const payload = verifyAdminToken(token);
+  let payload: Awaited<ReturnType<typeof verifyAdminToken>>;
+
+  try {
+    payload = await verifyAdminToken(token);
+  } catch (err) {
+    next(err);
+    return;
+  }
 
   if (!payload) {
     next(new AppError(401, 'Invalid or expired admin session'));
@@ -68,10 +75,17 @@ export function requireAdminRole(...allowedRoles: AdminRole[]) {
  */
 export function createAdminPageGuard(
   loginPath: string,
-): (req: Request, res: Response, next: NextFunction) => void {
-  return (req: Request, res: Response, next: NextFunction): void => {
+): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const token = extractAdminToken(req);
-    const payload = token ? verifyAdminToken(token) : undefined;
+    let payload: Awaited<ReturnType<typeof verifyAdminToken>>;
+
+    try {
+      payload = token ? await verifyAdminToken(token) : undefined;
+    } catch (err) {
+      next(err);
+      return;
+    }
 
     if (!payload) {
       res.redirect(`${loginPath}?next=${encodeURIComponent(req.originalUrl)}`);

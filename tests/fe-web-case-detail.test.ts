@@ -4,15 +4,15 @@ import jwt from 'jsonwebtoken';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_FIELD_EXECUTIVE,
 } from './helpers/test-app.js';
 
 const OTHER_FIELD_EXECUTIVE = { username: 'fe002', password: 'Password123!', id: 'fe-002' };
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
@@ -23,20 +23,18 @@ async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
   return extractSessionCookie(response.headers['set-cookie'], 'fs_fe_session');
 }
 
-function findComponentId(where: string, ...params: string[]): string {
-  const row = getDb().prepare(`SELECT id FROM case_components WHERE ${where} LIMIT 1`).get(...params) as
-    | { id: string }
-    | undefined;
+async function findComponentId(filter: Record<string, string>): Promise<string> {
+  const row = await getCollection('case_components').findOne(filter, { projection: { _id: 1 } });
 
   if (!row) {
-    throw new Error(`Seed has no component matching: ${where}`);
+    throw new Error(`Seed has no component matching: ${JSON.stringify(filter)}`);
   }
-  return row.id;
+  return String(row._id);
 }
 
 describe('GET /api/v1/fe-web/cases/:componentId', () => {
   it('requires a web session', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = ? AND bucket = 'pending'", 'fe-001');
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`);
 
@@ -44,7 +42,7 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
   });
 
   it('rejects a mobile token', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = ? AND bucket = 'pending'", 'fe-001');
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
     const mobileToken = jwt.sign({ fieldExecutiveId: SEEDED_FIELD_EXECUTIVE.id }, 'test-jwt-secret');
 
     const response = await request(app)
@@ -55,7 +53,7 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
   });
 
   it('returns an own pending component with evidence open', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = ? AND bucket = 'pending'", 'fe-001');
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`).set('Cookie', await signIn());
 
@@ -71,7 +69,7 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
   });
 
   it('closes evidence on a completed component', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = ? AND bucket = 'completed'", 'fe-001');
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'completed' });
 
     const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`).set('Cookie', await signIn());
 
@@ -81,8 +79,8 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
 
   it('answers 404 for another executive’s component, an unclaimed New one, and an unknown id', async () => {
     const cookie = await signIn();
-    const othersId = findComponentId("assigned_field_executive_id = ? AND bucket = 'pending'", OTHER_FIELD_EXECUTIVE.id);
-    const newId = findComponentId("bucket = 'new'");
+    const othersId = await findComponentId({ assigned_field_executive_id: OTHER_FIELD_EXECUTIVE.id, bucket: 'pending' });
+    const newId = await findComponentId({ bucket: 'new' });
 
     for (const componentId of [othersId, newId, 'does-not-exist']) {
       const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`).set('Cookie', cookie);
@@ -92,7 +90,7 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
   });
 
   it('exposes no contact numbers, GPS targets or respondent details', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = ? AND bucket = 'pending'", 'fe-001');
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`).set('Cookie', await signIn());
     const body = JSON.stringify(response.body);
@@ -105,19 +103,17 @@ describe('GET /api/v1/fe-web/cases/:componentId', () => {
   it('only marks siblings this executive holds as openable', async () => {
     const cookie = await signIn();
     const componentIds = (
-      getDb()
-        .prepare("SELECT id FROM case_components WHERE assigned_field_executive_id = 'fe-001' AND bucket != 'new'")
-        .all() as { id: string }[]
-    ).map((row) => row.id);
+      await getCollection('case_components')
+        .find({ assigned_field_executive_id: 'fe-001', bucket: { $ne: 'new' } }, { projection: { _id: 1 } })
+        .toArray()
+    ).map((row) => String(row._id));
 
     for (const componentId of componentIds) {
       const response = await request(app).get(`/api/v1/fe-web/cases/${componentId}`).set('Cookie', cookie);
 
       for (const sibling of response.body.data.siblingComponents as { componentId: string; isAssignedToYou: boolean }[]) {
-        const row = getDb()
-          .prepare('SELECT assigned_field_executive_id, bucket FROM case_components WHERE id = ?')
-          .get(sibling.componentId) as { assigned_field_executive_id: string | null; bucket: string };
-        const expected = row.assigned_field_executive_id === 'fe-001' && row.bucket !== 'new';
+        const row = await getCollection('case_components').findOne({ _id: sibling.componentId });
+        const expected = row?.assigned_field_executive_id === 'fe-001' && row?.bucket !== 'new';
         expect(sibling.isAssignedToYou, sibling.componentId).toBe(expected);
       }
     }

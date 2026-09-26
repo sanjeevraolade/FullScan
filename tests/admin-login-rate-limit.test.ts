@@ -7,8 +7,8 @@ import { app, removeTestDb, SEEDED_ADMIN } from './helpers/test-app.js';
  * so exhausting the window here must not starve the other admin suites.
  */
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 describe('admin login rate limiting', () => {

@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_FIELD_EXECUTIVE,
 } from './helpers/test-app.js';
@@ -25,8 +25,8 @@ interface CaseGroup {
   readonly cases: CaseEntry[];
 }
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
@@ -43,14 +43,12 @@ async function fetchCaseGroups(cookie: string): Promise<CaseGroup[]> {
   return response.body.data.caseGroups as CaseGroup[];
 }
 
-function findAssignedComponentIds(fieldExecutiveId: string, bucket: string): string[] {
-  const rows = getDb()
-    .prepare(
-      'SELECT id FROM case_components WHERE assigned_field_executive_id = ? AND bucket = ?',
-    )
-    .all(fieldExecutiveId, bucket) as { id: string }[];
+async function findAssignedComponentIds(fieldExecutiveId: string, bucket: string): Promise<string[]> {
+  const rows = await getCollection('case_components')
+    .find({ assigned_field_executive_id: fieldExecutiveId, bucket }, { projection: { _id: 1 } })
+    .toArray();
 
-  return rows.map((row) => row.id).sort();
+  return rows.map((row) => String(row._id)).sort();
 }
 
 describe('GET /api/v1/fe-web/cases', () => {
@@ -82,7 +80,7 @@ describe('GET /api/v1/fe-web/cases', () => {
     const groups = await fetchCaseGroups(await signIn());
 
     for (const group of groups) {
-      const expectedIds = findAssignedComponentIds(SEEDED_FIELD_EXECUTIVE.id, group.bucket);
+      const expectedIds = await findAssignedComponentIds(SEEDED_FIELD_EXECUTIVE.id, group.bucket);
 
       expect(group.caseCount, group.bucket).toBe(group.cases.length);
       expect(group.cases.map((entry) => entry.componentId).sort(), group.bucket).toEqual(expectedIds);
@@ -102,7 +100,7 @@ describe('GET /api/v1/fe-web/cases', () => {
 
     for (const group of otherGroups) {
       expect(group.cases.map((entry) => entry.componentId).sort()).toEqual(
-        findAssignedComponentIds(OTHER_FIELD_EXECUTIVE.id, group.bucket),
+        await findAssignedComponentIds(OTHER_FIELD_EXECUTIVE.id, group.bucket),
       );
       expect(group.cases.some((entry) => ownIds.has(entry.componentId))).toBe(false);
     }
@@ -112,10 +110,8 @@ describe('GET /api/v1/fe-web/cases', () => {
     const groups = await fetchCaseGroups(await signIn());
     const labels = new Map(
       (
-        getDb()
-          .prepare("SELECT code, label FROM dropdown_options WHERE category = 'component_status'")
-          .all() as { code: string; label: string }[]
-      ).map((row) => [row.code, row.label]),
+        await getCollection('dropdown_options').find({ category: 'component_status' }).toArray()
+      ).map((row) => [row.code as string, row.label as string]),
     );
 
     for (const entry of groups.flatMap((group) => group.cases)) {

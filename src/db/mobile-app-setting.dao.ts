@@ -1,38 +1,55 @@
-import { getDb } from './connection.js';
+import type { Document } from 'mongodb';
+import { getCollection, runInTransaction, sessionOption } from './connection.js';
+import { nowTimestamp } from './timestamp.js';
 import type { MobileAppSettingRow } from '../types/mobile-app-setting.types.js';
 
-export function findAllMobileAppSettings(): MobileAppSettingRow[] {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM mobile_app_settings ORDER BY category, sort_order, setting_key')
-    .all() as MobileAppSettingRow[];
+/** `setting_key` is this collection's primary key, so it is the one stored as `_id`. */
+type MobileAppSettingDocument = Omit<MobileAppSettingRow, 'setting_key'> & { _id: string };
+
+function mobileAppSettings() {
+  return getCollection<MobileAppSettingDocument>('mobile_app_settings');
 }
 
-export function findMobileAppSettingByKey(key: string): MobileAppSettingRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM mobile_app_settings WHERE setting_key = ?').get(key) as
-    | MobileAppSettingRow
-    | undefined;
+function toRow(document: Document): MobileAppSettingRow {
+  const { _id, ...fields } = document;
+  return { setting_key: _id, ...fields } as MobileAppSettingRow;
+}
+
+export async function findAllMobileAppSettings(): Promise<MobileAppSettingRow[]> {
+  const documents = await mobileAppSettings()
+    .find({}, { sort: { category: 1, sort_order: 1, _id: 1 }, ...sessionOption() })
+    .toArray();
+  return documents.map(toRow);
+}
+
+export async function findMobileAppSettingByKey(key: string): Promise<MobileAppSettingRow | undefined> {
+  const document = await mobileAppSettings().findOne({ _id: key }, sessionOption());
+  return document ? toRow(document) : undefined;
 }
 
 /**
  * Writes several settings in one transaction so a partially-valid batch can never
  * leave the mobile app reading a half-applied configuration.
  */
-export function updateMobileAppSettings(
+export async function updateMobileAppSettings(
   updates: ReadonlyArray<{ key: string; value: string }>,
   updatedBy: string,
-): void {
-  const db = getDb();
-  const stmt = db.prepare(
-    "UPDATE mobile_app_settings SET setting_value = ?, updated_by = ?, updated_at = datetime('now') WHERE setting_key = ?",
-  );
+): Promise<void> {
+  if (updates.length === 0) {
+    return;
+  }
 
-  const runAll = db.transaction((rows: ReadonlyArray<{ key: string; value: string }>) => {
-    for (const row of rows) {
-      stmt.run(row.value, updatedBy, row.key);
-    }
+  const updatedAt = nowTimestamp();
+
+  await runInTransaction(async () => {
+    await mobileAppSettings().bulkWrite(
+      updates.map((update) => ({
+        updateOne: {
+          filter: { _id: update.key },
+          update: { $set: { setting_value: update.value, updated_by: updatedBy, updated_at: updatedAt } },
+        },
+      })),
+      sessionOption(),
+    );
   });
-
-  runAll(updates);
 }

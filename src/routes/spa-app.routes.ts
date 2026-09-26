@@ -12,7 +12,7 @@ export interface SpaAppRouteOptions {
   /** Shown in the 503 when the app has not been built. */
   readonly buildCommand: string;
   /** Whether the request already carries a valid session for this app. */
-  readonly hasValidSession: (req: Request) => boolean;
+  readonly hasValidSession: (req: Request) => Promise<boolean>;
   /** Redirects an unauthenticated page request to `<appPath>/login`. */
   readonly pageGuard: RequestHandler;
 }
@@ -46,9 +46,14 @@ export function createSpaAppRoutes(options: SpaAppRouteOptions): Router {
     res.sendFile(shellPath);
   };
 
-  routes.get('/login', (req: Request, res: Response, next: NextFunction): void => {
-    if (options.hasValidSession(req)) {
-      res.redirect(options.appPath);
+  routes.get('/login', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    try {
+      if (await options.hasValidSession(req)) {
+        res.redirect(options.appPath);
+        return;
+      }
+    } catch (err) {
+      next(err);
       return;
     }
     sendShell(res, next);

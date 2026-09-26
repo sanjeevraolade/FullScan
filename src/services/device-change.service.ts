@@ -25,10 +25,10 @@ import type {
  * phone, an admin approves or rejects, and approval releases the device binding so
  * the next mobile login (on any phone, the old one included) binds again.
  *
- * Every request and every binding is kept — see migration 021.
+ * Every request and every binding is kept — nothing here deletes a document.
  */
 
-/** Mobile app settings keys for the request limit (seeded by migration 021). */
+/** Mobile app settings keys for the request limit (part of the initial seed). */
 export const DEVICE_CHANGE_SETTING_KEYS = {
   maxRequests: 'device_change_max_requests',
   windowDays: 'device_change_window_days',
@@ -39,20 +39,20 @@ const DEFAULT_POLICY: DeviceChangePolicy = { maxRequests: 2, windowDays: 30 };
 
 const REASON_MAX_LENGTH = 500;
 
-function readWholeNumberSetting(key: string, fallback: number): number {
-  const row = mobileAppSettingDao.findMobileAppSettingByKey(key);
+async function readWholeNumberSetting(key: string, fallback: number): Promise<number> {
+  const row = await mobileAppSettingDao.findMobileAppSettingByKey(key);
   const value = row ? Math.floor(Number(row.setting_value)) : Number.NaN;
   return Number.isFinite(value) && value >= 1 ? value : fallback;
 }
 
-export function getDeviceChangePolicy(): DeviceChangePolicy {
+export async function getDeviceChangePolicy(): Promise<DeviceChangePolicy> {
   return {
-    maxRequests: readWholeNumberSetting(DEVICE_CHANGE_SETTING_KEYS.maxRequests, DEFAULT_POLICY.maxRequests),
-    windowDays: readWholeNumberSetting(DEVICE_CHANGE_SETTING_KEYS.windowDays, DEFAULT_POLICY.windowDays),
+    maxRequests: await readWholeNumberSetting(DEVICE_CHANGE_SETTING_KEYS.maxRequests, DEFAULT_POLICY.maxRequests),
+    windowDays: await readWholeNumberSetting(DEVICE_CHANGE_SETTING_KEYS.windowDays, DEFAULT_POLICY.windowDays),
   };
 }
 
-/** SQLite `datetime('now')` text is UTC without a zone marker; the result keeps that format. */
+/** Stored timestamps are UTC `YYYY-MM-DD HH:MM:SS` without a zone marker; the result keeps that format. */
 function addDaysToTimestamp(timestamp: string, days: number): string {
   const date = new Date(`${timestamp.replace(' ', 'T')}Z`);
   date.setUTCDate(date.getUTCDate() + days);
@@ -112,23 +112,23 @@ function toHistoryEntry(row: FieldExecutiveDeviceRow): DeviceHistoryEntry {
 
 /* ------------------------------------------------------------ eligibility */
 
-function findFieldExecutive(fieldExecutiveId: string): FieldExecutiveRow {
-  const row = fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
+async function findFieldExecutive(fieldExecutiveId: string): Promise<FieldExecutiveRow> {
+  const row = await fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
   if (!row) {
     throw new AppError(404, 'Field executive not found');
   }
   return row;
 }
 
-function evaluateEligibility(fieldExecutive: FieldExecutiveRow): DeviceChangeEligibility {
-  const policy = getDeviceChangePolicy();
-  const requestTimes = deviceChangeDao.findRequestTimesInWindow(fieldExecutive.id, policy.windowDays);
+async function evaluateEligibility(fieldExecutive: FieldExecutiveRow): Promise<DeviceChangeEligibility> {
+  const policy = await getDeviceChangePolicy();
+  const requestTimes = await deviceChangeDao.findRequestTimesInWindow(fieldExecutive.id, policy.windowDays);
   const isLimitReached = requestTimes.length >= policy.maxRequests;
 
   let blockedReason: DeviceChangeEligibility['blockedReason'] = null;
   if (!fieldExecutive.device_id) {
     blockedReason = 'no_device';
-  } else if (deviceChangeDao.findPendingDeviceChangeRequestId(fieldExecutive.id)) {
+  } else if (await deviceChangeDao.findPendingDeviceChangeRequestId(fieldExecutive.id)) {
     blockedReason = 'pending_request';
   } else if (isLimitReached) {
     blockedReason = 'limit_reached';
@@ -152,40 +152,37 @@ function evaluateEligibility(fieldExecutive: FieldExecutiveRow): DeviceChangeEli
 
 /* ------------------------------------------------------ field executive */
 
-export function getDeviceChangeOverviewForFieldExecutive(
+export async function getDeviceChangeOverviewForFieldExecutive(
   fieldExecutiveId: string,
-): FieldExecutiveDeviceChangeOverview {
-  const fieldExecutive = findFieldExecutive(fieldExecutiveId);
+): Promise<FieldExecutiveDeviceChangeOverview> {
+  const fieldExecutive = await findFieldExecutive(fieldExecutiveId);
 
   return {
-    eligibility: evaluateEligibility(fieldExecutive),
-    requests: deviceChangeDao
-      .findDeviceChangeRequestsForFieldExecutive(fieldExecutiveId)
-      .map(toRequestView),
-    deviceHistory: deviceChangeDao
-      .findDeviceHistoryForFieldExecutive(fieldExecutiveId)
-      .map(toHistoryEntry),
+    eligibility: await evaluateEligibility(fieldExecutive),
+    requests: (await deviceChangeDao.findDeviceChangeRequestsForFieldExecutive(fieldExecutiveId)).map(toRequestView),
+    deviceHistory: (await deviceChangeDao.findDeviceHistoryForFieldExecutive(fieldExecutiveId)).map(toHistoryEntry),
   };
 }
 
 /**
  * Submits a device change request for the executive's currently bound phone.
  * Checked and inserted in one transaction, so two quick submissions cannot both
- * slip past the pending/limit checks.
+ * slip past the pending/limit checks (and the one-pending-per-executive unique index
+ * backs that up).
  */
-export function requestDeviceChange(
+export async function requestDeviceChange(
   fieldExecutiveId: string,
   reason: string | undefined,
-): FieldExecutiveDeviceChangeOverview {
+): Promise<FieldExecutiveDeviceChangeOverview> {
   const trimmedReason = reason?.trim() || null;
 
   if (trimmedReason && trimmedReason.length > REASON_MAX_LENGTH) {
     throw new AppError(400, `The reason must be ${REASON_MAX_LENGTH} characters or fewer`);
   }
 
-  deviceChangeDao.runInTransaction(() => {
-    const fieldExecutive = findFieldExecutive(fieldExecutiveId);
-    const eligibility = evaluateEligibility(fieldExecutive);
+  await deviceChangeDao.runInTransaction(async () => {
+    const fieldExecutive = await findFieldExecutive(fieldExecutiveId);
+    const eligibility = await evaluateEligibility(fieldExecutive);
 
     if (eligibility.blockedReason === 'no_device' || !fieldExecutive.device_id) {
       throw new AppError(
@@ -206,7 +203,7 @@ export function requestDeviceChange(
       );
     }
 
-    deviceChangeDao.insertDeviceChangeRequest({
+    await deviceChangeDao.insertDeviceChangeRequest({
       id: `device-change-${uuidv4()}`,
       fieldExecutiveId: fieldExecutive.id,
       reason: trimmedReason,
@@ -220,32 +217,32 @@ export function requestDeviceChange(
 
 /* ------------------------------------------------------------------ admin */
 
-export function listDeviceChangeRequestsForAdmin(
+export async function listDeviceChangeRequestsForAdmin(
   filter: DeviceChangeRequestFilter,
-): AdminDeviceChangeRequestList {
+): Promise<AdminDeviceChangeRequestList> {
   const counts = { pending: 0, approved: 0, rejected: 0, all: 0 };
 
-  for (const { status, total } of deviceChangeDao.countDeviceChangeRequestsByStatus(filter.fieldExecutiveId)) {
+  for (const { status, total } of await deviceChangeDao.countDeviceChangeRequestsByStatus(filter.fieldExecutiveId)) {
     counts[status] = total;
     counts.all += total;
   }
 
   return {
-    items: deviceChangeDao.listDeviceChangeRequests(filter).map(toAdminRequest),
+    items: (await deviceChangeDao.listDeviceChangeRequests(filter)).map(toAdminRequest),
     counts,
   };
 }
 
-function findRequest(requestId: string): DeviceChangeRequestDetailRow {
-  const row = deviceChangeDao.findDeviceChangeRequestById(requestId);
+async function findRequest(requestId: string): Promise<DeviceChangeRequestDetailRow> {
+  const row = await deviceChangeDao.findDeviceChangeRequestById(requestId);
   if (!row) {
     throw new AppError(404, 'Device change request not found');
   }
   return row;
 }
 
-function findPendingRequest(requestId: string): DeviceChangeRequestDetailRow {
-  const row = findRequest(requestId);
+async function findPendingRequest(requestId: string): Promise<DeviceChangeRequestDetailRow> {
+  const row = await findRequest(requestId);
   if (row.status !== 'pending') {
     throw new AppError(409, `This device change request has already been ${row.status}.`);
   }
@@ -261,28 +258,28 @@ function normalizeNote(note: string | undefined): string | null {
  * device history, and clears the account's binding so the executive can sign in to
  * the mobile app on any phone — the one they had included.
  */
-export function approveDeviceChangeRequest(
+export async function approveDeviceChangeRequest(
   requestId: string,
   adminUserId: string,
   note: string | undefined,
-): AdminDeviceChangeRequest {
-  deviceChangeDao.runInTransaction(() => {
-    const request = findPendingRequest(requestId);
+): Promise<AdminDeviceChangeRequest> {
+  await deviceChangeDao.runInTransaction(async () => {
+    const request = await findPendingRequest(requestId);
 
-    if (!deviceChangeDao.decideDeviceChangeRequest(requestId, 'approved', adminUserId, normalizeNote(note))) {
+    if (!(await deviceChangeDao.decideDeviceChangeRequest(requestId, 'approved', adminUserId, normalizeNote(note)))) {
       throw new AppError(409, 'This device change request has already been decided.');
     }
 
-    const fieldExecutive = findFieldExecutive(request.field_executive_id);
-    const openBinding = deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
+    const fieldExecutive = await findFieldExecutive(request.field_executive_id);
+    const openBinding = await deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
 
     if (openBinding) {
-      deviceChangeDao.releaseDeviceBinding(openBinding.id, 'device_change_approved', requestId);
+      await deviceChangeDao.releaseDeviceBinding(openBinding.id, 'device_change_approved', requestId);
     } else if (fieldExecutive.device_id) {
       // A binding with no history row (made before history existed and missed by the
       // backfill): record it, then close it, so the history still shows what was released.
       const legacyBindingId = `device-binding-${uuidv4()}`;
-      deviceChangeDao.insertDeviceBinding({
+      await deviceChangeDao.insertDeviceBinding({
         id: legacyBindingId,
         fieldExecutiveId: fieldExecutive.id,
         deviceId: fieldExecutive.device_id,
@@ -290,38 +287,38 @@ export function approveDeviceChangeRequest(
         isFirstLogin: false,
         boundAfterRequestId: null,
       });
-      deviceChangeDao.releaseDeviceBinding(legacyBindingId, 'device_change_approved', requestId);
+      await deviceChangeDao.releaseDeviceBinding(legacyBindingId, 'device_change_approved', requestId);
     }
 
-    deviceChangeDao.clearFieldExecutiveDeviceBinding(fieldExecutive.id);
+    await deviceChangeDao.clearFieldExecutiveDeviceBinding(fieldExecutive.id);
   });
 
-  return toAdminRequest(findRequest(requestId));
+  return toAdminRequest(await findRequest(requestId));
 }
 
 /** Rejects a request. The executive's binding is untouched. */
-export function rejectDeviceChangeRequest(
+export async function rejectDeviceChangeRequest(
   requestId: string,
   adminUserId: string,
   note: string | undefined,
-): AdminDeviceChangeRequest {
-  deviceChangeDao.runInTransaction(() => {
-    findPendingRequest(requestId);
+): Promise<AdminDeviceChangeRequest> {
+  await deviceChangeDao.runInTransaction(async () => {
+    await findPendingRequest(requestId);
 
-    if (!deviceChangeDao.decideDeviceChangeRequest(requestId, 'rejected', adminUserId, normalizeNote(note))) {
+    if (!(await deviceChangeDao.decideDeviceChangeRequest(requestId, 'rejected', adminUserId, normalizeNote(note)))) {
       throw new AppError(409, 'This device change request has already been decided.');
     }
   });
 
-  return toAdminRequest(findRequest(requestId));
+  return toAdminRequest(await findRequest(requestId));
 }
 
-export function getDeviceRecordsForAdmin(fieldExecutiveId: string): AdminFieldExecutiveDeviceRecords {
+export async function getDeviceRecordsForAdmin(fieldExecutiveId: string): Promise<AdminFieldExecutiveDeviceRecords> {
   return {
-    deviceHistory: deviceChangeDao.findDeviceHistoryForFieldExecutive(fieldExecutiveId).map(toHistoryEntry),
-    deviceChangeRequests: deviceChangeDao
-      .findDeviceChangeRequestsForFieldExecutive(fieldExecutiveId)
-      .map(toAdminRequest),
+    deviceHistory: (await deviceChangeDao.findDeviceHistoryForFieldExecutive(fieldExecutiveId)).map(toHistoryEntry),
+    deviceChangeRequests: (await deviceChangeDao.findDeviceChangeRequestsForFieldExecutive(fieldExecutiveId)).map(
+      toAdminRequest,
+    ),
   };
 }
 
@@ -337,22 +334,22 @@ export function getDeviceRecordsForAdmin(fieldExecutiveId: string): AdminFieldEx
  * (A login from a *different* handset than the bound one never reaches here — the
  * login refuses it first.)
  */
-export function recordMobileDeviceLogin(
+export async function recordMobileDeviceLogin(
   fieldExecutive: FieldExecutiveRow,
   deviceId: string,
   deviceDetails: string,
-): void {
-  deviceChangeDao.runInTransaction(() => {
-    const openBinding = deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
+): Promise<void> {
+  await deviceChangeDao.runInTransaction(async () => {
+    const openBinding = await deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
 
     if (fieldExecutive.device_id === deviceId) {
       if (openBinding) {
-        deviceChangeDao.touchDeviceBindingLogin(openBinding.id);
+        await deviceChangeDao.touchDeviceBindingLogin(openBinding.id);
         return;
       }
 
       // Bound before history existed and missed by the backfill: start its history now.
-      deviceChangeDao.insertDeviceBinding({
+      await deviceChangeDao.insertDeviceBinding({
         id: `device-binding-${uuidv4()}`,
         fieldExecutiveId: fieldExecutive.id,
         deviceId,
@@ -360,9 +357,9 @@ export function recordMobileDeviceLogin(
         isFirstLogin: false,
         boundAfterRequestId: null,
       });
-      const created = deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
+      const created = await deviceChangeDao.findOpenDeviceBinding(fieldExecutive.id);
       if (created) {
-        deviceChangeDao.touchDeviceBindingLogin(created.id);
+        await deviceChangeDao.touchDeviceBindingLogin(created.id);
       }
       return;
     }
@@ -370,17 +367,17 @@ export function recordMobileDeviceLogin(
     // The account's binding was cleared some other way than an approved request
     // (e.g. directly in the database) while a history row was still open: close it.
     if (openBinding) {
-      deviceChangeDao.releaseDeviceBinding(openBinding.id, 'binding_replaced', null);
+      await deviceChangeDao.releaseDeviceBinding(openBinding.id, 'binding_replaced', null);
     }
 
-    fieldExecutiveDao.updateFieldExecutiveDeviceBinding(fieldExecutive.id, deviceId, deviceDetails);
-    deviceChangeDao.insertDeviceBinding({
+    await fieldExecutiveDao.updateFieldExecutiveDeviceBinding(fieldExecutive.id, deviceId, deviceDetails);
+    await deviceChangeDao.insertDeviceBinding({
       id: `device-binding-${uuidv4()}`,
       fieldExecutiveId: fieldExecutive.id,
       deviceId,
       deviceDetails,
       isFirstLogin: true,
-      boundAfterRequestId: deviceChangeDao.findUnfollowedApprovedRequestId(fieldExecutive.id) ?? null,
+      boundAfterRequestId: (await deviceChangeDao.findUnfollowedApprovedRequestId(fieldExecutive.id)) ?? null,
     });
   });
 }

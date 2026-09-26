@@ -18,9 +18,9 @@ export const adminAppRoutes = createSpaAppRoutes({
   appPath: ADMIN_APP_PATH,
   resolveBuildDir: () => process.env.ADMIN_APP_DIR || path.join(__dirname, '..', '..', 'web-admin', 'dist'),
   buildCommand: 'npm run build:admin-web',
-  hasValidSession: (req) => {
+  hasValidSession: async (req) => {
     const token = readAdminSessionCookie(req);
-    return Boolean(token && verifyAdminToken(token));
+    return Boolean(token && (await verifyAdminToken(token)));
   },
   pageGuard: createAdminPageGuard(ADMIN_APP_LOGIN_PATH),
 });

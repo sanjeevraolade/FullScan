@@ -28,11 +28,16 @@ function sendPortalPage(res: Response, fileName: string): void {
 
 // GET /fe/login — the only unauthenticated page. An already-signed-in field
 // executive is bounced to the portal rather than shown the form again.
-feWebPortalRoutes.get('/login', (req: Request, res: Response): void => {
+feWebPortalRoutes.get('/login', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const token = readFeWebSessionCookie(req);
 
-  if (token && verifyFeWebToken(token)) {
-    res.redirect('/fe');
+  try {
+    if (token && (await verifyFeWebToken(token))) {
+      res.redirect('/fe');
+      return;
+    }
+  } catch (err) {
+    next(err);
     return;
   }
 

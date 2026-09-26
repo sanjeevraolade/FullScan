@@ -3,7 +3,7 @@ import request from 'supertest';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_ADMIN,
   SEEDED_FIELD_EXECUTIVE,
@@ -19,8 +19,8 @@ interface AdminEvidenceEntry {
   readonly uploadedBy: { readonly id: string; readonly name: string; readonly username: string };
 }
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signInAdmin(account: { username: string; password: string } = SEEDED_ADMIN): Promise<string> {
@@ -37,22 +37,19 @@ async function signInFieldExecutive(): Promise<string> {
   return extractSessionCookie(response.headers['set-cookie'], 'fs_fe_session');
 }
 
-function findOwnPendingComponent(): { id: string; caseId: string } {
-  const row = getDb()
-    .prepare(
-      "SELECT id, case_id AS caseId FROM case_components WHERE assigned_field_executive_id = 'fe-001' AND bucket = 'pending' LIMIT 1",
-    )
-    .get() as { id: string; caseId: string } | undefined;
+async function findOwnPendingComponent(): Promise<{ id: string; caseId: string }> {
+  const row = await getCollection('case_components')
+    .findOne({ assigned_field_executive_id: 'fe-001', bucket: 'pending' }, { projection: { _id: 1, case_id: 1 } });
 
   if (!row) {
     throw new Error('Seed has no pending component for fe-001');
   }
-  return row;
+  return { id: String(row._id), caseId: row.case_id as string };
 }
 
 describe('GET /api/v1/admin/cases/:caseId/evidence', () => {
   it('requires an admin session', async () => {
-    const { caseId } = findOwnPendingComponent();
+    const { caseId } = await findOwnPendingComponent();
 
     expect((await request(app).get(`/api/v1/admin/cases/${caseId}/evidence`)).status).toBe(401);
     expect(
@@ -62,7 +59,7 @@ describe('GET /api/v1/admin/cases/:caseId/evidence', () => {
   });
 
   it('is empty for a case nobody has uploaded to', async () => {
-    const { caseId } = findOwnPendingComponent();
+    const { caseId } = await findOwnPendingComponent();
 
     const response = await request(app).get(`/api/v1/admin/cases/${caseId}/evidence`).set('Cookie', await signInAdmin());
 
@@ -71,7 +68,7 @@ describe('GET /api/v1/admin/cases/:caseId/evidence', () => {
   });
 
   it('lists web uploads with the uploading executive, for both admin roles', async () => {
-    const { id: componentId, caseId } = findOwnPendingComponent();
+    const { id: componentId, caseId } = await findOwnPendingComponent();
 
     const upload = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)

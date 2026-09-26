@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { app, extractSessionCookie, getDb, removeTestDb, SEEDED_ADMIN } from './helpers/test-app.js';
+import { app, extractSessionCookie, getCollection, removeTestDb, SEEDED_ADMIN } from './helpers/test-app.js';
 
 const ENDPOINT = '/api/v1/admin/mobile-app-settings';
 
@@ -14,8 +14,8 @@ beforeAll(async () => {
   cookie = extractSessionCookie(response.headers['set-cookie']);
 });
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 function findSetting(settings: Array<{ key: string }>, key: string) {
@@ -117,12 +117,10 @@ describe(`PUT ${ENDPOINT}`, () => {
       .set('Cookie', cookie)
       .send({ settings: [{ key: 'photo_compression_quality', value: 65 }] });
 
-    const row = getDb()
-      .prepare('SELECT updated_by, updated_at FROM mobile_app_settings WHERE setting_key = ?')
-      .get('photo_compression_quality') as { updated_by: string; updated_at: string };
+    const row = await getCollection('mobile_app_settings').findOne({ _id: 'photo_compression_quality' });
 
-    expect(row.updated_by).toBe(SEEDED_ADMIN.id);
-    expect(row.updated_at).toBeTruthy();
+    expect(row?.updated_by).toBe(SEEDED_ADMIN.id);
+    expect(row?.updated_at).toBeTruthy();
   });
 
   it('trims whitespace from string values', async () => {

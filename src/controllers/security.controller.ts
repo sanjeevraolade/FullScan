@@ -9,9 +9,9 @@ import type { MockLocationReportInput } from '../types/mock-location.types.js';
  * Answers 200 for a re-delivered report and 201 for a newly recorded one, so
  * the app can tell an accepted retry from a first delivery.
  */
-export function reportMockLocation(req: Request, res: Response, next: NextFunction): void {
+export async function reportMockLocation(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = mockLocationService.reportMockLocationEvent(
+    const result = await mockLocationService.reportMockLocationEvent(
       req.fieldExecutiveId!,
       req.body as MockLocationReportInput,
     );

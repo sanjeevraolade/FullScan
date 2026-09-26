@@ -27,11 +27,16 @@ function sendPortalPage(res: Response, fileName: string): void {
 
 // GET /admin/login — the only unauthenticated page. An already-signed-in admin is
 // bounced to the shell rather than shown the form again.
-adminPortalRoutes.get('/login', (req: Request, res: Response): void => {
+adminPortalRoutes.get('/login', async (req: Request, res: Response, next: NextFunction): Promise<void> => {
   const token = readAdminSessionCookie(req);
 
-  if (token && verifyAdminToken(token)) {
-    res.redirect('/admin');
+  try {
+    if (token && (await verifyAdminToken(token))) {
+      res.redirect('/admin');
+      return;
+    }
+  } catch (err) {
+    next(err);
     return;
   }
 

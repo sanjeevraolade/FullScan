@@ -8,7 +8,7 @@ import type {
 
 const MAX_STRING_LENGTH = 500;
 
-/** Values are TEXT in SQLite; coerce back to the type the row declares. */
+/** Values are stored as text; coerce back to the type the row declares. */
 function parseSettingValue(row: MobileAppSettingRow): boolean | number | string {
   if (row.value_type === 'boolean') {
     return row.setting_value === 'true';
@@ -42,13 +42,13 @@ function toMobileAppSetting(row: MobileAppSettingRow): MobileAppSetting {
   };
 }
 
-export function getAllMobileAppSettings(): MobileAppSetting[] {
-  return mobileAppSettingDao.findAllMobileAppSettings().map(toMobileAppSetting);
+export async function getAllMobileAppSettings(): Promise<MobileAppSetting[]> {
+  return (await mobileAppSettingDao.findAllMobileAppSettings()).map(toMobileAppSetting);
 }
 
 /**
  * Validates one submitted value against its row's declared type, allowed options
- * and min/max, and returns it in the TEXT form the column stores.
+ * and min/max, and returns it in the text form the setting stores.
  * Throws AppError(400) with a message naming the offending setting.
  */
 function serializeSettingValue(
@@ -103,30 +103,32 @@ function serializeSettingValue(
  * Every value is validated before anything is written, and the write itself is a
  * single transaction — an invalid entry rejects the whole batch.
  */
-export function updateMobileAppSettings(
+export async function updateMobileAppSettings(
   updates: readonly MobileAppSettingUpdate[],
   adminUserId: string,
-): MobileAppSetting[] {
+): Promise<MobileAppSetting[]> {
   if (updates.length === 0) {
     throw new AppError(400, 'No settings supplied');
   }
 
   const seenKeys = new Set<string>();
-  const serialized = updates.map(({ key, value }) => {
+  const serialized: { key: string; value: string }[] = [];
+
+  for (const { key, value } of updates) {
     if (seenKeys.has(key)) {
       throw new AppError(400, `Duplicate setting in request: ${key}`);
     }
     seenKeys.add(key);
 
-    const row = mobileAppSettingDao.findMobileAppSettingByKey(key);
+    const row = await mobileAppSettingDao.findMobileAppSettingByKey(key);
     if (!row) {
       throw new AppError(400, `Unknown setting: ${key}`);
     }
 
-    return { key, value: serializeSettingValue(row, value) };
-  });
+    serialized.push({ key, value: serializeSettingValue(row, value) });
+  }
 
-  mobileAppSettingDao.updateMobileAppSettings(serialized, adminUserId);
+  await mobileAppSettingDao.updateMobileAppSettings(serialized, adminUserId);
 
   return getAllMobileAppSettings();
 }

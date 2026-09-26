@@ -10,7 +10,7 @@ to mock and develop against a real backend during development.
 | ---------- | ------------------------------------ |
 | Runtime    | Node.js + TypeScript (strict)        |
 | Framework  | Express                              |
-| Database   | SQLite (via `better-sqlite3`), WAL mode |
+| Database   | MongoDB (official `mongodb` driver), run as a replica set for transactions |
 | Validation | Zod                                  |
 | Logging    | Pino (`pino-http` request logging)   |
 | Security   | Helmet, CORS, express-rate-limit     |
@@ -21,6 +21,9 @@ to mock and develop against a real backend during development.
 
 - Node.js 18+ (Node 20+ recommended)
 - npm
+- MongoDB 6+ running as a **replica set** — the server uses transactions. Locally, `npm run db:dev`
+  starts one with no install needed; or use MongoDB Atlas, or `mongod --replSet rs0` +
+  `rs.initiate()`.
 
 ## Setup
 
@@ -37,7 +40,8 @@ cp .env.example .env
 | `PORT`                     | HTTP port                                     | `3000`                    |
 | `JWT_SECRET`                | Access token signing secret                   | `change-me-in-production` |
 | `JWT_REFRESH_SECRET`        | Refresh token signing secret                  | `change-me-refresh-secret`|
-| `DB_PATH`                   | SQLite file location                          | `./data/fullscan.sqlite`  |
+| `MONGODB_URI`               | MongoDB connection string (a replica set)     | `mongodb://127.0.0.1:27017/?replicaSet=rs0` |
+| `MONGODB_DB`                | Database name                                 | `fullscan`                |
 | `UPLOAD_DIR`                | Directory for uploaded evidence files         | `./uploads`               |
 | `GEO_FENCE_RADIUS_METERS`   | Allowed radius for geo-fenced actions          | `200`                     |
 
@@ -48,7 +52,8 @@ Change the JWT secrets before deploying anywhere beyond your own machine.
 **Development** (hot reload via `tsx watch`):
 
 ```bash
-npm run dev
+npm run db:dev   # terminal 1 — local MongoDB replica set on :27017, data in ./data/mongo
+npm run dev      # terminal 2
 ```
 
 **Production build + run**:
@@ -58,13 +63,15 @@ npm run build   # compiles src/ -> dist/ via tsc
 npm start       # runs dist/index.js
 ```
 
-The server initializes the SQLite database and applies any pending migrations automatically
-on startup — no separate migration step is required. Migration files live in
-`src/db/migrations/*.sql` and are applied in filename order, tracked in a `migrations` table.
+On startup the server connects to MongoDB, creates any missing collections, (re)applies their
+validators and indexes (`src/db/schema.ts`), and runs pending data migrations
+(`src/db/migrations/`, tracked in a `migrations` collection) — no separate step is required.
+`npm run migrate` does the same and exits, for running it ahead of a deploy. An empty database is
+seeded with the test data below by the first migration.
 
-> Note: `package.json` also defines an `npm run migrate` script (`tsx src/db/migrate.ts`), but
-> that file doesn't currently exist in `src/db/` — migrations only run via the automatic path
-> above (`initDb()` on server start).
+The server moved from SQLite to MongoDB — see
+[docs/sqlite-migration-mongodb.md](docs/sqlite-migration-mongodb.md), including how to copy an
+existing `data/fullscan.sqlite` across (`npm run db:migrate-sqlite`).
 
 Once running, the API is available at `http://localhost:<PORT>/api/v1`.
 
@@ -76,8 +83,10 @@ npm run test:run   # vitest, single run (CI)
 npm run lint        # eslint src/
 ```
 
-Suites live in `tests/` (config: `vitest.config.ts`). Each suite points `DB_PATH` at its own
-throwaway SQLite file via `tests/helpers/test-app.ts`, so tests never touch `./data/`.
+Suites live in `tests/` (config: `vitest.config.ts`). The global setup starts a throwaway
+in-memory MongoDB replica set (`mongodb-memory-server`; the first run downloads the binary), and
+`tests/helpers/test-app.ts` gives each suite its own freshly seeded database on it — tests never
+touch a real database.
 
 > Note: `npm run lint` currently fails — ESLint 9 requires an `eslint.config.js` and the project
 > has none. Type safety is covered by `npx tsc --noEmit`.
@@ -343,17 +352,21 @@ All four share the password `Admin@123!`.
 
 ### Test credentials
 
+The seed (`src/db/seed/*.json`) is generated from the legacy SQL migrations, which now live in
+`scripts/sqlite-legacy/migrations/` — that is where the migrations named below are. After changing
+them, run `npm run db:generate-seed`.
+
 The database is seeded with 51 field executives (`fe-001` plus 50 bulk-generated ones), 518 legacy
 synthetic cases (18 curated + 500 bulk-generated, see migration
 `008_seed_bulk_field_executives_and_cases.sql`, one component each), and 79 real de-identified cases
 with 132 components sourced from real case exports across 6 workflow phases — New, Pending, Uploaded,
 Completed, Stopped, and Rejected (see migrations `010_seed_real_case_data.sql` and
-`011_add_rejected_action_status.sql`, generated by `scripts/generate-real-case-seed.mjs`). Rejected
+`011_add_rejected_action_status.sql`, generated by `scripts/sqlite-legacy/generate-real-case-seed.mjs`). Rejected
 components go back into the FE's active queue (pending/beyond-TAT), not Completed — see
 `TERMINAL_/REWORK_ACTION_STATUS_CODES` in the generator script.
 
 For UI layout checks there are also 12 test cases (`case-uitest-001` … `012`, migration
-`018_seed_ui_test_cases.sql`, generated by `scripts/generate-ui-test-case-seed.mjs`) with realistic,
+`018_seed_ui_test_cases.sql`, generated by `scripts/sqlite-legacy/generate-ui-test-case-seed.mjs`) with realistic,
 moderately long text in every free-text field — up to 50 characters for candidate and father/spouse
 names, 60 for employer and client, 150 for address and remarks, 200 for client instructions and FE
 notes. 3 are in the New pool; 3 each of Pending, Beyond TAT and Completed are assigned to `fe001`.
@@ -384,7 +397,7 @@ src/
   index.ts              Entry point — loads env, initializes DB, starts the server
   controllers/          Request handlers per resource
   services/              Business logic per resource
-  db/                    SQLite connection, DAOs, migrations (*.sql)
+  db/                    MongoDB connection, schema (validators + indexes), DAOs, migrations, seed/*.json
   routes/                 Route definitions + Zod request schemas
   middleware/             validate (Zod), error-handler, authenticate, authenticate-admin,
                           authenticate-fe-web, login rate limit, portal CSP
@@ -399,9 +412,16 @@ public/
 web-fe/                   Field Executive React app (Vite) — built to web-fe/dist, served at /app
 web-admin/                Admin React app (Vite) — built to web-admin/dist, served at /admin-app
 tests/                    Vitest + Supertest suites
+scripts/                  db:dev MongoDB runner, seed generator, SQLite → MongoDB copy
+  sqlite-legacy/          The 22 pre-MongoDB SQL migrations and their seed generators
 ```
 
 ## Data
 
-SQLite database file lives at `./data/fullscan.sqlite` (git-ignored). Delete it to reset all
-data — it will be recreated with migrations applied on next `npm run dev` / `npm start`.
+Data lives in the MongoDB database named by `MONGODB_DB` (`npm run db:dev` keeps its files in
+`./data/mongo`, git-ignored). To reset everything, drop the database — e.g.
+`mongosh "$MONGODB_URI" --eval 'db.getSiblingDB("fullscan").dropDatabase()'` — and it is recreated
+and reseeded on the next `npm run dev` / `npm start`.
+
+The old SQLite file `./data/fullscan.sqlite` is no longer used. Copy its contents into MongoDB once
+with `npm run db:migrate-sqlite` (see [docs/sqlite-migration-mongodb.md](docs/sqlite-migration-mongodb.md)).

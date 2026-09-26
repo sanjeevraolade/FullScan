@@ -1,4 +1,7 @@
-import { getDb } from './connection.js';
+import { ObjectId, type Document } from 'mongodb';
+import { getCollection, sessionOption } from './connection.js';
+import { containsText, EXPOSE_ID, fromDocument, JOIN_PARENT_CASE, leftJoinFields } from './documents.js';
+import { nowTimestamp } from './timestamp.js';
 import type { CaseComponentRow } from '../types/case.types.js';
 import type {
   AdminCaseListFilter,
@@ -6,6 +9,8 @@ import type {
   CaseCategoryCount,
   CaseRow,
 } from '../types/admin-case.types.js';
+
+export { runInTransaction } from './connection.js';
 
 /**
  * Admin reads and writes over `cases` / `case_components`.
@@ -15,17 +20,32 @@ import type {
  * only place cases are created or edited.
  */
 
-const LIST_SELECT = `
-  SELECT
-    cc.id, cc.case_id, cc.bucket, cc.verification_type, cc.address_type, cc.address,
-    cc.component_status, cc.action_status, cc.assigned_field_executive_id, cc.assigned_to_name,
-    cc.tat_due_at, cc.updated_at,
-    c.case_ref, c.client_name, c.candidate_name, c.profile_status,
-    fe.name AS assigned_field_executive_name
-  FROM case_components cc
-  JOIN cases c ON c.id = cc.case_id
-  LEFT JOIN field_executives fe ON fe.id = cc.assigned_field_executive_id
-`;
+/** `LEFT JOIN field_executives fe ON fe.id = cc.assigned_field_executive_id`, for the assignee's name. */
+const JOIN_ASSIGNEE_NAME = leftJoinFields('field_executives', 'assigned_field_executive_id', {
+  assigned_field_executive_name: 'name',
+});
+
+/** The columns of an `AdminCaseListItem` source row. */
+const LIST_PROJECTION = {
+  _id: 0,
+  id: '$_id',
+  case_id: 1,
+  bucket: 1,
+  verification_type: 1,
+  address_type: 1,
+  address: 1,
+  component_status: 1,
+  action_status: 1,
+  assigned_field_executive_id: 1,
+  assigned_to_name: 1,
+  tat_due_at: 1,
+  updated_at: 1,
+  case_ref: 1,
+  client_name: 1,
+  candidate_name: 1,
+  profile_status: 1,
+  assigned_field_executive_name: 1,
+};
 
 interface AdminCaseListRow {
   readonly id: string;
@@ -47,36 +67,37 @@ interface AdminCaseListRow {
   readonly updated_at: string;
 }
 
-/** WHERE fragment + bound values shared by the list, the total and the category counts. */
-function buildFilterClause(
+/**
+ * Components joined with their case and filtered — shared by the list, the total and
+ * the category counts. Component-level conditions run before the join so the
+ * indexes are used; the search spans case columns too, so it runs after.
+ */
+function buildFilteredComponents(
   filter: AdminCaseListFilter,
   options: { readonly includeBucket: boolean },
-): { clause: string; values: unknown[] } {
-  const conditions: string[] = [];
-  const values: unknown[] = [];
+): Document[] {
+  const componentMatch: Document = {};
 
   if (options.includeBucket && filter.bucket) {
-    conditions.push('cc.bucket = ?');
-    values.push(filter.bucket);
+    componentMatch.bucket = filter.bucket;
   }
 
   if (filter.fieldExecutiveId) {
-    conditions.push('cc.assigned_field_executive_id = ?');
-    values.push(filter.fieldExecutiveId);
+    componentMatch.assigned_field_executive_id = filter.fieldExecutiveId;
   }
+
+  const stages: Document[] = [{ $match: componentMatch }, ...JOIN_PARENT_CASE];
 
   if (filter.search) {
-    conditions.push(
-      '(c.case_ref LIKE ? OR c.candidate_name LIKE ? OR c.client_name LIKE ? OR cc.address LIKE ?)',
-    );
-    const term = `%${filter.search}%`;
-    values.push(term, term, term, term);
+    const term = containsText(filter.search);
+    stages.push({
+      $match: {
+        $or: [{ case_ref: term }, { candidate_name: term }, { client_name: term }, { address: term }],
+      },
+    });
   }
 
-  return {
-    clause: conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '',
-    values,
-  };
+  return stages;
 }
 
 function mapListRow(row: AdminCaseListRow): AdminCaseListItem {
@@ -101,83 +122,88 @@ function mapListRow(row: AdminCaseListRow): AdminCaseListItem {
   };
 }
 
-export function findComponentsForAdmin(filter: AdminCaseListFilter): AdminCaseListItem[] {
-  const db = getDb();
-  const { clause, values } = buildFilterClause(filter, { includeBucket: true });
-
-  const rows = db
-    .prepare(`${LIST_SELECT} ${clause} ORDER BY cc.updated_at DESC, cc.id LIMIT ? OFFSET ?`)
-    .all(...values, filter.limit, filter.offset) as AdminCaseListRow[];
+export async function findComponentsForAdmin(filter: AdminCaseListFilter): Promise<AdminCaseListItem[]> {
+  const rows = await getCollection('case_components')
+    .aggregate<AdminCaseListRow>(
+      [
+        ...buildFilteredComponents(filter, { includeBucket: true }),
+        { $sort: { updated_at: -1, _id: 1 } },
+        { $skip: filter.offset },
+        { $limit: filter.limit },
+        ...JOIN_ASSIGNEE_NAME,
+        { $project: LIST_PROJECTION },
+      ],
+      sessionOption(),
+    )
+    .toArray();
 
   return rows.map(mapListRow);
 }
 
-export function countComponentsForAdmin(filter: AdminCaseListFilter): number {
-  const db = getDb();
-  const { clause, values } = buildFilterClause(filter, { includeBucket: true });
-
-  const row = db
-    .prepare(
-      `SELECT COUNT(*) AS total FROM case_components cc JOIN cases c ON c.id = cc.case_id ${clause}`,
+export async function countComponentsForAdmin(filter: AdminCaseListFilter): Promise<number> {
+  const [result] = await getCollection('case_components')
+    .aggregate<{ total: number }>(
+      [...buildFilteredComponents(filter, { includeBucket: true }), { $count: 'total' }],
+      sessionOption(),
     )
-    .get(...values) as { total: number };
+    .toArray();
 
-  return row.total;
+  return result?.total ?? 0;
 }
 
 /**
  * Per-bucket counts under the *non-bucket* part of the filter, so switching tabs
  * never changes the numbers on the tabs.
  */
-export function countComponentsByBucket(filter: AdminCaseListFilter): CaseCategoryCount[] {
-  const db = getDb();
-  const { clause, values } = buildFilterClause(filter, { includeBucket: false });
-
-  return db
-    .prepare(
-      `SELECT cc.bucket, COUNT(*) AS count
-       FROM case_components cc JOIN cases c ON c.id = cc.case_id
-       ${clause}
-       GROUP BY cc.bucket`,
+export function countComponentsByBucket(filter: AdminCaseListFilter): Promise<CaseCategoryCount[]> {
+  return getCollection('case_components')
+    .aggregate<CaseCategoryCount>(
+      [
+        ...buildFilteredComponents(filter, { includeBucket: false }),
+        { $group: { _id: '$bucket', count: { $sum: 1 } } },
+        { $project: { _id: 0, bucket: '$_id', count: 1 } },
+      ],
+      sessionOption(),
     )
-    .all(...values) as CaseCategoryCount[];
+    .toArray();
 }
 
-export function findCaseById(caseId: string): CaseRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM cases WHERE id = ?').get(caseId) as CaseRow | undefined;
+async function findCase(filter: Document): Promise<CaseRow | undefined> {
+  const document = await getCollection('cases').findOne(filter, sessionOption());
+  return document ? fromDocument<CaseRow>(document) : undefined;
 }
 
-export function findCaseByRef(caseRef: string): CaseRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM cases WHERE case_ref = ?').get(caseRef) as CaseRow | undefined;
+export function findCaseById(caseId: string): Promise<CaseRow | undefined> {
+  return findCase({ _id: caseId });
+}
+
+export function findCaseByRef(caseRef: string): Promise<CaseRow | undefined> {
+  return findCase({ case_ref: caseRef });
 }
 
 /** Components of one case, joined with their parent case and assignee name. */
 export function findComponentRowsByCaseId(
   caseId: string,
-): (CaseComponentRow & { assigned_field_executive_name: string | null })[] {
-  const db = getDb();
-  return db
-    .prepare(
-      `SELECT cc.*, c.case_ref, c.client_name, c.candidate_name, c.primary_contact_number,
-              c.secondary_contact_number, c.profile_status, c.father_or_spouse_name, c.employer_name,
-              fe.name AS assigned_field_executive_name
-       FROM case_components cc
-       JOIN cases c ON c.id = cc.case_id
-       LEFT JOIN field_executives fe ON fe.id = cc.assigned_field_executive_id
-       WHERE cc.case_id = ?
-       ORDER BY cc.created_at ASC, cc.id ASC`,
+): Promise<(CaseComponentRow & { assigned_field_executive_name: string | null })[]> {
+  return getCollection('case_components')
+    .aggregate<CaseComponentRow & { assigned_field_executive_name: string | null }>(
+      [
+        { $match: { case_id: caseId } },
+        { $sort: { created_at: 1, _id: 1 } },
+        ...JOIN_PARENT_CASE,
+        ...JOIN_ASSIGNEE_NAME,
+        ...EXPOSE_ID,
+      ],
+      sessionOption(),
     )
-    .all(caseId) as (CaseComponentRow & { assigned_field_executive_name: string | null })[];
+    .toArray();
 }
 
-export function findComponentIdsByCaseId(caseId: string): string[] {
-  const db = getDb();
-  const rows = db
-    .prepare('SELECT id FROM case_components WHERE case_id = ?')
-    .all(caseId) as { id: string }[];
-  return rows.map((row) => row.id);
+export async function findComponentIdsByCaseId(caseId: string): Promise<string[]> {
+  const documents = await getCollection<{ _id: string }>('case_components')
+    .find({ case_id: caseId }, { projection: { _id: 1 }, ...sessionOption() })
+    .toArray();
+  return documents.map((document) => document._id);
 }
 
 /** Every column an admin write touches — insert and update bind the same shape. */
@@ -218,53 +244,97 @@ export interface CaseWriteValues {
   readonly profileStatus: string;
 }
 
-export function insertCase(values: CaseWriteValues): void {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO cases (
-       id, case_ref, client_name, candidate_name, father_or_spouse_name, employer_name,
-       primary_contact_number, secondary_contact_number, profile_status
-     ) VALUES (
-       @id, @caseRef, @clientName, @candidateName, @fatherOrSpouseName, @employerName,
-       @primaryContactNumber, @secondaryContactNumber, @profileStatus
-     )`,
-  ).run(values);
+function toCaseFields(values: CaseWriteValues): Document {
+  return {
+    case_ref: values.caseRef,
+    client_name: values.clientName,
+    candidate_name: values.candidateName,
+    father_or_spouse_name: values.fatherOrSpouseName,
+    employer_name: values.employerName,
+    primary_contact_number: values.primaryContactNumber,
+    secondary_contact_number: values.secondaryContactNumber,
+    profile_status: values.profileStatus,
+  };
 }
 
-export function updateCase(values: CaseWriteValues): void {
-  const db = getDb();
-  db.prepare(
-    `UPDATE cases SET
-       case_ref = @caseRef,
-       client_name = @clientName,
-       candidate_name = @candidateName,
-       father_or_spouse_name = @fatherOrSpouseName,
-       employer_name = @employerName,
-       primary_contact_number = @primaryContactNumber,
-       secondary_contact_number = @secondaryContactNumber,
-       profile_status = @profileStatus,
-       updated_at = datetime('now')
-     WHERE id = @id`,
-  ).run(values);
+function toComponentFields(values: CaseComponentWriteValues): Document {
+  return {
+    component_status: values.componentStatus,
+    action_status: values.actionStatus,
+    bucket: values.bucket,
+    verification_type: values.verificationType,
+    address_type: values.addressType,
+    residence_type: values.residenceType,
+    address: values.address,
+    location: values.location,
+    remarks: values.remarks,
+    additional_verification_instructions: values.additionalVerificationInstructions,
+    additional_verification_remarks: values.additionalVerificationRemarks,
+    assigned_field_executive_id: values.assignedFieldExecutiveId,
+    assigned_to_name: values.assignedToName,
+    tat_due_at: values.tatDueAt,
+    target_latitude: values.targetLatitude,
+    target_longitude: values.targetLongitude,
+    masked_primary_phone: values.maskedPrimaryPhone,
+    masked_secondary_phone: values.maskedSecondaryPhone,
+    client_instructions: values.clientInstructions,
+    field_executive_notes: values.fieldExecutiveNotes,
+  };
 }
 
-export function insertCaseComponent(values: CaseComponentWriteValues): void {
-  const db = getDb();
-  db.prepare(
-    `INSERT INTO case_components (
-       id, case_id, component_status, action_status, bucket, verification_type, address_type,
-       residence_type, address, location, remarks, additional_verification_instructions,
-       additional_verification_remarks, assigned_field_executive_id, assigned_to_name, tat_due_at,
-       target_latitude, target_longitude, masked_primary_phone, masked_secondary_phone,
-       client_instructions, field_executive_notes
-     ) VALUES (
-       @id, @caseId, @componentStatus, @actionStatus, @bucket, @verificationType, @addressType,
-       @residenceType, @address, @location, @remarks, @additionalVerificationInstructions,
-       @additionalVerificationRemarks, @assignedFieldExecutiveId, @assignedToName, @tatDueAt,
-       @targetLatitude, @targetLongitude, @maskedPrimaryPhone, @maskedSecondaryPhone,
-       @clientInstructions, @fieldExecutiveNotes
-     )`,
-  ).run(values);
+/**
+ * The columns an admin write never sets, at the defaults SQLite gave them. Written
+ * explicitly so a new component reads back with `null`s rather than missing fields.
+ */
+const COMPONENT_DEFAULTS = {
+  gps_distance_meters: 0,
+  gps_is_within_range: 0,
+  selected_verification_status: null,
+  respondent_name: null,
+  respondent_relation: null,
+  received_date: null,
+  action_updated_date: null,
+  insuff_raised_date: null,
+  insuff_cleared_date: null,
+  addl_doc_requested_date: null,
+  addl_doc_cleared_date: null,
+  cost_approval_requested_date: null,
+  cost_approved_date: null,
+  cost_rejected_date: null,
+  cost_currency: null,
+  cost_amount: null,
+} as const;
+
+export async function insertCase(values: CaseWriteValues): Promise<void> {
+  const now = nowTimestamp();
+  await getCollection('cases').insertOne(
+    { _id: values.id, ...toCaseFields(values), created_at: now, updated_at: now },
+    sessionOption(),
+  );
+}
+
+export async function updateCase(values: CaseWriteValues): Promise<void> {
+  await getCollection('cases').updateOne(
+    { _id: values.id },
+    { $set: { ...toCaseFields(values), updated_at: nowTimestamp() } },
+    sessionOption(),
+  );
+}
+
+export async function insertCaseComponent(values: CaseComponentWriteValues): Promise<void> {
+  const now = nowTimestamp();
+  await getCollection('case_components').insertOne(
+    {
+      _id: values.id,
+      case_id: values.caseId,
+      ...toComponentFields(values),
+      ...COMPONENT_DEFAULTS,
+      created_at: now,
+      updated_at: now,
+      insert_order: new ObjectId(),
+    },
+    sessionOption(),
+  );
 }
 
 /**
@@ -273,37 +343,10 @@ export function insertCaseComponent(values: CaseComponentWriteValues): void {
  * left out — they are the field executive's record of what happened on site, not
  * something the back office overwrites from a form.
  */
-export function updateCaseComponent(values: CaseComponentWriteValues): void {
-  const db = getDb();
-  db.prepare(
-    `UPDATE case_components SET
-       component_status = @componentStatus,
-       action_status = @actionStatus,
-       bucket = @bucket,
-       verification_type = @verificationType,
-       address_type = @addressType,
-       residence_type = @residenceType,
-       address = @address,
-       location = @location,
-       remarks = @remarks,
-       additional_verification_instructions = @additionalVerificationInstructions,
-       additional_verification_remarks = @additionalVerificationRemarks,
-       assigned_field_executive_id = @assignedFieldExecutiveId,
-       assigned_to_name = @assignedToName,
-       tat_due_at = @tatDueAt,
-       target_latitude = @targetLatitude,
-       target_longitude = @targetLongitude,
-       masked_primary_phone = @maskedPrimaryPhone,
-       masked_secondary_phone = @maskedSecondaryPhone,
-       client_instructions = @clientInstructions,
-       field_executive_notes = @fieldExecutiveNotes,
-       updated_at = datetime('now')
-     WHERE id = @id AND case_id = @caseId`,
-  ).run(values);
-}
-
-/** Runs `work` inside a SQLite transaction, so a part-written case never lands. */
-export function runInTransaction<T>(work: () => T): T {
-  const db = getDb();
-  return db.transaction(work)();
+export async function updateCaseComponent(values: CaseComponentWriteValues): Promise<void> {
+  await getCollection('case_components').updateOne(
+    { _id: values.id, case_id: values.caseId },
+    { $set: { ...toComponentFields(values), updated_at: nowTimestamp() } },
+    sessionOption(),
+  );
 }

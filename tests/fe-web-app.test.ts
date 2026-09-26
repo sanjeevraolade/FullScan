@@ -21,9 +21,9 @@ beforeAll(() => {
   process.env.FE_WEB_APP_DIR = appDir;
 });
 
-afterAll(() => {
+afterAll(async () => {
   delete process.env.FE_WEB_APP_DIR;
-  removeTestDb();
+  await removeTestDb();
 });
 
 async function signIn(): Promise<string> {

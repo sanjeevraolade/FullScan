@@ -22,9 +22,9 @@ beforeAll(() => {
   process.env.ADMIN_APP_DIR = appDir;
 });
 
-afterAll(() => {
+afterAll(async () => {
   delete process.env.ADMIN_APP_DIR;
-  removeTestDb();
+  await removeTestDb();
 });
 
 async function signInAdmin(account: { username: string; password: string } = SEEDED_ADMIN): Promise<string> {

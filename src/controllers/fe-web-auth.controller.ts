@@ -11,9 +11,9 @@ import { logger } from '../utils/logger.js';
  * Validates field executive credentials and sets the httpOnly session cookie. The
  * token itself is deliberately not in the body — the portal never needs it.
  */
-export function login(req: Request, res: Response, next: NextFunction): void {
+export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const { token, expiresInSeconds, fieldExecutive } = feWebAuthService.loginFieldExecutiveWeb(
+    const { token, expiresInSeconds, fieldExecutive } = await feWebAuthService.loginFieldExecutiveWeb(
       req.body,
     );
 
@@ -31,7 +31,7 @@ export function login(req: Request, res: Response, next: NextFunction): void {
  * Clears the session cookie. The web token only ever lived in that cookie, so this
  * fully signs the browser out.
  */
-export function logout(req: Request, res: Response, next: NextFunction): void {
+export async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     clearFeWebSessionCookie(res);
     logger.info({ fieldExecutiveId: req.fieldExecutiveId }, 'Field executive signed out on web');

@@ -7,8 +7,8 @@ export function toFieldExecutive(row: FieldExecutiveRow): FieldExecutive {
   return { id: row.id, name: row.name, email: row.email, role: row.role };
 }
 
-export function getCurrentFieldExecutive(fieldExecutiveId: string): FieldExecutive {
-  const row = fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
+export async function getCurrentFieldExecutive(fieldExecutiveId: string): Promise<FieldExecutive> {
+  const row = await fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
 
   if (!row) {
     throw new AppError(404, 'No field executive session found');

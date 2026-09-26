@@ -1,6 +1,7 @@
 import * as referenceDataDao from '../db/reference-data.dao.js';
 import { getAllMobileAppSettings } from './mobile-app-setting.service.js';
 import type {
+  DropdownCategory,
   DropdownOption,
   DropdownOptionRow,
   MobileAppSettings,
@@ -12,6 +13,10 @@ function mapOptions(rows: DropdownOptionRow[]): DropdownOption[] {
   return rows.map((row) => ({ code: row.code, label: row.label }));
 }
 
+async function findOptions(category: DropdownCategory): Promise<DropdownOption[]> {
+  return mapOptions(await referenceDataDao.findDropdownOptionsByCategory(category));
+}
+
 /**
  * Flattens the admin-managed settings into the key/value form the mobile app
  * consumes, dropping the portal-only presentation metadata (label, description,
@@ -20,15 +25,15 @@ function mapOptions(rows: DropdownOptionRow[]): DropdownOption[] {
  * Reuses the settings service rather than re-reading the DAO, so type coercion
  * happens in exactly one place.
  */
-function buildMobileAppSettings(): MobileAppSettings {
-  const settings = getAllMobileAppSettings();
+async function buildMobileAppSettings(): Promise<MobileAppSettings> {
+  const settings = await getAllMobileAppSettings();
   const values: Record<string, MobileAppSettingValue> = {};
   let updatedAt: string | null = null;
 
   for (const setting of settings) {
     values[setting.key] = setting.value;
 
-    // SQLite's 'YYYY-MM-DD HH:MM:SS' sorts correctly as a string.
+    // The stored 'YYYY-MM-DD HH:MM:SS' sorts correctly as a string.
     if (setting.updatedAt && (!updatedAt || setting.updatedAt > updatedAt)) {
       updatedAt = setting.updatedAt;
     }
@@ -47,15 +52,35 @@ function buildMobileAppSettings(): MobileAppSettings {
  * using the one post-login batch call it already makes, and so re-fetching
  * reference data also refreshes configuration.
  */
-export function getReferenceData(): ReferenceData {
+export async function getReferenceData(): Promise<ReferenceData> {
+  const [
+    verificationTypeStatuses,
+    utvOptions,
+    insuffOptions,
+    photoTypes,
+    componentStatuses,
+    actionStatuses,
+    profileStatuses,
+    mobileAppSettings,
+  ] = await Promise.all([
+    findOptions('verification_type_status'),
+    findOptions('utv_option'),
+    findOptions('insuff_option'),
+    findOptions('photo_type'),
+    findOptions('component_status'),
+    findOptions('action_status'),
+    findOptions('profile_status'),
+    buildMobileAppSettings(),
+  ]);
+
   return {
-    verificationTypeStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('verification_type_status')),
-    utvOptions: mapOptions(referenceDataDao.findDropdownOptionsByCategory('utv_option')),
-    insuffOptions: mapOptions(referenceDataDao.findDropdownOptionsByCategory('insuff_option')),
-    photoTypes: mapOptions(referenceDataDao.findDropdownOptionsByCategory('photo_type')),
-    componentStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('component_status')),
-    actionStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('action_status')),
-    profileStatuses: mapOptions(referenceDataDao.findDropdownOptionsByCategory('profile_status')),
-    mobileAppSettings: buildMobileAppSettings(),
+    verificationTypeStatuses,
+    utvOptions,
+    insuffOptions,
+    photoTypes,
+    componentStatuses,
+    actionStatuses,
+    profileStatuses,
+    mobileAppSettings,
   };
 }

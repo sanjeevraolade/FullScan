@@ -1,64 +1,68 @@
-import { getDb } from './connection.js';
+import { getCollection, sessionOption } from './connection.js';
+import { fromDocument, type StoredDocument } from './documents.js';
+import { nowTimestamp } from './timestamp.js';
 import type { MockLocationEventInsert, MockLocationEventRow } from '../types/mock-location.types.js';
 
-export function findMockLocationEventByClientEventId(
-  clientEventId: string,
-): MockLocationEventRow | undefined {
-  const db = getDb();
-  return db
-    .prepare('SELECT * FROM mock_location_events WHERE client_event_id = ?')
-    .get(clientEventId) as MockLocationEventRow | undefined;
+type MockLocationEventDocument = StoredDocument<MockLocationEventRow>;
+
+function mockLocationEvents() {
+  return getCollection<MockLocationEventDocument>('mock_location_events');
 }
 
-export function insertMockLocationEvent(event: MockLocationEventInsert): MockLocationEventRow {
-  const db = getDb();
+export async function findMockLocationEventByClientEventId(
+  clientEventId: string,
+): Promise<MockLocationEventRow | undefined> {
+  const document = await mockLocationEvents().findOne({ client_event_id: clientEventId }, sessionOption());
+  return document ? fromDocument<MockLocationEventRow>(document) : undefined;
+}
 
-  db.prepare(
-    `INSERT INTO mock_location_events (
-       id, client_event_id, field_executive_id,
-       detection_stage, detected_at,
-       latitude, longitude, accuracy_meters, fix_captured_at, fix_source,
-       case_id,
-       device_id, device_name, device_model, device_brand, device_manufacturer, device_type,
-       os_name, os_version, app_version, app_build_number, installer_package_name,
-       is_emulator, device_time_zone,
-       raw_payload
-     ) VALUES (
-       @id, @clientEventId, @fieldExecutiveId,
-       @detectionStage, @detectedAt,
-       @latitude, @longitude, @accuracyMeters, @fixCapturedAt, @fixSource,
-       @caseId,
-       @deviceId, @deviceName, @deviceModel, @deviceBrand, @deviceManufacturer, @deviceType,
-       @osName, @osVersion, @appVersion, @appBuildNumber, @installerPackageName,
-       @isEmulator, @deviceTimeZone,
-       @rawPayload
-     )`,
-  ).run({
-    ...event,
-    // better-sqlite3 binds integers, not booleans.
-    isEmulator: event.isEmulator ? 1 : 0,
-  });
+export async function insertMockLocationEvent(event: MockLocationEventInsert): Promise<MockLocationEventRow> {
+  const now = nowTimestamp();
+  const document: MockLocationEventDocument = {
+    _id: event.id,
+    client_event_id: event.clientEventId,
+    field_executive_id: event.fieldExecutiveId,
+    detection_stage: event.detectionStage,
+    detected_at: event.detectedAt,
+    reported_at: now,
+    latitude: event.latitude,
+    longitude: event.longitude,
+    accuracy_meters: event.accuracyMeters,
+    fix_captured_at: event.fixCapturedAt,
+    fix_source: event.fixSource,
+    case_id: event.caseId,
+    device_id: event.deviceId,
+    device_name: event.deviceName,
+    device_model: event.deviceModel,
+    device_brand: event.deviceBrand,
+    device_manufacturer: event.deviceManufacturer,
+    device_type: event.deviceType,
+    os_name: event.osName,
+    os_version: event.osVersion,
+    app_version: event.appVersion,
+    app_build_number: event.appBuildNumber,
+    installer_package_name: event.installerPackageName,
+    // Kept as 0/1, the form the SQLite column held and the services compare against.
+    is_emulator: event.isEmulator ? 1 : 0,
+    device_time_zone: event.deviceTimeZone,
+    raw_payload: event.rawPayload,
+    created_at: now,
+  };
 
-  return db.prepare('SELECT * FROM mock_location_events WHERE id = ?').get(event.id) as
-    MockLocationEventRow;
+  await mockLocationEvents().insertOne(document, sessionOption());
+  return fromDocument<MockLocationEventRow>(document);
 }
 
 /** How many detections stand against this executive — the fraud signal the report returns. */
-export function countMockLocationEventsForFieldExecutive(fieldExecutiveId: string): number {
-  const db = getDb();
-  const row = db
-    .prepare('SELECT COUNT(*) AS total FROM mock_location_events WHERE field_executive_id = ?')
-    .get(fieldExecutiveId) as { total: number };
-  return row.total;
+export function countMockLocationEventsForFieldExecutive(fieldExecutiveId: string): Promise<number> {
+  return mockLocationEvents().countDocuments({ field_executive_id: fieldExecutiveId }, sessionOption());
 }
 
 /** Device clock of the earliest detection, so the back office can see how long this has run. */
-export function findFirstDetectedAtForFieldExecutive(fieldExecutiveId: string): string | null {
-  const db = getDb();
-  const row = db
-    .prepare(
-      'SELECT MIN(detected_at) AS first_detected_at FROM mock_location_events WHERE field_executive_id = ?',
-    )
-    .get(fieldExecutiveId) as { first_detected_at: string | null };
-  return row.first_detected_at;
+export async function findFirstDetectedAtForFieldExecutive(fieldExecutiveId: string): Promise<string | null> {
+  const earliest = await mockLocationEvents().findOne(
+    { field_executive_id: fieldExecutiveId },
+    { sort: { detected_at: 1 }, projection: { detected_at: 1 }, ...sessionOption() },
+  );
+  return earliest?.detected_at ?? null;
 }

@@ -1,6 +1,6 @@
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
-import { app, getDb, removeTestDb } from './helpers/test-app.js';
+import { app, getCollection, removeTestDb } from './helpers/test-app.js';
 
 /**
  * POST /api/v1/security/mock-location — the mobile app reports a faked device
@@ -65,8 +65,8 @@ beforeAll(async () => {
   token = response.body.data.token;
 });
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 describe(`POST ${ENDPOINT}`, () => {
@@ -89,9 +89,9 @@ describe(`POST ${ENDPOINT}`, () => {
     expect(response.body.data.eventId).toBeTruthy();
     expect(response.body.data.totalEventCount).toBeGreaterThanOrEqual(1);
 
-    const row = getDb()
-      .prepare('SELECT * FROM mock_location_events WHERE id = ?')
-      .get(response.body.data.eventId) as Record<string, unknown>;
+    const row = (await getCollection('mock_location_events').findOne({
+      _id: response.body.data.eventId,
+    })) as Record<string, unknown>;
 
     expect(row.field_executive_id).toBe(FIELD_EXECUTIVE.id);
     expect(row.detection_stage).toBe('post_login');
@@ -133,9 +133,7 @@ describe(`POST ${ENDPOINT}`, () => {
     expect(retry.body.data.isDuplicate).toBe(true);
     expect(retry.body.data.eventId).toBe(first.body.data.eventId);
 
-    const { total } = getDb()
-      .prepare('SELECT COUNT(*) AS total FROM mock_location_events WHERE client_event_id = ?')
-      .get('evt-retried-once') as { total: number };
+    const total = await getCollection('mock_location_events').countDocuments({ client_event_id: 'evt-retried-once' });
     expect(total).toBe(1);
   });
 
@@ -151,9 +149,9 @@ describe(`POST ${ENDPOINT}`, () => {
 
     expect(response.status).toBe(201);
 
-    const row = getDb()
-      .prepare('SELECT * FROM mock_location_events WHERE client_event_id = ?')
-      .get('evt-minimal') as Record<string, unknown>;
+    const row = (await getCollection('mock_location_events').findOne({
+      client_event_id: 'evt-minimal',
+    })) as Record<string, unknown>;
 
     expect(row.latitude).toBeNull();
     expect(row.case_id).toBeNull();

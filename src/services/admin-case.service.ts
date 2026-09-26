@@ -32,24 +32,22 @@ import type { DropdownCategory, DropdownOption } from '../types/reference-data.t
 
 const DEFAULT_COMPONENT_STATUS = 'new_component';
 
-function isKnownDropdownCode(category: DropdownCategory, code: string): boolean {
-  return referenceDataDao
-    .findDropdownOptionsByCategory(category)
-    .some((option) => option.code === code);
+async function isKnownDropdownCode(category: DropdownCategory, code: string): Promise<boolean> {
+  return (await referenceDataDao.findDropdownOptionsByCategory(category)).some((option) => option.code === code);
 }
 
-function assertKnownDropdownCode(
+async function assertKnownDropdownCode(
   category: DropdownCategory,
   code: string,
   fieldLabel: string,
-): void {
-  if (!isKnownDropdownCode(category, code)) {
+): Promise<void> {
+  if (!(await isKnownDropdownCode(category, code))) {
     throw new AppError(400, `Unknown ${fieldLabel}: ${code}`);
   }
 }
 
-function assertFieldExecutiveExists(fieldExecutiveId: string): void {
-  if (!fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId)) {
+async function assertFieldExecutiveExists(fieldExecutiveId: string): Promise<void> {
+  if (!(await fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId))) {
     throw new AppError(400, `Unknown field executive: ${fieldExecutiveId}`);
   }
 }
@@ -95,7 +93,9 @@ function mapComponent(
   };
 }
 
-function mapDetail(caseRow: CaseRow): AdminCaseDetail {
+async function mapDetail(caseRow: CaseRow): Promise<AdminCaseDetail> {
+  const components = await adminCaseDao.findComponentRowsByCaseId(caseRow.id);
+
   return {
     id: caseRow.id,
     caseRef: caseRow.case_ref,
@@ -108,7 +108,7 @@ function mapDetail(caseRow: CaseRow): AdminCaseDetail {
     profileStatus: caseRow.profile_status,
     createdAt: caseRow.created_at,
     updatedAt: caseRow.updated_at,
-    components: adminCaseDao.findComponentRowsByCaseId(caseRow.id).map(mapComponent),
+    components: components.map(mapComponent),
   };
 }
 
@@ -121,23 +121,29 @@ function fillMissingCategories(counted: CaseCategoryCount[]): CaseCategoryCount[
 }
 
 /** All case components, filtered and paged, plus the per-category counts behind the tabs. */
-export function listCasesForAdmin(filter: AdminCaseListFilter): AdminCaseListResult {
+export async function listCasesForAdmin(filter: AdminCaseListFilter): Promise<AdminCaseListResult> {
   if (filter.fieldExecutiveId) {
-    assertFieldExecutiveExists(filter.fieldExecutiveId);
+    await assertFieldExecutiveExists(filter.fieldExecutiveId);
   }
 
+  const [items, total, counted] = await Promise.all([
+    adminCaseDao.findComponentsForAdmin(filter),
+    adminCaseDao.countComponentsForAdmin(filter),
+    adminCaseDao.countComponentsByBucket(filter),
+  ]);
+
   return {
-    items: adminCaseDao.findComponentsForAdmin(filter),
-    total: adminCaseDao.countComponentsForAdmin(filter),
-    categories: fillMissingCategories(adminCaseDao.countComponentsByBucket(filter)),
+    items,
+    total,
+    categories: fillMissingCategories(counted),
     limit: filter.limit,
     offset: filter.offset,
   };
 }
 
 /** One case with every component beneath it — what the admin editor loads. */
-export function getCaseForAdmin(caseId: string): AdminCaseDetail {
-  const caseRow = adminCaseDao.findCaseById(caseId);
+export async function getCaseForAdmin(caseId: string): Promise<AdminCaseDetail> {
+  const caseRow = await adminCaseDao.findCaseById(caseId);
 
   if (!caseRow) {
     throw new AppError(404, `Case not found: ${caseId}`);
@@ -147,23 +153,23 @@ export function getCaseForAdmin(caseId: string): AdminCaseDetail {
 }
 
 /** Validates one component payload and binds it to the columns a write touches. */
-function toComponentWriteValues(
+async function toComponentWriteValues(
   componentId: string,
   caseId: string,
   input: AdminCaseComponentInput,
-): adminCaseDao.CaseComponentWriteValues {
+): Promise<adminCaseDao.CaseComponentWriteValues> {
   const componentStatus = toText(input.componentStatus) || DEFAULT_COMPONENT_STATUS;
   const actionStatus = toNullableText(input.actionStatus);
   const assignedFieldExecutiveId = toNullableText(input.assignedFieldExecutiveId);
 
-  assertKnownDropdownCode('component_status', componentStatus, 'component status');
+  await assertKnownDropdownCode('component_status', componentStatus, 'component status');
 
   if (actionStatus) {
-    assertKnownDropdownCode('action_status', actionStatus, 'action status');
+    await assertKnownDropdownCode('action_status', actionStatus, 'action status');
   }
 
   if (assignedFieldExecutiveId) {
-    assertFieldExecutiveExists(assignedFieldExecutiveId);
+    await assertFieldExecutiveExists(assignedFieldExecutiveId);
   }
 
   return {
@@ -192,8 +198,11 @@ function toComponentWriteValues(
   };
 }
 
-function toCaseWriteValues(caseId: string, input: CreateCaseInput | UpdateCaseInput): adminCaseDao.CaseWriteValues {
-  assertKnownDropdownCode('profile_status', input.profileStatus, 'profile status');
+async function toCaseWriteValues(
+  caseId: string,
+  input: CreateCaseInput | UpdateCaseInput,
+): Promise<adminCaseDao.CaseWriteValues> {
+  await assertKnownDropdownCode('profile_status', input.profileStatus, 'profile status');
 
   return {
     id: caseId,
@@ -213,22 +222,28 @@ function toCaseWriteValues(caseId: string, input: CreateCaseInput | UpdateCaseIn
  * to the mobile app (which lists components), so at least one is required —
  * enforced by the route schema and relied on here.
  */
-export function createCase(input: CreateCaseInput): AdminCaseDetail {
+export async function createCase(input: CreateCaseInput): Promise<AdminCaseDetail> {
   const caseRef = toText(input.caseRef);
 
-  if (adminCaseDao.findCaseByRef(caseRef)) {
+  if (await adminCaseDao.findCaseByRef(caseRef)) {
     throw new AppError(409, `A case already exists with reference ${caseRef}`);
   }
 
   const caseId = uuidv4();
-  const caseValues = toCaseWriteValues(caseId, input);
-  const componentValues = input.components.map((component) =>
-    toComponentWriteValues(uuidv4(), caseId, component),
-  );
+  const caseValues = await toCaseWriteValues(caseId, input);
+  const componentValues: adminCaseDao.CaseComponentWriteValues[] = [];
 
-  adminCaseDao.runInTransaction(() => {
-    adminCaseDao.insertCase(caseValues);
-    componentValues.forEach(adminCaseDao.insertCaseComponent);
+  // One at a time, so the first invalid component is the one reported.
+  for (const component of input.components) {
+    componentValues.push(await toComponentWriteValues(uuidv4(), caseId, component));
+  }
+
+  await adminCaseDao.runInTransaction(async () => {
+    await adminCaseDao.insertCase(caseValues);
+
+    for (const values of componentValues) {
+      await adminCaseDao.insertCaseComponent(values);
+    }
   });
 
   return getCaseForAdmin(caseId);
@@ -241,42 +256,43 @@ export function createCase(input: CreateCaseInput): AdminCaseDetail {
  * office edits one component at a time, and a partial payload must never silently
  * delete the rest of a candidate's verification trail.
  */
-export function updateCase(caseId: string, input: UpdateCaseInput): AdminCaseDetail {
-  const existing = adminCaseDao.findCaseById(caseId);
+export async function updateCase(caseId: string, input: UpdateCaseInput): Promise<AdminCaseDetail> {
+  const existing = await adminCaseDao.findCaseById(caseId);
 
   if (!existing) {
     throw new AppError(404, `Case not found: ${caseId}`);
   }
 
   const caseRef = toText(input.caseRef);
-  const conflicting = adminCaseDao.findCaseByRef(caseRef);
+  const conflicting = await adminCaseDao.findCaseByRef(caseRef);
 
   if (conflicting && conflicting.id !== caseId) {
     throw new AppError(409, `A case already exists with reference ${caseRef}`);
   }
 
-  const ownedComponentIds = new Set(adminCaseDao.findComponentIdsByCaseId(caseId));
-  const caseValues = toCaseWriteValues(caseId, input);
+  const ownedComponentIds = new Set(await adminCaseDao.findComponentIdsByCaseId(caseId));
+  const caseValues = await toCaseWriteValues(caseId, input);
+  const writes: { isNew: boolean; values: adminCaseDao.CaseComponentWriteValues }[] = [];
 
-  const writes = input.components.map((component) => {
+  for (const component of input.components) {
     if (component.id && !ownedComponentIds.has(component.id)) {
       throw new AppError(404, `Component ${component.id} does not belong to case ${caseId}`);
     }
 
-    return {
+    writes.push({
       isNew: !component.id,
-      values: toComponentWriteValues(component.id ?? uuidv4(), caseId, component),
-    };
-  });
+      values: await toComponentWriteValues(component.id ?? uuidv4(), caseId, component),
+    });
+  }
 
-  adminCaseDao.runInTransaction(() => {
-    adminCaseDao.updateCase(caseValues);
+  await adminCaseDao.runInTransaction(async () => {
+    await adminCaseDao.updateCase(caseValues);
 
     for (const write of writes) {
       if (write.isNew) {
-        adminCaseDao.insertCaseComponent(write.values);
+        await adminCaseDao.insertCaseComponent(write.values);
       } else {
-        adminCaseDao.updateCaseComponent(write.values);
+        await adminCaseDao.updateCaseComponent(write.values);
       }
     }
   });
@@ -284,10 +300,11 @@ export function updateCase(caseId: string, input: UpdateCaseInput): AdminCaseDet
   return getCaseForAdmin(caseId);
 }
 
-function mapOptions(category: DropdownCategory): DropdownOption[] {
-  return referenceDataDao
-    .findDropdownOptionsByCategory(category)
-    .map((row) => ({ code: row.code, label: row.label }));
+async function mapOptions(category: DropdownCategory): Promise<DropdownOption[]> {
+  return (await referenceDataDao.findDropdownOptionsByCategory(category)).map((row) => ({
+    code: row.code,
+    label: row.label,
+  }));
 }
 
 /**
@@ -295,13 +312,19 @@ function mapOptions(category: DropdownCategory): DropdownOption[] {
  * rows the mobile app reads — so a status the portal offers is always one the
  * device can render a label for.
  */
-export function getCaseFormOptions(): CaseFormOptions {
+export async function getCaseFormOptions(): Promise<CaseFormOptions> {
+  const [componentStatuses, actionStatuses, profileStatuses] = await Promise.all([
+    mapOptions('component_status'),
+    mapOptions('action_status'),
+    mapOptions('profile_status'),
+  ]);
+
   return {
     buckets: CASE_BUCKETS,
     addressTypes: ADDRESS_TYPES,
     residenceTypes: RESIDENCE_TYPES,
-    componentStatuses: mapOptions('component_status'),
-    actionStatuses: mapOptions('action_status'),
-    profileStatuses: mapOptions('profile_status'),
+    componentStatuses,
+    actionStatuses,
+    profileStatuses,
   };
 }

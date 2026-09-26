@@ -4,7 +4,7 @@ import jwt from 'jsonwebtoken';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_FIELD_EXECUTIVE,
 } from './helpers/test-app.js';
@@ -22,18 +22,20 @@ const HANDSET = {
   },
 };
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
-beforeEach(() => {
-  setDeviceBinding(null, null);
+beforeEach(async () => {
+  await setDeviceBinding(null, null);
 });
 
-function setDeviceBinding(deviceId: string | null, deviceDetails: string | null): void {
-  getDb()
-    .prepare('UPDATE field_executives SET device_id = ?, device_details = ? WHERE id = ?')
-    .run(deviceId, deviceDetails, SEEDED_FIELD_EXECUTIVE.id);
+async function setDeviceBinding(deviceId: string | null, deviceDetails: string | null): Promise<void> {
+  await getCollection('field_executives')
+    .updateOne(
+      { _id: SEEDED_FIELD_EXECUTIVE.id },
+      { $set: { device_id: deviceId, device_details: deviceDetails } },
+    );
 }
 
 async function signIn(): Promise<string> {
@@ -98,7 +100,7 @@ describe('GET /api/v1/fe-web/profile', () => {
   });
 
   it('only exposes the known device fields, never extra keys the app stored', async () => {
-    setDeviceBinding(
+    await setDeviceBinding(
       'device-with-extras',
       JSON.stringify({ ...HANDSET.deviceDetails, carrier: 'Jio', ipAddress: '10.0.0.7' }),
     );
@@ -112,7 +114,7 @@ describe('GET /api/v1/fe-web/profile', () => {
   });
 
   it('still shows the binding when the stored details are unreadable', async () => {
-    setDeviceBinding('device-with-bad-json', '{not json');
+    await setDeviceBinding('device-with-bad-json', '{not json');
 
     const profile = await fetchProfile();
 
@@ -128,7 +130,7 @@ describe('GET /api/v1/fe-web/profile', () => {
   });
 
   it('treats blank or non-string detail values as missing', async () => {
-    setDeviceBinding('device-with-odd-values', JSON.stringify({ deviceName: '   ', model: 42, brand: null }));
+    await setDeviceBinding('device-with-odd-values', JSON.stringify({ deviceName: '   ', model: 42, brand: null }));
 
     const { mobileDevice } = await fetchProfile();
 
@@ -138,7 +140,7 @@ describe('GET /api/v1/fe-web/profile', () => {
   });
 
   it('never returns the password hash or raw device_details', async () => {
-    setDeviceBinding(HANDSET.deviceId, JSON.stringify(HANDSET.deviceDetails));
+    await setDeviceBinding(HANDSET.deviceId, JSON.stringify(HANDSET.deviceDetails));
 
     const body = JSON.stringify(await fetchProfile());
 

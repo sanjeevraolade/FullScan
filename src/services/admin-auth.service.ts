@@ -35,8 +35,8 @@ export function toAdminUser(row: AdminUserRow): AdminUser {
  * admin are created with their email as username, and seeded admins can use either.
  * Rejects unknown accounts, wrong passwords and deactivated accounts alike.
  */
-export function loginAdmin({ username, password }: AdminLoginInput): AdminLoginResult {
-  const row = adminUserDao.findAdminUserByLogin(username.trim());
+export async function loginAdmin({ username, password }: AdminLoginInput): Promise<AdminLoginResult> {
+  const row = await adminUserDao.findAdminUserByLogin(username.trim());
   const isPasswordValid = verifyPassword(password, row?.password_hash);
 
   if (!row || !isPasswordValid) {
@@ -55,7 +55,7 @@ export function loginAdmin({ username, password }: AdminLoginInput): AdminLoginR
   };
   const token = jwt.sign(payload, JWT_SECRET, { expiresIn: ADMIN_TOKEN_EXPIRY_SECONDS });
 
-  adminUserDao.touchAdminUserLastLogin(row.id);
+  await adminUserDao.touchAdminUserLastLogin(row.id);
 
   return {
     token,
@@ -70,7 +70,7 @@ export function loginAdmin({ username, password }: AdminLoginInput): AdminLoginR
  * valid *field executive* token, which is signed with the same secret but lacks
  * the `scope: 'admin'` claim.
  */
-export function verifyAdminToken(token: string): AdminJwtPayload | undefined {
+export async function verifyAdminToken(token: string): Promise<AdminJwtPayload | undefined> {
   let payload: AdminJwtPayload;
 
   try {
@@ -84,7 +84,7 @@ export function verifyAdminToken(token: string): AdminJwtPayload | undefined {
   }
 
   // An account deactivated mid-session must stop working before its token expires.
-  const row = adminUserDao.findAdminUserById(payload.adminUserId);
+  const row = await adminUserDao.findAdminUserById(payload.adminUserId);
   if (!row || row.is_active !== 1) {
     return undefined;
   }
@@ -95,8 +95,8 @@ export function verifyAdminToken(token: string): AdminJwtPayload | undefined {
 }
 
 /** Current admin's profile, for the portal header. */
-export function getAdminUserProfile(adminUserId: string): AdminUser {
-  const row = adminUserDao.findAdminUserById(adminUserId);
+export async function getAdminUserProfile(adminUserId: string): Promise<AdminUser> {
+  const row = await adminUserDao.findAdminUserById(adminUserId);
 
   if (!row) {
     throw new AppError(404, 'Admin user not found');

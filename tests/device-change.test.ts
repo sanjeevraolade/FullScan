@@ -1,9 +1,10 @@
 import { afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import { timestampDaysAgo } from '../src/db/timestamp.js';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_ADMIN,
   SEEDED_REGULAR_ADMIN,
@@ -23,8 +24,8 @@ const FE_OVERVIEW = '/api/v1/fe-web/device-change';
 const ADMIN_REQUESTS = '/api/v1/admin/device-change-requests';
 const ADMIN_SETTINGS = '/api/v1/admin/mobile-app-settings';
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 interface Handset {
@@ -58,35 +59,42 @@ interface DeviceRow {
   readonly bound_after_request_id: string | null;
 }
 
-function fieldExecutiveIdFor(username: string): string {
-  const row = getDb().prepare('SELECT id FROM field_executives WHERE username = ?').get(username) as
-    | { id: string }
-    | undefined;
+async function fieldExecutiveIdFor(username: string): Promise<string> {
+  const row = await getCollection('field_executives').findOne({ username }, { projection: { _id: 1 } });
 
   if (!row) {
     throw new Error(`No seeded field executive ${username}`);
   }
-  return row.id;
+  return row._id;
 }
 
-function readBoundDeviceId(username: string): string | null {
-  const row = getDb()
-    .prepare('SELECT device_id FROM field_executives WHERE username = ?')
-    .get(username) as { device_id: string | null };
-  return row.device_id;
+async function readBoundDeviceId(username: string): Promise<string | null> {
+  const row = await getCollection('field_executives').findOne({ username }, { projection: { device_id: 1 } });
+  return (row?.device_id as string | null | undefined) ?? null;
 }
 
-function readDeviceRows(username: string): DeviceRow[] {
-  return getDb()
-    .prepare('SELECT * FROM field_executive_devices WHERE field_executive_id = ? ORDER BY created_at, rowid')
-    .all(fieldExecutiveIdFor(username)) as DeviceRow[];
+/** Oldest first, in write order — `insert_order` stands in for SQLite's rowid. */
+async function readDeviceRows(username: string): Promise<DeviceRow[]> {
+  const documents = await getCollection('field_executive_devices')
+    .find(
+      { field_executive_id: await fieldExecutiveIdFor(username) },
+      { sort: { created_at: 1, insert_order: 1 } },
+    )
+    .toArray();
+  return documents.map(({ _id, ...fields }) => ({ id: _id, ...fields }) as unknown as DeviceRow);
 }
 
-function countRequestRows(username: string): number {
-  const row = getDb()
-    .prepare('SELECT COUNT(*) AS total FROM device_change_requests WHERE field_executive_id = ?')
-    .get(fieldExecutiveIdFor(username)) as { total: number };
-  return row.total;
+async function countRequestRows(username: string): Promise<number> {
+  return getCollection('device_change_requests').countDocuments({
+    field_executive_id: await fieldExecutiveIdFor(username),
+  });
+}
+
+/** SQLite's `datetime(<timestamp>, '+N days')` on a stored `YYYY-MM-DD HH:MM:SS` timestamp. */
+function addDays(timestamp: string, days: number): string {
+  const date = new Date(`${timestamp.replace(' ', 'T')}Z`);
+  date.setUTCDate(date.getUTCDate() + days);
+  return date.toISOString().replace('T', ' ').slice(0, 19);
 }
 
 function mobileLogin(username: string, device: Handset) {
@@ -184,7 +192,7 @@ describe('mobile login keeps device history', () => {
   it('opens a history row on the first login', async () => {
     expect((await mobileLogin(username, phone)).status).toBe(200);
 
-    const rows = readDeviceRows(username);
+    const rows = await readDeviceRows(username);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ device_id: phone.deviceId, released_at: null, bound_after_request_id: null });
     expect(rows[0].bound_at).toBeTruthy();
@@ -192,13 +200,14 @@ describe('mobile login keeps device history', () => {
   });
 
   it('stamps later logins on the same phone without adding rows', async () => {
-    getDb()
-      .prepare("UPDATE field_executive_devices SET last_login_at = '2020-01-01 00:00:00' WHERE field_executive_id = ?")
-      .run(fieldExecutiveIdFor(username));
+    await getCollection('field_executive_devices').updateMany(
+      { field_executive_id: await fieldExecutiveIdFor(username) },
+      { $set: { last_login_at: '2020-01-01 00:00:00' } },
+    );
 
     expect((await mobileLogin(username, phone)).status).toBe(200);
 
-    const rows = readDeviceRows(username);
+    const rows = await readDeviceRows(username);
     expect(rows).toHaveLength(1);
     expect(rows[0].last_login_at).not.toBe('2020-01-01 00:00:00');
   });
@@ -208,7 +217,7 @@ describe('mobile login keeps device history', () => {
 
     expect(response.status).toBe(403);
     expect(response.body.error).toContain('Request a device change');
-    expect(readDeviceRows(username)).toHaveLength(1);
+    expect(await readDeviceRows(username)).toHaveLength(1);
   });
 });
 
@@ -227,7 +236,7 @@ describe('field executive requests a device change', () => {
 
     const response = await submitRequest('fe012');
     expect(response.status).toBe(409);
-    expect(countRequestRows('fe012')).toBe(0);
+    expect(await countRequestRows('fe012')).toBe(0);
   });
 
   it('can request once a phone is linked', async () => {
@@ -261,7 +270,7 @@ describe('field executive requests a device change', () => {
 
     expect(response.status).toBe(409);
     expect(response.body.error).toContain('waiting for admin approval');
-    expect(countRequestRows(username)).toBe(1);
+    expect(await countRequestRows(username)).toBe(1);
   });
 
   it('keeps the current phone working while the request is pending', async () => {
@@ -299,7 +308,7 @@ describe('admin reviews device change requests', () => {
     const approvedOnly = await listForAdmin('?status=approved');
     expect(approvedOnly.items.some((candidate: { id: string }) => candidate.id === item.id)).toBe(false);
 
-    const forExecutive = await listForAdmin(`?fieldExecutiveId=${fieldExecutiveIdFor('fe011')}`);
+    const forExecutive = await listForAdmin(`?fieldExecutiveId=${await fieldExecutiveIdFor('fe011')}`);
     expect(forExecutive.items.map((candidate: { id: string }) => candidate.id)).toEqual([item.id]);
   });
 
@@ -331,8 +340,8 @@ describe('rejecting a request', () => {
       decisionNote: 'Use your current phone',
       decidedBy: { id: SEEDED_REGULAR_ADMIN.id },
     });
-    expect(readBoundDeviceId(username)).toBe('request-phone-a');
-    expect(readDeviceRows(username).every((row) => row.released_at === null)).toBe(true);
+    expect(await readBoundDeviceId(username)).toBe('request-phone-a');
+    expect((await readDeviceRows(username)).every((row) => row.released_at === null)).toBe(true);
 
     const overview = await getOverview(username);
     expect(overview.eligibility).toMatchObject({ canRequest: true, requestsInWindow: 1 });
@@ -344,7 +353,7 @@ describe('rejecting a request', () => {
 
     expect((await decide(rejected.id, 'reject')).status).toBe(409);
     expect((await decide(rejected.id, 'approve')).status).toBe(409);
-    expect(readBoundDeviceId(username)).toBe('request-phone-a');
+    expect(await readBoundDeviceId(username)).toBe('request-phone-a');
   });
 });
 
@@ -358,8 +367,8 @@ describe('approving a request', () => {
     expect(approval.status).toBe(200);
     expect(approval.body.data).toMatchObject({ status: 'approved', newDevice: null, decidedBy: { id: SEEDED_ADMIN.id } });
 
-    expect(readBoundDeviceId(username)).toBeNull();
-    const [released] = readDeviceRows(username);
+    expect(await readBoundDeviceId(username)).toBeNull();
+    const [released] = await readDeviceRows(username);
     expect(released).toMatchObject({
       device_id: oldPhone.deviceId,
       release_reason: 'device_change_approved',
@@ -374,7 +383,7 @@ describe('approving a request', () => {
     // "Any device, including the old one"
     expect((await mobileLogin(username, oldPhone)).status).toBe(200);
 
-    const rows = readDeviceRows(username);
+    const rows = await readDeviceRows(username);
     expect(rows).toHaveLength(2);
     expect(rows[0].released_at).toBeTruthy();
     expect(rows[1]).toMatchObject({
@@ -383,7 +392,7 @@ describe('approving a request', () => {
       bound_after_request_id: requestId,
     });
 
-    const [item] = (await listForAdmin(`?fieldExecutiveId=${fieldExecutiveIdFor(username)}`)).items;
+    const [item] = (await listForAdmin(`?fieldExecutiveId=${await fieldExecutiveIdFor(username)}`)).items;
     expect(item.newDevice).toMatchObject({ deviceId: oldPhone.deviceId, deviceName: 'Old Phone' });
     expect(item.newDevice.boundAt).toBeTruthy();
   });
@@ -398,8 +407,8 @@ describe('approving a request', () => {
     expect((await decide(requestId, 'approve')).status).toBe(200);
     expect((await mobileLogin(username, newPhone)).status).toBe(200);
 
-    expect(readBoundDeviceId(username)).toBe(newPhone.deviceId);
-    expect(countRequestRows(username)).toBe(1);
+    expect(await readBoundDeviceId(username)).toBe(newPhone.deviceId);
+    expect(await countRequestRows(username)).toBe(1);
 
     const overview = await getOverview(username);
     expect(overview.requests[0]).toMatchObject({
@@ -419,19 +428,25 @@ describe('approving a request', () => {
 
   it('records a binding that predates device history before releasing it', async () => {
     const username = 'fe015';
-    getDb()
-      .prepare("UPDATE field_executives SET device_id = 'legacy-phone', device_details = ? WHERE username = ?")
-      .run(JSON.stringify(handset('legacy-phone', 'Legacy Phone').deviceDetails), username);
+    await getCollection('field_executives').updateOne(
+      { username },
+      {
+        $set: {
+          device_id: 'legacy-phone',
+          device_details: JSON.stringify(handset('legacy-phone', 'Legacy Phone').deviceDetails),
+        },
+      },
+    );
 
     const response = await submitRequest(username, { reason: 'Old binding' });
     expect(response.status).toBe(201);
 
     expect((await decide(response.body.data.requests[0].id, 'approve')).status).toBe(200);
 
-    const rows = readDeviceRows(username);
+    const rows = await readDeviceRows(username);
     expect(rows).toHaveLength(1);
     expect(rows[0]).toMatchObject({ device_id: 'legacy-phone', bound_at: null, release_reason: 'device_change_approved' });
-    expect(readBoundDeviceId(username)).toBeNull();
+    expect(await readBoundDeviceId(username)).toBeNull();
   });
 });
 
@@ -450,11 +465,8 @@ describe('request limit from mobile app settings', () => {
     const requestId = await bindAndRequest(username, handset('limit-phone', 'Limit Phone'));
     expect((await decide(requestId, 'reject')).status).toBe(200);
 
-    const expectedNext = (
-      getDb()
-        .prepare("SELECT datetime(requested_at, '+30 days') AS next FROM device_change_requests WHERE id = ?")
-        .get(requestId) as { next: string }
-    ).next;
+    const request = await getCollection('device_change_requests').findOne({ _id: requestId });
+    const expectedNext = addDays(request?.requested_at as string, 30);
 
     const overview = await getOverview(username);
     expect(overview.eligibility).toMatchObject({
@@ -468,13 +480,14 @@ describe('request limit from mobile app settings', () => {
     const response = await submitRequest(username);
     expect(response.status).toBe(429);
     expect(response.body.error).toContain('at most 1 time every 30 days');
-    expect(countRequestRows(username)).toBe(1);
+    expect(await countRequestRows(username)).toBe(1);
   });
 
   it('frees the slot once the request is older than the window', async () => {
-    getDb()
-      .prepare("UPDATE device_change_requests SET requested_at = datetime('now', '-31 days') WHERE field_executive_id = ?")
-      .run(fieldExecutiveIdFor(username));
+    await getCollection('device_change_requests').updateMany(
+      { field_executive_id: await fieldExecutiveIdFor(username) },
+      { $set: { requested_at: timestampDaysAgo(31) } },
+    );
 
     const overview = await getOverview(username);
     expect(overview.eligibility).toMatchObject({ canRequest: true, requestsInWindow: 0, nextRequestAllowedAt: null });
@@ -491,7 +504,7 @@ describe('request limit from mobile app settings', () => {
 describe('history for the back office', () => {
   it('adds device history and requests to Field Executive History', async () => {
     const response = await request(app)
-      .get(`/api/v1/admin/field-executives/${fieldExecutiveIdFor('fe014')}/history`)
+      .get(`/api/v1/admin/field-executives/${await fieldExecutiveIdFor('fe014')}/history`)
       .set('Cookie', await adminCookie());
 
     expect(response.status).toBe(200);
@@ -525,6 +538,6 @@ describe('history for the back office', () => {
 
     expect(deletion.status).toBe(409);
     expect(deletion.body.error).toContain('device change request');
-    expect(countRequestRows('fe017')).toBe(1);
+    expect(await countRequestRows('fe017')).toBe(1);
   });
 });

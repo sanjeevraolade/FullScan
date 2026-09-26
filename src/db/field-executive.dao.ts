@@ -1,36 +1,38 @@
-import { getDb } from './connection.js';
+import { getCollection, sessionOption } from './connection.js';
+import { fromDocument, type StoredDocument } from './documents.js';
 import type { FieldExecutiveRow } from '../types/field-executive.types.js';
 
-export function findFieldExecutiveById(id: string): FieldExecutiveRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM field_executives WHERE id = ?').get(id) as
-    | FieldExecutiveRow
-    | undefined;
+type FieldExecutiveDocument = StoredDocument<FieldExecutiveRow>;
+
+function fieldExecutives() {
+  return getCollection<FieldExecutiveDocument>('field_executives');
 }
 
-export function findFieldExecutiveByUsername(username: string): FieldExecutiveRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM field_executives WHERE username = ?').get(username) as
-    | FieldExecutiveRow
-    | undefined;
+async function findOne(filter: Partial<FieldExecutiveDocument>): Promise<FieldExecutiveRow | undefined> {
+  const document = await fieldExecutives().findOne(filter, sessionOption());
+  return document ? fromDocument<FieldExecutiveRow>(document) : undefined;
 }
 
-export function findFieldExecutiveByDeviceId(deviceId: string): FieldExecutiveRow | undefined {
-  const db = getDb();
-  return db.prepare('SELECT * FROM field_executives WHERE device_id = ?').get(deviceId) as
-    | FieldExecutiveRow
-    | undefined;
+export function findFieldExecutiveById(id: string): Promise<FieldExecutiveRow | undefined> {
+  return findOne({ _id: id });
 }
 
-export function updateFieldExecutiveDeviceBinding(
+export function findFieldExecutiveByUsername(username: string): Promise<FieldExecutiveRow | undefined> {
+  return findOne({ username });
+}
+
+export function findFieldExecutiveByDeviceId(deviceId: string): Promise<FieldExecutiveRow | undefined> {
+  return findOne({ device_id: deviceId });
+}
+
+export async function updateFieldExecutiveDeviceBinding(
   id: string,
   deviceId: string,
   deviceDetails: string,
-): void {
-  const db = getDb();
-  db.prepare('UPDATE field_executives SET device_id = ?, device_details = ? WHERE id = ?').run(
-    deviceId,
-    deviceDetails,
-    id,
+): Promise<void> {
+  await fieldExecutives().updateOne(
+    { _id: id },
+    { $set: { device_id: deviceId, device_details: deviceDetails } },
+    sessionOption(),
   );
 }

@@ -2,8 +2,8 @@ import { afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
 import { app, extractSessionCookie, removeTestDb, SEEDED_ADMIN } from './helpers/test-app.js';
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(): Promise<string> {

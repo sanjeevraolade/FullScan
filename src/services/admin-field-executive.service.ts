@@ -87,7 +87,7 @@ function mapCase(
   };
 }
 
-/** SQLite timestamps sort correctly as strings; a missing one sorts last. */
+/** Stored timestamps sort correctly as strings; a missing one sorts last. */
 function compareTimestampsDesc(left: string | null, right: string | null): number {
   return (right ?? '').localeCompare(left ?? '');
 }
@@ -146,8 +146,8 @@ function groupCasesByBucket(
   return [...HISTORY_BUCKETS, ...extraBuckets].map((bucket) => buildGroup(bucket, cases));
 }
 
-export function listFieldExecutivesForAdmin(search?: string): AdminFieldExecutiveListItem[] {
-  return adminFieldExecutiveDao.findFieldExecutivesForAdmin(search).map(mapFieldExecutive);
+export async function listFieldExecutivesForAdmin(search?: string): Promise<AdminFieldExecutiveListItem[]> {
+  return (await adminFieldExecutiveDao.findFieldExecutivesForAdmin(search)).map(mapFieldExecutive);
 }
 
 /**
@@ -157,16 +157,19 @@ export function listFieldExecutivesForAdmin(search?: string): AdminFieldExecutiv
  * the component is pulled in by id and listed alongside the assigned ones, so
  * reassigning a case cannot hide where a fake fix was reported.
  */
-export function getFieldExecutiveHistory(fieldExecutiveId: string): FieldExecutiveHistory {
-  const row = adminFieldExecutiveDao.findFieldExecutiveForAdmin(fieldExecutiveId);
+export async function getFieldExecutiveHistory(fieldExecutiveId: string): Promise<FieldExecutiveHistory> {
+  const row = await adminFieldExecutiveDao.findFieldExecutiveForAdmin(fieldExecutiveId);
 
   if (!row) {
     throw new AppError(404, `Field executive not found: ${fieldExecutiveId}`);
   }
 
-  const eventRows = adminFieldExecutiveDao.findMockLocationEventsForFieldExecutive(fieldExecutiveId);
-  const assignedComponents =
-    adminFieldExecutiveDao.findComponentsAssignedToFieldExecutive(fieldExecutiveId);
+  const [eventRows, assignedComponents, distinctDeviceCount, deviceRecords] = await Promise.all([
+    adminFieldExecutiveDao.findMockLocationEventsForFieldExecutive(fieldExecutiveId),
+    adminFieldExecutiveDao.findComponentsAssignedToFieldExecutive(fieldExecutiveId),
+    adminFieldExecutiveDao.countDistinctMockLocationDevices(fieldExecutiveId),
+    getDeviceRecordsForAdmin(fieldExecutiveId),
+  ]);
 
   const componentsById = new Map<string, FieldExecutiveComponentRow>(
     assignedComponents.map((component) => [component.id, component]),
@@ -182,7 +185,7 @@ export function getFieldExecutiveHistory(fieldExecutiveId: string): FieldExecuti
     ),
   ];
 
-  for (const component of adminFieldExecutiveDao.findComponentsByIds(referencedElsewhere)) {
+  for (const component of await adminFieldExecutiveDao.findComponentsByIds(referencedElsewhere)) {
     componentsById.set(component.id, component);
   }
 
@@ -215,12 +218,11 @@ export function getFieldExecutiveHistory(fieldExecutiveId: string): FieldExecuti
       // Rows come back newest-first, so the ends of the list are the extremes.
       firstDetectedAt: eventRows.length > 0 ? eventRows[eventRows.length - 1].detected_at : null,
       lastDetectedAt: eventRows.length > 0 ? eventRows[0].detected_at : null,
-      distinctDeviceCount:
-        adminFieldExecutiveDao.countDistinctMockLocationDevices(fieldExecutiveId),
+      distinctDeviceCount,
     },
     caseGroups: groupCasesByBucket(cases),
     unlinkedMockLocationEvents,
     // Every phone the account has been bound to and every device change request — never deleted.
-    ...getDeviceRecordsForAdmin(fieldExecutiveId),
+    ...deviceRecords,
   };
 }

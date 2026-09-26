@@ -5,7 +5,7 @@ import request from 'supertest';
 import {
   app,
   extractSessionCookie,
-  getDb,
+  getCollection,
   removeTestDb,
   SEEDED_FIELD_EXECUTIVE,
   testDbDir,
@@ -24,8 +24,8 @@ interface EvidenceEntry {
   readonly source: string;
 }
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
@@ -36,23 +36,17 @@ async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
   return extractSessionCookie(response.headers['set-cookie'], 'fs_fe_session');
 }
 
-function findComponentId(where: string, ...params: string[]): string {
-  const row = getDb().prepare(`SELECT id FROM case_components WHERE ${where} LIMIT 1`).get(...params) as
-    | { id: string }
-    | undefined;
+async function findComponentId(filter: Record<string, string>): Promise<string> {
+  const row = await getCollection('case_components').findOne(filter, { projection: { _id: 1 } });
 
   if (!row) {
-    throw new Error(`Seed has no component matching: ${where}`);
+    throw new Error(`Seed has no component matching: ${JSON.stringify(filter)}`);
   }
-  return row.id;
+  return String(row._id);
 }
 
-function countEvidenceRows(componentId: string): number {
-  return (
-    getDb().prepare('SELECT COUNT(*) AS total FROM case_evidence WHERE component_id = ?').get(componentId) as {
-      total: number;
-    }
-  ).total;
+function countEvidenceRows(componentId: string): Promise<number> {
+  return getCollection('case_evidence').countDocuments({ component_id: componentId });
 }
 
 function listStoredFiles(componentId: string): string[] {
@@ -62,7 +56,7 @@ function listStoredFiles(componentId: string): string[] {
 
 describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
   it('requires a web session', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'pending'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -73,7 +67,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
 
   it('stores JPEG, PNG and WebP images, records them and returns the full list', async () => {
     const cookie = await signIn();
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'beyond_tat'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'beyond_tat' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -89,7 +83,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
     expect(evidence.map((entry) => entry.fileName).sort()).toEqual(['door.jpg', 'nameplate.png', 'street.webp']);
     expect(evidence.map((entry) => entry.mimeType).sort()).toEqual(['image/jpeg', 'image/png', 'image/webp']);
     expect(evidence.every((entry) => entry.source === 'web_upload')).toBe(true);
-    expect(countEvidenceRows(componentId)).toBe(3);
+    expect(await countEvidenceRows(componentId)).toBe(3);
     expect(listStoredFiles(componentId)).toHaveLength(3);
     expect(JSON.stringify(response.body)).not.toContain('storage');
 
@@ -102,7 +96,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
 
   it('rejects the whole batch when any file is not a real image, writing nothing', async () => {
     const cookie = await signIn();
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'pending'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -112,12 +106,12 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
 
     expect(response.status).toBe(415);
     expect(response.body.error).toContain('fake.jpg');
-    expect(countEvidenceRows(componentId)).toBe(0);
+    expect(await countEvidenceRows(componentId)).toBe(0);
     expect(listStoredFiles(componentId)).toHaveLength(0);
   });
 
   it('strips path segments from file names', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'pending'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -129,7 +123,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
   });
 
   it('refuses uploads to a completed component', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'completed'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'completed' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -137,11 +131,11 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
       .attach('files', JPEG, 'door.jpg');
 
     expect(response.status).toBe(409);
-    expect(countEvidenceRows(componentId)).toBe(0);
+    expect(await countEvidenceRows(componentId)).toBe(0);
   });
 
   it('answers 404 for another executive’s component', async () => {
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-002' AND bucket = 'pending'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-002', bucket: 'pending' });
 
     const response = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -149,7 +143,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
       .attach('files', JPEG, 'door.jpg');
 
     expect(response.status).toBe(404);
-    expect(countEvidenceRows(componentId)).toBe(0);
+    expect(await countEvidenceRows(componentId)).toBe(0);
 
     const listed = await request(app)
       .get(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -159,7 +153,7 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
 
   it('requires at least one file and a multipart body', async () => {
     const cookie = await signIn();
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'pending'");
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
 
     const empty = await request(app)
       .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
@@ -174,8 +168,8 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
 
   it('enforces the per-file size and file-count limits', async () => {
     const cookie = await signIn();
-    const componentId = findComponentId("assigned_field_executive_id = 'fe-001' AND bucket = 'pending'");
-    const before = countEvidenceRows(componentId);
+    const componentId = await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' });
+    const before = await countEvidenceRows(componentId);
 
     const oversized = Buffer.concat([JPEG, Buffer.alloc(MAX_EVIDENCE_FILE_BYTES)]);
     const tooBig = await request(app)
@@ -190,6 +184,6 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
     }
     expect((await tooMany).status).toBe(400);
 
-    expect(countEvidenceRows(componentId)).toBe(before);
+    expect(await countEvidenceRows(componentId)).toBe(before);
   });
 });

@@ -5,9 +5,9 @@ import * as authService from '../services/auth.service.js';
  * POST /api/v1/auth/login
  * Validates username + password and returns a session token.
  */
-export function login(req: Request, res: Response, next: NextFunction): void {
+export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = authService.login(req.body);
+    const result = await authService.login(req.body);
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);

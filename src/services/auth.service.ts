@@ -9,8 +9,8 @@ const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
 const TOKEN_EXPIRY = '12h';
 
 /** Validates credentials and issues a session token. Fails unless both username and password match. */
-export function login({ username, password, deviceId, deviceDetails }: LoginInput): LoginResult {
-  const row = fieldExecutiveDao.findFieldExecutiveByUsername(username);
+export async function login({ username, password, deviceId, deviceDetails }: LoginInput): Promise<LoginResult> {
+  const row = await fieldExecutiveDao.findFieldExecutiveByUsername(username);
   const isPasswordValid = row ? bcrypt.compareSync(password, row.password_hash) : false;
 
   if (!row || !isPasswordValid) {
@@ -23,7 +23,7 @@ export function login({ username, password, deviceId, deviceDetails }: LoginInpu
   }
 
   // Check if this device is already bound to a DIFFERENT user
-  const deviceBoundUser = fieldExecutiveDao.findFieldExecutiveByDeviceId(deviceId);
+  const deviceBoundUser = await fieldExecutiveDao.findFieldExecutiveByDeviceId(deviceId);
   if (deviceBoundUser && deviceBoundUser.id !== row.id) {
     // Device is bound to a different user
     let boundUserName = 'another user';
@@ -57,7 +57,7 @@ export function login({ username, password, deviceId, deviceDetails }: LoginInpu
 
   // Bind this device on the account's first login (or its first since an approved
   // device change), or stamp the login on the bound device — both kept in device history.
-  recordMobileDeviceLogin(row, deviceId, JSON.stringify(deviceDetails));
+  await recordMobileDeviceLogin(row, deviceId, JSON.stringify(deviceDetails));
 
   const token = jwt.sign({ fieldExecutiveId: row.id }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 

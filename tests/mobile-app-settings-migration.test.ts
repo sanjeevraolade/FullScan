@@ -4,16 +4,18 @@ import path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 
 /**
- * Migration `015` tightens the geo-fence radius from 25..5000 to 10..2000. A
- * database written under the old bounds can hold a value the admin form would
- * now refuse, so the migration clamps it. This suite reproduces that upgrade on
- * a fresh database rather than trusting the seed defaults.
+ * Legacy SQLite migration `015` tightens the geo-fence radius from 25..5000 to
+ * 10..2000. A database written under the old bounds can hold a value the admin
+ * form would now refuse, so the migration clamps it. This suite reproduces that
+ * upgrade on a fresh SQLite database rather than trusting the seed defaults.
  *
- * Runs its own `better-sqlite3` connection so it can apply migrations in two
- * stages — the shared `test-app` helper applies them all at once.
+ * The server runs on MongoDB now, but the SQL migrations still matter: they
+ * generate the MongoDB seed, and `migrate-sqlite-to-mongo.ts` applies any a
+ * database file is missing before copying it. Runs its own `better-sqlite3`
+ * connection so it can apply migrations in two stages.
  */
 
-const MIGRATIONS_DIR = path.join(__dirname, '..', 'src', 'db', 'migrations');
+const MIGRATIONS_DIR = path.join(__dirname, '..', 'scripts', 'sqlite-legacy', 'migrations');
 const MIGRATION_014 = '014_create_mobile_app_settings.sql';
 const MIGRATION_015 = '015_add_location_retry_and_tighten_geofence.sql';
 

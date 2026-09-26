@@ -28,9 +28,9 @@ function readListFilter(req: Request): AdminCaseListFilter {
  * Every case component, filtered and paged, with the per-category counts the
  * portal's bucket tabs are labelled from.
  */
-export function listCases(req: Request, res: Response, next: NextFunction): void {
+export async function listCases(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = adminCaseService.listCasesForAdmin(readListFilter(req));
+    const result = await adminCaseService.listCasesForAdmin(readListFilter(req));
     res.json({ success: true, data: result });
   } catch (err) {
     next(err);
@@ -41,9 +41,9 @@ export function listCases(req: Request, res: Response, next: NextFunction): void
  * GET /api/v1/admin/cases/form-options
  * The status/type vocabularies the case editor's selects are built from.
  */
-export function getCaseFormOptions(_req: Request, res: Response, next: NextFunction): void {
+export async function getCaseFormOptions(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    res.json({ success: true, data: adminCaseService.getCaseFormOptions() });
+    res.json({ success: true, data: await adminCaseService.getCaseFormOptions() });
   } catch (err) {
     next(err);
   }
@@ -54,9 +54,9 @@ export function getCaseFormOptions(_req: Request, res: Response, next: NextFunct
  * One case with every component beneath it. Note `:caseId` here is a **case** id,
  * unlike the mobile `/cases/:caseId` routes where it is a component id.
  */
-export function getCase(req: Request, res: Response, next: NextFunction): void {
+export async function getCase(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const detail = adminCaseService.getCaseForAdmin(req.params.caseId);
+    const detail = await adminCaseService.getCaseForAdmin(req.params.caseId);
     res.json({ success: true, data: detail });
   } catch (err) {
     next(err);
@@ -67,9 +67,9 @@ export function getCase(req: Request, res: Response, next: NextFunction): void {
  * POST /api/v1/admin/cases
  * Creates a case and its components.
  */
-export function createCase(req: Request, res: Response, next: NextFunction): void {
+export async function createCase(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const created = adminCaseService.createCase(req.body);
+    const created = await adminCaseService.createCase(req.body);
 
     logger.info(
       { adminUserId: req.adminUserId, caseId: created.id, caseRef: created.caseRef },
@@ -86,9 +86,9 @@ export function createCase(req: Request, res: Response, next: NextFunction): voi
  * PUT /api/v1/admin/cases/:caseId
  * Updates a case's own fields and upserts the components it carries.
  */
-export function updateCase(req: Request, res: Response, next: NextFunction): void {
+export async function updateCase(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const updated = adminCaseService.updateCase(req.params.caseId, req.body);
+    const updated = await adminCaseService.updateCase(req.params.caseId, req.body);
 
     logger.info(
       {
@@ -110,9 +110,9 @@ export function updateCase(req: Request, res: Response, next: NextFunction): voi
  * GET /api/v1/admin/cases/:caseId/evidence
  * Web-uploaded evidence for every component of the case, with who uploaded it.
  */
-export function getCaseEvidence(req: Request, res: Response, next: NextFunction): void {
+export async function getCaseEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    res.json({ success: true, data: evidenceService.getEvidenceForAdminCase(req.params.caseId) });
+    res.json({ success: true, data: await evidenceService.getEvidenceForAdminCase(req.params.caseId) });
   } catch (err) {
     next(err);
   }

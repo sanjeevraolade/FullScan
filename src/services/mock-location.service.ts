@@ -26,17 +26,17 @@ function toNullableText(value: string | undefined): string | null {
  * than once. A repeat is answered with the original event rather than an error,
  * which is what lets the app drop it from its queue.
  */
-export function reportMockLocationEvent(
+export async function reportMockLocationEvent(
   fieldExecutiveId: string,
   input: MockLocationReportInput,
-): MockLocationReportResult {
-  const fieldExecutive = fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
+): Promise<MockLocationReportResult> {
+  const fieldExecutive = await fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
 
   if (!fieldExecutive) {
     throw new AppError(404, 'No field executive session found');
   }
 
-  const existing = mockLocationDao.findMockLocationEventByClientEventId(input.clientEventId);
+  const existing = await mockLocationDao.findMockLocationEventByClientEventId(input.clientEventId);
 
   if (existing) {
     logger.warn(
@@ -48,15 +48,15 @@ export function reportMockLocationEvent(
       eventId: existing.id,
       isDuplicate: true,
       reportedAt: existing.reported_at,
-      totalEventCount: mockLocationDao.countMockLocationEventsForFieldExecutive(fieldExecutiveId),
-      firstDetectedAt: mockLocationDao.findFirstDetectedAtForFieldExecutive(fieldExecutiveId),
+      totalEventCount: await mockLocationDao.countMockLocationEventsForFieldExecutive(fieldExecutiveId),
+      firstDetectedAt: await mockLocationDao.findFirstDetectedAtForFieldExecutive(fieldExecutiveId),
     };
   }
 
   const fix = input.fix ?? {};
   const device = input.device ?? {};
 
-  const row = mockLocationDao.insertMockLocationEvent({
+  const row = await mockLocationDao.insertMockLocationEvent({
     id: uuidv4(),
     clientEventId: input.clientEventId,
     fieldExecutiveId,
@@ -87,7 +87,7 @@ export function reportMockLocationEvent(
   });
 
   const totalEventCount =
-    mockLocationDao.countMockLocationEventsForFieldExecutive(fieldExecutiveId);
+    await mockLocationDao.countMockLocationEventsForFieldExecutive(fieldExecutiveId);
 
   // A fraud signal belongs in the server log at warn level, not just the table.
   logger.warn(
@@ -108,6 +108,6 @@ export function reportMockLocationEvent(
     isDuplicate: false,
     reportedAt: row.reported_at,
     totalEventCount,
-    firstDetectedAt: mockLocationDao.findFirstDetectedAtForFieldExecutive(fieldExecutiveId),
+    firstDetectedAt: await mockLocationDao.findFirstDetectedAtForFieldExecutive(fieldExecutiveId),
   };
 }

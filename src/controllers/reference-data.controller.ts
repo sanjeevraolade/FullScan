@@ -6,9 +6,9 @@ import * as referenceDataService from '../services/reference-data.service.js';
  * Bulk dropdown/option data (statuses, UTV/Insufficient reasons, photo
  * types) fetched once after login.
  */
-export function getReferenceData(req: Request, res: Response, next: NextFunction): void {
+export async function getReferenceData(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const data = referenceDataService.getReferenceData();
+    const data = await referenceDataService.getReferenceData();
     res.json({ success: true, data });
   } catch (err) {
     next(err);

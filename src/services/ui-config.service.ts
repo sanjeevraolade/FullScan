@@ -3,8 +3,8 @@ import * as uiConfigDao from '../db/ui-config.dao.js';
 import { AppError } from '../utils/app-error.js';
 import { v4 as uuidv4 } from 'uuid';
 
-export function getAllScreenConfigs(): ScreenConfig[] {
-  const rows = uiConfigDao.findAllUiConfigs();
+export async function getAllScreenConfigs(): Promise<ScreenConfig[]> {
+  const rows = await uiConfigDao.findAllUiConfigs();
 
   return rows.map((row) => ({
     screenId: row.screen_id,
@@ -15,8 +15,8 @@ export function getAllScreenConfigs(): ScreenConfig[] {
   }));
 }
 
-export function getScreenConfig(screenId: string): ScreenConfig {
-  const row = uiConfigDao.findUiConfigByScreenId(screenId);
+export async function getScreenConfig(screenId: string): Promise<ScreenConfig> {
+  const row = await uiConfigDao.findUiConfigByScreenId(screenId);
 
   if (!row) {
     throw new AppError(404, `Screen config not found: ${screenId}`);
@@ -31,14 +31,14 @@ export function getScreenConfig(screenId: string): ScreenConfig {
   };
 }
 
-export function updateScreenConfig(
+export async function updateScreenConfig(
   screenId: string,
   title: string,
   components: ComponentConfig[],
-): ScreenConfig {
+): Promise<ScreenConfig> {
   const configJson = JSON.stringify(components);
   const id = uuidv4();
-  const row = uiConfigDao.upsertUiConfig(id, screenId, title, configJson);
+  const row = await uiConfigDao.upsertUiConfig(id, screenId, title, configJson);
 
   return {
     screenId: row.screen_id,

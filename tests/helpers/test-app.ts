@@ -1,30 +1,33 @@
 import fs from 'fs';
 import os from 'os';
 import path from 'path';
+import { inject } from 'vitest';
 
 /**
- * Boots the Express app against a throwaway SQLite database.
+ * Boots the Express app against a throwaway MongoDB database.
  *
- * Env has to be set before anything is imported: `initDb()` reads `DB_PATH` when
- * called, and the auth services capture `JWT_SECRET` at module load. Migrations
- * (including the admin seed) are applied by `initDb()`, so each suite starts from
- * the same known data.
+ * Env has to be set before anything is imported: `initDb()` reads `MONGODB_URI` /
+ * `MONGODB_DB` when called, and the auth services capture `JWT_SECRET` at module
+ * load. Every suite gets its own database on the replica set the global setup
+ * started, seeded by the initial-data migration, so each starts from the same
+ * known data.
  */
 const testDbDir = fs.mkdtempSync(path.join(os.tmpdir(), 'fullscan-server-test-'));
 
-process.env.DB_PATH = path.join(testDbDir, 'test.sqlite');
+process.env.MONGODB_URI = inject('mongoUri');
+process.env.MONGODB_DB = `fullscan_test_${path.basename(testDbDir).replace(/\W/g, '_')}`;
 process.env.UPLOAD_DIR = path.join(testDbDir, 'uploads');
 process.env.JWT_SECRET = 'test-jwt-secret';
 process.env.NODE_ENV = 'test';
 
-const { initDb, closeDb, getDb } = await import('../../src/db/connection.js');
-initDb();
+const { initDb, closeDb, getCollection, getDb } = await import('../../src/db/connection.js');
+await initDb();
 
 const { app } = await import('../../src/app.js');
 
-export { app, closeDb, getDb, testDbDir };
+export { app, closeDb, getCollection, getDb, testDbDir };
 
-/** Test credentials seeded by migration 013. `SEEDED_ADMIN` is the super admin. */
+/** Test credentials from the initial seed. `SEEDED_ADMIN` is the super admin. */
 export const SEEDED_ADMIN = { username: 'admin001', password: 'Admin@123!', id: 'admin-001' };
 export const SEEDED_REGULAR_ADMIN = {
   username: 'admin002',
@@ -34,7 +37,7 @@ export const SEEDED_REGULAR_ADMIN = {
 };
 export const SEEDED_INACTIVE_ADMIN = { username: 'admin004', password: 'Admin@123!' };
 
-/** Field executive seeded by migrations 002/007 — also the account the mobile app uses. */
+/** Seeded field executive — also the account the mobile app uses. */
 export const SEEDED_FIELD_EXECUTIVE = { username: 'fe001', password: 'Password123!', id: 'fe-001' };
 
 /**
@@ -54,7 +57,8 @@ export function extractSessionCookie(
   return cookie.split(';')[0];
 }
 
-export function removeTestDb(): void {
-  closeDb();
+export async function removeTestDb(): Promise<void> {
+  await getDb().dropDatabase();
+  await closeDb();
   fs.rmSync(testDbDir, { recursive: true, force: true });
 }

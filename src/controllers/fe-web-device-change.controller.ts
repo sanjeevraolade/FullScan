@@ -14,9 +14,9 @@ function requireFieldExecutiveId(req: Request): string {
  * GET /api/v1/fe-web/device-change
  * Whether the FE can request a device change now, plus their request and device history.
  */
-export function getMyDeviceChange(req: Request, res: Response, next: NextFunction): void {
+export async function getMyDeviceChange(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const overview = deviceChangeService.getDeviceChangeOverviewForFieldExecutive(
+    const overview = await deviceChangeService.getDeviceChangeOverviewForFieldExecutive(
       requireFieldExecutiveId(req),
     );
     res.json({ success: true, data: overview });
@@ -30,12 +30,12 @@ export function getMyDeviceChange(req: Request, res: Response, next: NextFunctio
  * Submits a device change request for the currently bound phone. Answers 201 with
  * the refreshed overview.
  */
-export function createMyDeviceChangeRequest(req: Request, res: Response, next: NextFunction): void {
+export async function createMyDeviceChangeRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const fieldExecutiveId = requireFieldExecutiveId(req);
     const { reason } = req.body as { reason?: string };
 
-    const overview = deviceChangeService.requestDeviceChange(fieldExecutiveId, reason);
+    const overview = await deviceChangeService.requestDeviceChange(fieldExecutiveId, reason);
     logger.info({ fieldExecutiveId }, 'Device change requested');
 
     res.status(201).json({ success: true, data: overview });

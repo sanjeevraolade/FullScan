@@ -19,9 +19,9 @@ export const feWebAppRoutes = createSpaAppRoutes({
   appPath: FE_WEB_APP_PATH,
   resolveBuildDir: () => process.env.FE_WEB_APP_DIR || path.join(__dirname, '..', '..', 'web-fe', 'dist'),
   buildCommand: 'npm run build:web',
-  hasValidSession: (req) => {
+  hasValidSession: async (req) => {
     const token = readFeWebSessionCookie(req);
-    return Boolean(token && verifyFeWebToken(token));
+    return Boolean(token && (await verifyFeWebToken(token)));
   },
   pageGuard: createFeWebPageGuard(FE_WEB_APP_LOGIN_PATH),
 });

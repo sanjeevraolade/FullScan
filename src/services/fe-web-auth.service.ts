@@ -28,8 +28,8 @@ const INVALID_CREDENTIALS_MESSAGE = 'Invalid username or password';
  * browser has no stable device identity, and binding one would lock the FE out of
  * their handset. The account's mobile device binding is neither checked nor changed.
  */
-export function loginFieldExecutiveWeb({ username, password }: FeWebLoginInput): FeWebLoginResult {
-  const row = fieldExecutiveDao.findFieldExecutiveByUsername(username.trim());
+export async function loginFieldExecutiveWeb({ username, password }: FeWebLoginInput): Promise<FeWebLoginResult> {
+  const row = await fieldExecutiveDao.findFieldExecutiveByUsername(username.trim());
   const isPasswordValid = verifyPassword(password, row?.password_hash);
 
   if (!row || !isPasswordValid) {
@@ -51,7 +51,7 @@ export function loginFieldExecutiveWeb({ username, password }: FeWebLoginInput):
  * currently-valid web token for an existing field executive — including a
  * structurally valid mobile or admin token, which lack `scope: 'fe_web'`.
  */
-export function verifyFeWebToken(token: string): FeWebJwtPayload | undefined {
+export async function verifyFeWebToken(token: string): Promise<FeWebJwtPayload | undefined> {
   let payload: FeWebJwtPayload;
 
   try {
@@ -65,7 +65,7 @@ export function verifyFeWebToken(token: string): FeWebJwtPayload | undefined {
   }
 
   // A deleted account must stop working before its token expires.
-  if (!fieldExecutiveDao.findFieldExecutiveById(payload.fieldExecutiveId)) {
+  if (!(await fieldExecutiveDao.findFieldExecutiveById(payload.fieldExecutiveId))) {
     return undefined;
   }
 

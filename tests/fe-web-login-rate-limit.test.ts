@@ -7,8 +7,8 @@ import { app, removeTestDb, SEEDED_ADMIN, SEEDED_FIELD_EXECUTIVE } from './helpe
  * so exhausting the window here must not starve the other suites.
  */
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 describe('field executive web login rate limiting', () => {

@@ -28,8 +28,8 @@ function mapCostRequested(row: CaseComponentRow): CostRequested | null {
     : null;
 }
 
-function mapDetail(row: CaseComponentRow): CaseDetail {
-  const siblings = caseDao.findSiblingComponents(row.case_id, row.id).map((sibling) => ({
+async function mapDetail(row: CaseComponentRow): Promise<CaseDetail> {
+  const siblings = (await caseDao.findSiblingComponents(row.case_id, row.id)).map((sibling) => ({
     id: sibling.id,
     verificationType: sibling.verification_type,
     addressType: sibling.address_type,
@@ -92,15 +92,15 @@ const MAX_RANDOM_NEW_COMPONENTS = 10;
  * assignment. The app groups by bucket and computes tab counts client-side
  * (offline-first: fetch once, cache, filter locally).
  */
-export function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): CaseSummary[] {
-  const assignedRows = caseDao
-    .findComponentsByFieldExecutive(fieldExecutiveId)
-    .filter((row) => row.bucket !== 'new');
+export async function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): Promise<CaseSummary[]> {
+  const assignedRows = (await caseDao.findComponentsByFieldExecutive(fieldExecutiveId)).filter(
+    (row) => row.bucket !== 'new',
+  );
 
   const randomNewCount =
     MIN_RANDOM_NEW_COMPONENTS +
     Math.floor(Math.random() * (MAX_RANDOM_NEW_COMPONENTS - MIN_RANDOM_NEW_COMPONENTS + 1));
-  const randomNewRows = caseDao.findRandomNewComponents(randomNewCount);
+  const randomNewRows = await caseDao.findRandomNewComponents(randomNewCount);
 
   return [...randomNewRows, ...assignedRows].map(mapSummary);
 }
@@ -111,8 +111,8 @@ export function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): Case
  * from the whole pool per request, so acceptance is what actually claims
  * ownership.
  */
-export function acceptCase(componentId: string, fieldExecutiveId: string): CaseSummary {
-  const existing = caseDao.findComponentById(componentId);
+export async function acceptCase(componentId: string, fieldExecutiveId: string): Promise<CaseSummary> {
+  const existing = await caseDao.findComponentById(componentId);
 
   if (!existing) {
     throw new AppError(404, `Case component not found: ${componentId}`);
@@ -122,13 +122,13 @@ export function acceptCase(componentId: string, fieldExecutiveId: string): CaseS
     throw new AppError(409, `Case component ${componentId} is not in the New bucket`);
   }
 
-  const updated = caseDao.updateComponentBucket(componentId, 'pending', fieldExecutiveId);
+  const updated = await caseDao.updateComponentBucket(componentId, 'pending', fieldExecutiveId);
   return mapSummary(updated);
 }
 
 /** Full Case Details payload for the verification workflow screen. */
-export function getCaseDetail(componentId: string): CaseDetail {
-  const existing = caseDao.findComponentById(componentId);
+export async function getCaseDetail(componentId: string): Promise<CaseDetail> {
+  const existing = await caseDao.findComponentById(componentId);
 
   if (!existing) {
     throw new AppError(404, `Case component not found: ${componentId}`);
@@ -138,13 +138,16 @@ export function getCaseDetail(componentId: string): CaseDetail {
 }
 
 /** Records the field executive's verification outcome and moves the component to Completed. */
-export function submitVerificationOutcome(componentId: string, outcome: VerificationOutcomeInput): CaseSummary {
-  const existing = caseDao.findComponentById(componentId);
+export async function submitVerificationOutcome(
+  componentId: string,
+  outcome: VerificationOutcomeInput,
+): Promise<CaseSummary> {
+  const existing = await caseDao.findComponentById(componentId);
 
   if (!existing) {
     throw new AppError(404, `Case component not found: ${componentId}`);
   }
 
-  const updated = caseDao.updateComponentVerificationOutcome(componentId, outcome);
+  const updated = await caseDao.updateComponentVerificationOutcome(componentId, outcome);
   return mapSummary(updated);
 }

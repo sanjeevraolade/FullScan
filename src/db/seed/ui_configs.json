@@ -1,0 +1,38 @@
+[
+  {
+    "id": "cfg-assignment-list",
+    "screen_id": "assignment-list",
+    "version": 1,
+    "title": "Assignment List",
+    "config_json": "[{\"type\":\"card\",\"fields\":[{\"key\":\"candidateName\",\"label\":\"Candidate Name\",\"type\":\"text\",\"visible\":true,\"order\":1},{\"key\":\"address\",\"label\":\"Address\",\"type\":\"text\",\"visible\":true,\"order\":2},{\"key\":\"status\",\"label\":\"Status\",\"type\":\"status\",\"visible\":true,\"order\":3},{\"key\":\"assignedDate\",\"label\":\"Assigned Date\",\"type\":\"date\",\"visible\":true,\"order\":4}]}]",
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__"
+  },
+  {
+    "id": "cfg-assignment-detail",
+    "screen_id": "assignment-detail",
+    "version": 1,
+    "title": "Assignment Detail",
+    "config_json": "[{\"type\":\"header\",\"fields\":[{\"key\":\"candidateName\",\"label\":\"Candidate Name\",\"type\":\"text\",\"visible\":true,\"order\":1},{\"key\":\"status\",\"label\":\"Status\",\"type\":\"status\",\"visible\":true,\"order\":2}]},{\"type\":\"detail\",\"fields\":[{\"key\":\"address\",\"label\":\"Address\",\"type\":\"text\",\"visible\":true,\"order\":1},{\"key\":\"location\",\"label\":\"Location\",\"type\":\"location\",\"visible\":true,\"order\":2},{\"key\":\"assignedDate\",\"label\":\"Assigned Date\",\"type\":\"date\",\"visible\":true,\"order\":3},{\"key\":\"employerName\",\"label\":\"Employer\",\"type\":\"text\",\"visible\":true,\"order\":4},{\"key\":\"caseId\",\"label\":\"Case ID\",\"type\":\"text\",\"visible\":true,\"order\":5}]}]",
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__"
+  },
+  {
+    "id": "cfg-evidence-capture",
+    "screen_id": "evidence-capture",
+    "version": 1,
+    "title": "Evidence Capture",
+    "config_json": "[{\"type\":\"form\",\"fields\":[{\"key\":\"photo\",\"label\":\"Capture Photo\",\"type\":\"image\",\"visible\":true,\"order\":1},{\"key\":\"location\",\"label\":\"Current Location\",\"type\":\"location\",\"visible\":true,\"order\":2},{\"key\":\"remarks\",\"label\":\"Remarks\",\"type\":\"text\",\"visible\":true,\"order\":3}]}]",
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__"
+  },
+  {
+    "id": "cfg-verification-report",
+    "screen_id": "verification-report",
+    "version": 1,
+    "title": "Verification Report",
+    "config_json": "[{\"type\":\"form\",\"fields\":[{\"key\":\"candidatePresent\",\"label\":\"Candidate Present\",\"type\":\"status\",\"visible\":true,\"order\":1},{\"key\":\"identityVerified\",\"label\":\"Identity Verified\",\"type\":\"status\",\"visible\":true,\"order\":2},{\"key\":\"addressConfirmed\",\"label\":\"Address Confirmed\",\"type\":\"status\",\"visible\":true,\"order\":3},{\"key\":\"remarks\",\"label\":\"Observations\",\"type\":\"text\",\"visible\":true,\"order\":4}]}]",
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__"
+  }
+]

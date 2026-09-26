@@ -6,10 +6,10 @@ import * as adminFieldExecutiveService from '../services/admin-field-executive.s
  * The roster, with assignment and detection counts — also the source for the
  * assignee dropdown on the case editor.
  */
-export function listFieldExecutives(req: Request, res: Response, next: NextFunction): void {
+export async function listFieldExecutives(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
-    const executives = adminFieldExecutiveService.listFieldExecutivesForAdmin(
+    const executives = await adminFieldExecutiveService.listFieldExecutivesForAdmin(
       search || undefined,
     );
     res.json({ success: true, data: executives });
@@ -23,9 +23,9 @@ export function listFieldExecutives(req: Request, res: Response, next: NextFunct
  * Case-wise history for one executive, including every mock-location detection
  * recorded against the case it happened on.
  */
-export function getFieldExecutiveHistory(req: Request, res: Response, next: NextFunction): void {
+export async function getFieldExecutiveHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const history = adminFieldExecutiveService.getFieldExecutiveHistory(
+    const history = await adminFieldExecutiveService.getFieldExecutiveHistory(
       req.params.fieldExecutiveId,
     );
     res.json({ success: true, data: history });

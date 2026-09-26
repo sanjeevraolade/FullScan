@@ -1,4 +1,7 @@
-import { getDb } from './connection.js';
+import { ObjectId, type Document } from 'mongodb';
+import { getCollection, sessionOption } from './connection.js';
+import { EXPOSE_ID, fromDocument, leftJoinFields } from './documents.js';
+import { nowTimestamp, timestampDaysAgo } from './timestamp.js';
 import type {
   DeviceChangeRequestDetailRow,
   DeviceChangeRequestFilter,
@@ -10,218 +13,253 @@ import type {
 /**
  * Device change requests and device binding history.
  *
- * Nothing here deletes a row. Requests move from `pending` to a decision once;
+ * Nothing here deletes a document. Requests move from `pending` to a decision once;
  * bindings are opened and later closed — both are the audit trail.
  */
 
-/** Runs `work` in one SQLite transaction; a thrown error rolls everything back. */
-export function runInTransaction<T>(work: () => T): T {
-  return getDb().transaction(work)();
+export { runInTransaction } from './connection.js';
+
+function requests() {
+  return getCollection('device_change_requests');
 }
 
-const REQUEST_SELECT = `
-  SELECT
-    r.*,
-    fe.name AS fe_name,
-    fe.username AS fe_username,
-    a.name AS decided_by_name,
-    d.device_id AS new_device_id,
-    d.device_details AS new_device_details,
-    d.bound_at AS new_bound_at,
-    d.last_login_at AS new_last_login_at
-  FROM device_change_requests r
-  JOIN field_executives fe ON fe.id = r.field_executive_id
-  LEFT JOIN admin_users a ON a.id = r.decided_by
-  LEFT JOIN field_executive_devices d ON d.bound_after_request_id = r.id
-`;
+function bindings() {
+  return getCollection('field_executive_devices');
+}
 
-export function findDeviceChangeRequestById(id: string): DeviceChangeRequestDetailRow | undefined {
-  return getDb().prepare(`${REQUEST_SELECT} WHERE r.id = ?`).get(id) as
-    | DeviceChangeRequestDetailRow
-    | undefined;
+/** Newest first; `insert_order` breaks ties between requests made in the same second. */
+const NEWEST_REQUEST_FIRST = { requested_at: -1, insert_order: -1 } as const;
+const NEWEST_BINDING_FIRST = { created_at: -1, insert_order: -1 } as const;
+
+/**
+ * A request with the executive's name, the deciding admin's name and the binding
+ * that followed it — the old `REQUEST_SELECT` joins.
+ */
+const REQUEST_DETAILS: readonly Document[] = [
+  { $lookup: { from: 'field_executives', localField: 'field_executive_id', foreignField: '_id', as: 'fe' } },
+  { $unwind: '$fe' },
+  { $set: { fe_name: '$fe.name', fe_username: '$fe.username' } },
+  { $unset: 'fe' },
+  ...leftJoinFields('admin_users', 'decided_by', { decided_by_name: 'name' }),
+  ...leftJoinFields(
+    'field_executive_devices',
+    '_id',
+    {
+      new_device_id: 'device_id',
+      new_device_details: 'device_details',
+      new_bound_at: 'bound_at',
+      new_last_login_at: 'last_login_at',
+    },
+    'bound_after_request_id',
+  ),
+  ...EXPOSE_ID,
+];
+
+function findRequestDetails(stages: readonly Document[]): Promise<DeviceChangeRequestDetailRow[]> {
+  return requests()
+    .aggregate<DeviceChangeRequestDetailRow>([...stages, ...REQUEST_DETAILS], sessionOption())
+    .toArray();
+}
+
+export async function findDeviceChangeRequestById(id: string): Promise<DeviceChangeRequestDetailRow | undefined> {
+  const [row] = await findRequestDetails([{ $match: { _id: id } }]);
+  return row;
 }
 
 export function findDeviceChangeRequestsForFieldExecutive(
   fieldExecutiveId: string,
-): DeviceChangeRequestDetailRow[] {
-  return getDb()
-    .prepare(`${REQUEST_SELECT} WHERE r.field_executive_id = ? ORDER BY r.requested_at DESC, r.rowid DESC`)
-    .all(fieldExecutiveId) as DeviceChangeRequestDetailRow[];
+): Promise<DeviceChangeRequestDetailRow[]> {
+  return findRequestDetails([{ $match: { field_executive_id: fieldExecutiveId } }, { $sort: NEWEST_REQUEST_FIRST }]);
 }
 
-export function listDeviceChangeRequests(
-  filter: DeviceChangeRequestFilter,
-): DeviceChangeRequestDetailRow[] {
-  const clauses: string[] = [];
-  const values: string[] = [];
+export function listDeviceChangeRequests(filter: DeviceChangeRequestFilter): Promise<DeviceChangeRequestDetailRow[]> {
+  const match: Document = {};
 
   if (filter.status) {
-    clauses.push('r.status = ?');
-    values.push(filter.status);
+    match.status = filter.status;
   }
   if (filter.fieldExecutiveId) {
-    clauses.push('r.field_executive_id = ?');
-    values.push(filter.fieldExecutiveId);
+    match.field_executive_id = filter.fieldExecutiveId;
   }
 
-  const where = clauses.length > 0 ? `WHERE ${clauses.join(' AND ')}` : '';
-
-  return getDb()
-    .prepare(`${REQUEST_SELECT} ${where} ORDER BY r.requested_at DESC, r.rowid DESC`)
-    .all(...values) as DeviceChangeRequestDetailRow[];
+  return findRequestDetails([{ $match: match }, { $sort: NEWEST_REQUEST_FIRST }]);
 }
 
 export function countDeviceChangeRequestsByStatus(
   fieldExecutiveId?: string,
-): Array<{ status: DeviceChangeRequestStatus; total: number }> {
-  const where = fieldExecutiveId ? 'WHERE field_executive_id = ?' : '';
-  const values = fieldExecutiveId ? [fieldExecutiveId] : [];
-
-  return getDb()
-    .prepare(`SELECT status, COUNT(*) AS total FROM device_change_requests ${where} GROUP BY status`)
-    .all(...values) as Array<{ status: DeviceChangeRequestStatus; total: number }>;
+): Promise<Array<{ status: DeviceChangeRequestStatus; total: number }>> {
+  return requests()
+    .aggregate<{ status: DeviceChangeRequestStatus; total: number }>(
+      [
+        { $match: fieldExecutiveId ? { field_executive_id: fieldExecutiveId } : {} },
+        { $group: { _id: '$status', total: { $sum: 1 } } },
+        { $project: { _id: 0, status: '$_id', total: 1 } },
+      ],
+      sessionOption(),
+    )
+    .toArray();
 }
 
 /** `requested_at` of every request inside the rolling window, oldest first. */
-export function findRequestTimesInWindow(fieldExecutiveId: string, windowDays: number): string[] {
-  const rows = getDb()
-    .prepare(
-      `SELECT requested_at FROM device_change_requests
-       WHERE field_executive_id = ? AND requested_at > datetime('now', ?)
-       ORDER BY requested_at ASC`,
+export async function findRequestTimesInWindow(fieldExecutiveId: string, windowDays: number): Promise<string[]> {
+  const documents = await requests()
+    .find(
+      { field_executive_id: fieldExecutiveId, requested_at: { $gt: timestampDaysAgo(windowDays) } },
+      { sort: { requested_at: 1, insert_order: 1 }, projection: { requested_at: 1 }, ...sessionOption() },
     )
-    .all(fieldExecutiveId, `-${windowDays} days`) as Array<{ requested_at: string }>;
+    .toArray();
 
-  return rows.map((row) => row.requested_at);
+  return documents.map((document) => document.requested_at as string);
 }
 
-export function findPendingDeviceChangeRequestId(fieldExecutiveId: string): string | undefined {
-  const row = getDb()
-    .prepare("SELECT id FROM device_change_requests WHERE field_executive_id = ? AND status = 'pending' LIMIT 1")
-    .get(fieldExecutiveId) as { id: string } | undefined;
-
-  return row?.id;
+export async function findPendingDeviceChangeRequestId(fieldExecutiveId: string): Promise<string | undefined> {
+  const document = await requests().findOne(
+    { field_executive_id: fieldExecutiveId, status: 'pending' },
+    { projection: { _id: 1 }, ...sessionOption() },
+  );
+  return document?._id as string | undefined;
 }
 
-export function insertDeviceChangeRequest(input: {
+export async function insertDeviceChangeRequest(input: {
   id: string;
   fieldExecutiveId: string;
   reason: string | null;
   deviceId: string;
   deviceDetails: string | null;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO device_change_requests (id, field_executive_id, reason, device_id, device_details)
-       VALUES (@id, @fieldExecutiveId, @reason, @deviceId, @deviceDetails)`,
-    )
-    .run(input);
+}): Promise<void> {
+  await requests().insertOne(
+    {
+      _id: input.id,
+      field_executive_id: input.fieldExecutiveId,
+      status: 'pending',
+      reason: input.reason,
+      device_id: input.deviceId,
+      device_details: input.deviceDetails,
+      requested_at: nowTimestamp(),
+      decided_at: null,
+      decided_by: null,
+      decision_note: null,
+      insert_order: new ObjectId(),
+    },
+    sessionOption(),
+  );
 }
 
 /** Records a decision on a still-pending request. Returns false if it was no longer pending. */
-export function decideDeviceChangeRequest(
+export async function decideDeviceChangeRequest(
   id: string,
   status: Exclude<DeviceChangeRequestStatus, 'pending'>,
   adminUserId: string,
   note: string | null,
-): boolean {
-  const result = getDb()
-    .prepare(
-      `UPDATE device_change_requests
-       SET status = ?, decided_by = ?, decided_at = datetime('now'), decision_note = ?
-       WHERE id = ? AND status = 'pending'`,
-    )
-    .run(status, adminUserId, note, id);
+): Promise<boolean> {
+  const result = await requests().updateOne(
+    { _id: id, status: 'pending' },
+    { $set: { status, decided_by: adminUserId, decided_at: nowTimestamp(), decision_note: note } },
+    sessionOption(),
+  );
 
-  return result.changes === 1;
+  return result.matchedCount === 1;
 }
 
 /* -------------------------------------------------------------- bindings */
 
-export function findOpenDeviceBinding(fieldExecutiveId: string): FieldExecutiveDeviceRow | undefined {
-  return getDb()
-    .prepare(
-      `SELECT * FROM field_executive_devices
-       WHERE field_executive_id = ? AND released_at IS NULL
-       ORDER BY created_at DESC, rowid DESC LIMIT 1`,
-    )
-    .get(fieldExecutiveId) as FieldExecutiveDeviceRow | undefined;
+export async function findOpenDeviceBinding(fieldExecutiveId: string): Promise<FieldExecutiveDeviceRow | undefined> {
+  const document = await bindings().findOne(
+    { field_executive_id: fieldExecutiveId, released_at: null },
+    { sort: NEWEST_BINDING_FIRST, ...sessionOption() },
+  );
+  return document ? fromDocument<FieldExecutiveDeviceRow>(document) : undefined;
 }
 
-export function findDeviceHistoryForFieldExecutive(fieldExecutiveId: string): FieldExecutiveDeviceRow[] {
-  return getDb()
-    .prepare(
-      `SELECT * FROM field_executive_devices
-       WHERE field_executive_id = ?
-       ORDER BY created_at DESC, rowid DESC`,
-    )
-    .all(fieldExecutiveId) as FieldExecutiveDeviceRow[];
+export async function findDeviceHistoryForFieldExecutive(fieldExecutiveId: string): Promise<FieldExecutiveDeviceRow[]> {
+  const documents = await bindings()
+    .find({ field_executive_id: fieldExecutiveId }, { sort: NEWEST_BINDING_FIRST, ...sessionOption() })
+    .toArray();
+  return documents.map((document) => fromDocument<FieldExecutiveDeviceRow>(document));
 }
 
 /**
  * Opens a binding history row.
  * `isFirstLogin` stamps `bound_at` and `last_login_at` with now; a backfilled row
- * for a binding that predates history leaves both NULL.
+ * for a binding that predates history leaves both null.
  */
-export function insertDeviceBinding(input: {
+export async function insertDeviceBinding(input: {
   id: string;
   fieldExecutiveId: string;
   deviceId: string;
   deviceDetails: string | null;
   isFirstLogin: boolean;
   boundAfterRequestId: string | null;
-}): void {
-  getDb()
-    .prepare(
-      `INSERT INTO field_executive_devices
-         (id, field_executive_id, device_id, device_details, bound_at, last_login_at, bound_after_request_id)
-       VALUES (
-         @id, @fieldExecutiveId, @deviceId, @deviceDetails,
-         CASE WHEN @isFirstLogin = 1 THEN datetime('now') END,
-         CASE WHEN @isFirstLogin = 1 THEN datetime('now') END,
-         @boundAfterRequestId
-       )`,
-    )
-    .run({ ...input, isFirstLogin: input.isFirstLogin ? 1 : 0 });
+}): Promise<void> {
+  const now = nowTimestamp();
+
+  await bindings().insertOne(
+    {
+      _id: input.id,
+      field_executive_id: input.fieldExecutiveId,
+      device_id: input.deviceId,
+      device_details: input.deviceDetails,
+      bound_at: input.isFirstLogin ? now : null,
+      last_login_at: input.isFirstLogin ? now : null,
+      released_at: null,
+      release_reason: null,
+      released_by_request_id: null,
+      bound_after_request_id: input.boundAfterRequestId,
+      created_at: now,
+      insert_order: new ObjectId(),
+    },
+    sessionOption(),
+  );
 }
 
-export function releaseDeviceBinding(
+export async function releaseDeviceBinding(
   bindingId: string,
   reason: DeviceReleaseReason,
   requestId: string | null,
-): void {
-  getDb()
-    .prepare(
-      `UPDATE field_executive_devices
-       SET released_at = datetime('now'), release_reason = ?, released_by_request_id = ?
-       WHERE id = ? AND released_at IS NULL`,
-    )
-    .run(reason, requestId, bindingId);
+): Promise<void> {
+  await bindings().updateOne(
+    { _id: bindingId, released_at: null },
+    { $set: { released_at: nowTimestamp(), release_reason: reason, released_by_request_id: requestId } },
+    sessionOption(),
+  );
 }
 
-export function touchDeviceBindingLogin(bindingId: string): void {
-  getDb()
-    .prepare("UPDATE field_executive_devices SET last_login_at = datetime('now') WHERE id = ?")
-    .run(bindingId);
+export async function touchDeviceBindingLogin(bindingId: string): Promise<void> {
+  await bindings().updateOne({ _id: bindingId }, { $set: { last_login_at: nowTimestamp() } }, sessionOption());
 }
 
 /** The latest approved request not yet followed by a new binding. */
-export function findUnfollowedApprovedRequestId(fieldExecutiveId: string): string | undefined {
-  const row = getDb()
-    .prepare(
-      `SELECT r.id FROM device_change_requests r
-       WHERE r.field_executive_id = ? AND r.status = 'approved'
-         AND NOT EXISTS (SELECT 1 FROM field_executive_devices d WHERE d.bound_after_request_id = r.id)
-       ORDER BY r.decided_at DESC, r.rowid DESC LIMIT 1`,
+export async function findUnfollowedApprovedRequestId(fieldExecutiveId: string): Promise<string | undefined> {
+  const [row] = await requests()
+    .aggregate<{ _id: string }>(
+      [
+        { $match: { field_executive_id: fieldExecutiveId, status: 'approved' } },
+        { $sort: { decided_at: -1, insert_order: -1 } },
+        {
+          $lookup: {
+            from: 'field_executive_devices',
+            localField: '_id',
+            foreignField: 'bound_after_request_id',
+            as: 'followers',
+            pipeline: [{ $limit: 1 }, { $project: { _id: 1 } }],
+          },
+        },
+        { $match: { followers: { $size: 0 } } },
+        { $limit: 1 },
+        { $project: { _id: 1 } },
+      ],
+      sessionOption(),
     )
-    .get(fieldExecutiveId) as { id: string } | undefined;
+    .toArray();
 
-  return row?.id;
+  return row?._id;
 }
 
 /** Frees the account to bind again on its next mobile login. */
-export function clearFieldExecutiveDeviceBinding(fieldExecutiveId: string): void {
-  getDb()
-    .prepare('UPDATE field_executives SET device_id = NULL, device_details = NULL WHERE id = ?')
-    .run(fieldExecutiveId);
+export async function clearFieldExecutiveDeviceBinding(fieldExecutiveId: string): Promise<void> {
+  await getCollection('field_executives').updateOne(
+    { _id: fieldExecutiveId },
+    { $set: { device_id: null, device_details: null } },
+    sessionOption(),
+  );
 }

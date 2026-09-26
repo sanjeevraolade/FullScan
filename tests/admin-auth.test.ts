@@ -9,8 +9,8 @@ import {
   SEEDED_INACTIVE_ADMIN,
 } from './helpers/test-app.js';
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 async function signIn(): Promise<string> {

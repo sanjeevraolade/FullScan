@@ -16,11 +16,11 @@ const FE_WEB_CASE_BUCKETS: readonly FeWebCaseBucket[] = ['pending', 'beyond_tat'
 /** Buckets whose components still accept evidence. */
 const EVIDENCE_OPEN_BUCKETS: ReadonlySet<CaseComponentRow['bucket']> = new Set(['pending', 'beyond_tat']);
 
-function findComponentStatusLabels(): ReadonlyMap<string, string> {
+async function findComponentStatusLabels(): Promise<ReadonlyMap<string, string>> {
   return new Map(
-    referenceDataDao
-      .findDropdownOptionsByCategory('component_status')
-      .map((option) => [option.code, option.label] as const),
+    (await referenceDataDao.findDropdownOptionsByCategory('component_status')).map(
+      (option) => [option.code, option.label] as const,
+    ),
   );
 }
 
@@ -45,7 +45,7 @@ function mapCase(row: CaseComponentRow, statusLabels: ReadonlyMap<string, string
   };
 }
 
-/** SQLite timestamps sort correctly as strings; a missing one sorts last. */
+/** Stored timestamps sort correctly as strings; a missing one sorts last. */
 function compareTatDueAsc(left: CaseComponentRow, right: CaseComponentRow): number {
   if (!left.tat_due_at || !right.tat_due_at) {
     return (left.tat_due_at ? 0 : 1) - (right.tat_due_at ? 0 : 1);
@@ -80,9 +80,9 @@ function buildGroup(
  * assigned-components query as the mobile `GET /cases`, so web and app agree on
  * what an executive holds.
  */
-export function getCaseListForFieldExecutive(fieldExecutiveId: string): FeWebCaseList {
-  const rows = caseDao.findComponentsByFieldExecutive(fieldExecutiveId);
-  const statusLabels = findComponentStatusLabels();
+export async function getCaseListForFieldExecutive(fieldExecutiveId: string): Promise<FeWebCaseList> {
+  const rows = await caseDao.findComponentsByFieldExecutive(fieldExecutiveId);
+  const statusLabels = await findComponentStatusLabels();
 
   return {
     caseGroups: FE_WEB_CASE_BUCKETS.map((bucket) => buildGroup(bucket, rows, statusLabels)),
@@ -94,11 +94,11 @@ export function getCaseListForFieldExecutive(fieldExecutiveId: string): FeWebCas
  * else — another executive's component, an unclaimed New one, an unknown id —
  * answers the same 404, so the endpoint cannot be used to probe for case ids.
  */
-export function findOwnComponent(
+export async function findOwnComponent(
   fieldExecutiveId: string,
   componentId: string,
-): CaseComponentRow & { readonly bucket: FeWebCaseBucket } {
-  const row = caseDao.findComponentById(componentId);
+): Promise<CaseComponentRow & { readonly bucket: FeWebCaseBucket }> {
+  const row = await caseDao.findComponentById(componentId);
 
   if (!row || row.assigned_field_executive_id !== fieldExecutiveId || !isWebVisibleBucket(row.bucket)) {
     throw new AppError(404, 'Case not found');
@@ -112,12 +112,13 @@ export function canUploadEvidence(row: CaseComponentRow): boolean {
 }
 
 /** One of the signed-in executive's own components, with its case-wide siblings. */
-export function getCaseDetailForFieldExecutive(
+export async function getCaseDetailForFieldExecutive(
   fieldExecutiveId: string,
   componentId: string,
-): FeWebCaseDetail {
-  const row = findOwnComponent(fieldExecutiveId, componentId);
-  const statusLabels = findComponentStatusLabels();
+): Promise<FeWebCaseDetail> {
+  const row = await findOwnComponent(fieldExecutiveId, componentId);
+  const statusLabels = await findComponentStatusLabels();
+  const siblings = await caseDao.findSiblingComponents(row.case_id, row.id);
   const labelFor = (code: string): string => statusLabels.get(code) ?? code;
 
   return {
@@ -140,7 +141,7 @@ export function getCaseDetailForFieldExecutive(
     tatDueAt: row.tat_due_at,
     updatedAt: row.updated_at,
     canUploadEvidence: canUploadEvidence(row),
-    siblingComponents: caseDao.findSiblingComponents(row.case_id, row.id).map((sibling) => ({
+    siblingComponents: siblings.map((sibling) => ({
       componentId: sibling.id,
       verificationType: sibling.verification_type,
       addressType: sibling.address_type,

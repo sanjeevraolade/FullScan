@@ -12,9 +12,9 @@ import { logger } from '../utils/logger.js';
  * Validates admin credentials, sets the httpOnly session cookie and returns the
  * token (so non-browser clients can use the Bearer header instead).
  */
-export function login(req: Request, res: Response, next: NextFunction): void {
+export async function login(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const result = adminAuthService.loginAdmin(req.body);
+    const result = await adminAuthService.loginAdmin(req.body);
 
     setAdminSessionCookie(res, result.token, result.expiresInSeconds);
     logger.info({ adminUserId: result.adminUser.id }, 'Admin signed in');
@@ -30,7 +30,7 @@ export function login(req: Request, res: Response, next: NextFunction): void {
  * Clears the session cookie. Tokens are stateless, so a Bearer holder keeps its
  * token until expiry — the portal, which only ever uses the cookie, is signed out.
  */
-export function logout(req: Request, res: Response, next: NextFunction): void {
+export async function logout(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     clearAdminSessionCookie(res);
     logger.info({ adminUserId: req.adminUserId }, 'Admin signed out');
@@ -46,13 +46,13 @@ export function logout(req: Request, res: Response, next: NextFunction): void {
  * Current admin's profile — the portal uses it to render the drawer header and to
  * confirm the session is still alive.
  */
-export function getCurrentAdmin(req: Request, res: Response, next: NextFunction): void {
+export async function getCurrentAdmin(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.adminUserId) {
       throw new AppError(401, 'Missing admin authentication token');
     }
 
-    const adminUser = adminAuthService.getAdminUserProfile(req.adminUserId);
+    const adminUser = await adminAuthService.getAdminUserProfile(req.adminUserId);
     res.json({ success: true, data: adminUser });
   } catch (err) {
     next(err);

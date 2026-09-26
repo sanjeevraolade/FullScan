@@ -15,7 +15,7 @@ function requireAdminUserId(req: Request): string {
  * GET /api/v1/admin/device-change-requests
  * Requests, newest first, filtered by `status` and/or `fieldExecutiveId`, with per-status counts.
  */
-export function listDeviceChangeRequests(req: Request, res: Response, next: NextFunction): void {
+export async function listDeviceChangeRequests(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { status, fieldExecutiveId } = req.query as {
       status?: DeviceChangeRequestStatus;
@@ -24,7 +24,7 @@ export function listDeviceChangeRequests(req: Request, res: Response, next: Next
 
     res.json({
       success: true,
-      data: deviceChangeService.listDeviceChangeRequestsForAdmin({ status, fieldExecutiveId }),
+      data: await deviceChangeService.listDeviceChangeRequestsForAdmin({ status, fieldExecutiveId }),
     });
   } catch (err) {
     next(err);
@@ -35,12 +35,12 @@ export function listDeviceChangeRequests(req: Request, res: Response, next: Next
  * POST /api/v1/admin/device-change-requests/:requestId/approve
  * Approves the request and releases the executive's device binding.
  */
-export function approveDeviceChangeRequest(req: Request, res: Response, next: NextFunction): void {
+export async function approveDeviceChangeRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const adminUserId = requireAdminUserId(req);
     const { note } = (req.body ?? {}) as { note?: string };
 
-    const decided = deviceChangeService.approveDeviceChangeRequest(req.params.requestId, adminUserId, note);
+    const decided = await deviceChangeService.approveDeviceChangeRequest(req.params.requestId, adminUserId, note);
     logger.info(
       { adminUserId, requestId: decided.id, fieldExecutiveId: decided.fieldExecutive.id },
       'Device change request approved',
@@ -56,12 +56,12 @@ export function approveDeviceChangeRequest(req: Request, res: Response, next: Ne
  * POST /api/v1/admin/device-change-requests/:requestId/reject
  * Rejects the request; the executive's binding is unchanged.
  */
-export function rejectDeviceChangeRequest(req: Request, res: Response, next: NextFunction): void {
+export async function rejectDeviceChangeRequest(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const adminUserId = requireAdminUserId(req);
     const { note } = (req.body ?? {}) as { note?: string };
 
-    const decided = deviceChangeService.rejectDeviceChangeRequest(req.params.requestId, adminUserId, note);
+    const decided = await deviceChangeService.rejectDeviceChangeRequest(req.params.requestId, adminUserId, note);
     logger.info(
       { adminUserId, requestId: decided.id, fieldExecutiveId: decided.fieldExecutive.id },
       'Device change request rejected',

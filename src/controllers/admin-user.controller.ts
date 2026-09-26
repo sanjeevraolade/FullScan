@@ -8,9 +8,9 @@ import type { AdminRole, UpdateAdminUserInput } from '../types/admin.types.js';
  * GET /api/v1/admin/admin-users
  * Every admin account — super admin only.
  */
-export function listAdminUsers(_req: Request, res: Response, next: NextFunction): void {
+export async function listAdminUsers(_req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    res.json({ success: true, data: adminUserService.listAdminUsers() });
+    res.json({ success: true, data: await adminUserService.listAdminUsers() });
   } catch (err) {
     next(err);
   }
@@ -21,7 +21,7 @@ export function listAdminUsers(_req: Request, res: Response, next: NextFunction)
  * Adds an admin by email — super admin only. Answers 201 with the account and its
  * one-time temporary password.
  */
-export function createAdminUser(req: Request, res: Response, next: NextFunction): void {
+export async function createAdminUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.adminUserId) {
       throw new AppError(401, 'Missing admin authentication token');
@@ -29,7 +29,7 @@ export function createAdminUser(req: Request, res: Response, next: NextFunction)
 
     // `validate()` checks but does not transform, so the role default is applied here.
     const { name, email, role } = req.body as { name: string; email: string; role?: AdminRole };
-    const result = adminUserService.createAdminUser(
+    const result = await adminUserService.createAdminUser(
       { name, email, role: role ?? 'admin' },
       req.adminUserId,
     );
@@ -50,14 +50,14 @@ export function createAdminUser(req: Request, res: Response, next: NextFunction)
  * PATCH /api/v1/admin/admin-users/:adminUserId
  * Promotes/demotes and/or deactivates/reactivates another admin — super admin only.
  */
-export function updateAdminUser(req: Request, res: Response, next: NextFunction): void {
+export async function updateAdminUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.adminUserId) {
       throw new AppError(401, 'Missing admin authentication token');
     }
 
     const { role, isActive } = req.body as UpdateAdminUserInput;
-    const updated = adminUserService.updateAdminUser(
+    const updated = await adminUserService.updateAdminUser(
       req.params.adminUserId,
       { role, isActive },
       req.adminUserId,
@@ -78,14 +78,14 @@ export function updateAdminUser(req: Request, res: Response, next: NextFunction)
  * DELETE /api/v1/admin/admin-users/:adminUserId
  * Permanently deletes another admin with no audit history — super admin only.
  */
-export function deleteAdminUser(req: Request, res: Response, next: NextFunction): void {
+export async function deleteAdminUser(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.adminUserId) {
       throw new AppError(401, 'Missing admin authentication token');
     }
 
     const { adminUserId: targetAdminUserId } = req.params;
-    adminUserService.deleteAdminUser(targetAdminUserId, req.adminUserId);
+    await adminUserService.deleteAdminUser(targetAdminUserId, req.adminUserId);
 
     logger.info(
       { adminUserId: req.adminUserId, targetAdminUserId },

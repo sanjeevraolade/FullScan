@@ -21,8 +21,8 @@ beforeAll(async () => {
   cookie = extractSessionCookie(response.headers['set-cookie']);
 });
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 function buildCase(overrides: Record<string, unknown> = {}): Record<string, unknown> {

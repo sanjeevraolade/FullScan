@@ -20,8 +20,8 @@ function toMobileDevice(row: FieldExecutiveRow): FeWebMobileDevice | null {
  * The signed-in field executive's profile, plus the mobile device their account is
  * currently bound to.
  */
-export function getProfileForFieldExecutive(fieldExecutiveId: string): FeWebProfile {
-  const row = fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
+export async function getProfileForFieldExecutive(fieldExecutiveId: string): Promise<FeWebProfile> {
+  const row = await fieldExecutiveDao.findFieldExecutiveById(fieldExecutiveId);
 
   if (!row) {
     throw new AppError(404, 'No field executive session found');

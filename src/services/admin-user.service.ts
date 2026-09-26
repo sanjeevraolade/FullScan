@@ -58,31 +58,31 @@ function toAdminUserSummary(row: AdminUserRow): AdminUserSummary {
 }
 
 /** Every admin account, for the super admin's list. Never carries a password hash. */
-export function listAdminUsers(): AdminUserSummary[] {
-  return adminUserDao.listAdminUsers().map(toAdminUserSummary);
+export async function listAdminUsers(): Promise<AdminUserSummary[]> {
+  return (await adminUserDao.listAdminUsers()).map(toAdminUserSummary);
 }
 
 /**
  * Adds an admin by email. The email (lower-cased) doubles as the username, and a
  * temporary password is generated and returned once for the super admin to hand over.
  */
-export function createAdminUser(
+export async function createAdminUser(
   input: CreateAdminUserInput,
   createdByAdminUserId: string,
-): CreateAdminUserResult {
+): Promise<CreateAdminUserResult> {
   const email = input.email.trim().toLowerCase();
   const name = input.name.trim();
 
   // Checked against usernames too: the new username *is* this email, and seeded
   // usernames live in the same sign-in namespace.
-  if (adminUserDao.isAdminIdentifierTaken(email)) {
+  if (await adminUserDao.isAdminIdentifierTaken(email)) {
     throw new AppError(409, 'An admin with this email already exists');
   }
 
   const temporaryPassword = generateTemporaryPassword();
   const id = `admin-${uuidv4()}`;
 
-  adminUserDao.insertAdminUser({
+  await adminUserDao.insertAdminUser({
     id,
     username: email,
     name,
@@ -92,7 +92,7 @@ export function createAdminUser(
     createdBy: createdByAdminUserId,
   });
 
-  const row = adminUserDao.findAdminUserById(id);
+  const row = await adminUserDao.findAdminUserById(id);
   if (!row) {
     throw new AppError(500, 'The admin account could not be created');
   }
@@ -107,8 +107,8 @@ export function createAdminUser(
  * super admin: the caller is one (the route requires it), and they can never demote,
  * deactivate or delete themselves — so whatever they do to others, they remain.
  */
-function findManageableAdmin(targetAdminUserId: string, actingAdminUserId: string): AdminUserRow {
-  const row = adminUserDao.findAdminUserById(targetAdminUserId);
+async function findManageableAdmin(targetAdminUserId: string, actingAdminUserId: string): Promise<AdminUserRow> {
+  const row = await adminUserDao.findAdminUserById(targetAdminUserId);
 
   if (!row) {
     throw new AppError(404, 'Admin user not found');
@@ -128,16 +128,16 @@ function findManageableAdmin(targetAdminUserId: string, actingAdminUserId: strin
  * Promotes/demotes and deactivates/reactivates another admin. Takes effect on that
  * admin's next request — `verifyAdminToken` reads role and status from the row.
  */
-export function updateAdminUser(
+export async function updateAdminUser(
   targetAdminUserId: string,
   changes: UpdateAdminUserInput,
   actingAdminUserId: string,
-): AdminUserSummary {
-  findManageableAdmin(targetAdminUserId, actingAdminUserId);
+): Promise<AdminUserSummary> {
+  await findManageableAdmin(targetAdminUserId, actingAdminUserId);
 
-  adminUserDao.updateAdminUser(targetAdminUserId, changes);
+  await adminUserDao.updateAdminUser(targetAdminUserId, changes);
 
-  const updated = adminUserDao.findAdminUserById(targetAdminUserId);
+  const updated = await adminUserDao.findAdminUserById(targetAdminUserId);
   if (!updated) {
     throw new AppError(404, 'Admin user not found');
   }
@@ -156,10 +156,10 @@ function pluralize(count: number, noun: string): string {
  * setting, or an admin account they added — is refused with 409: deleting them
  * would erase who did what. Deactivation removes their access and keeps the record.
  */
-export function deleteAdminUser(targetAdminUserId: string, actingAdminUserId: string): void {
-  const row = findManageableAdmin(targetAdminUserId, actingAdminUserId);
+export async function deleteAdminUser(targetAdminUserId: string, actingAdminUserId: string): Promise<void> {
+  const row = await findManageableAdmin(targetAdminUserId, actingAdminUserId);
   const { settingsChanged, adminsAdded, deviceChangesDecided } =
-    adminUserDao.countAdminAuditReferences(row.id);
+    await adminUserDao.countAdminAuditReferences(row.id);
 
   if (settingsChanged > 0 || adminsAdded > 0 || deviceChangesDecided > 0) {
     const history = [
@@ -178,5 +178,5 @@ export function deleteAdminUser(targetAdminUserId: string, actingAdminUserId: st
     );
   }
 
-  adminUserDao.deleteAdminUser(row.id);
+  await adminUserDao.deleteAdminUser(row.id);
 }

@@ -7,13 +7,13 @@ import { AppError } from '../utils/app-error.js';
  * GET /api/v1/fe-web/cases
  * The signed-in field executive's Pending, Beyond TAT and Completed cases.
  */
-export function getMyCases(req: Request, res: Response, next: NextFunction): void {
+export async function getMyCases(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     if (!req.fieldExecutiveId) {
       throw new AppError(401, 'Missing field executive web session');
     }
 
-    const caseList = feWebCaseService.getCaseListForFieldExecutive(req.fieldExecutiveId);
+    const caseList = await feWebCaseService.getCaseListForFieldExecutive(req.fieldExecutiveId);
     res.json({ success: true, data: caseList });
   } catch (err) {
     next(err);
@@ -31,9 +31,9 @@ function requireFieldExecutiveId(req: Request): string {
  * GET /api/v1/fe-web/cases/:componentId
  * One of the signed-in field executive's own case components. 404 for anything else.
  */
-export function getMyCaseDetail(req: Request, res: Response, next: NextFunction): void {
+export async function getMyCaseDetail(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const detail = feWebCaseService.getCaseDetailForFieldExecutive(
+    const detail = await feWebCaseService.getCaseDetailForFieldExecutive(
       requireFieldExecutiveId(req),
       req.params.componentId,
     );
@@ -47,9 +47,9 @@ export function getMyCaseDetail(req: Request, res: Response, next: NextFunction)
  * GET /api/v1/fe-web/cases/:componentId/evidence
  * Evidence uploaded for one of the executive's own components, newest first.
  */
-export function getMyCaseEvidence(req: Request, res: Response, next: NextFunction): void {
+export async function getMyCaseEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const evidence = feWebEvidenceService.getEvidenceForFieldExecutive(
+    const evidence = await feWebEvidenceService.getEvidenceForFieldExecutive(
       requireFieldExecutiveId(req),
       req.params.componentId,
     );
@@ -63,10 +63,10 @@ export function getMyCaseEvidence(req: Request, res: Response, next: NextFunctio
  * POST /api/v1/fe-web/cases/:componentId/evidence
  * Stores the uploaded images and answers 201 with the component's full evidence list.
  */
-export function uploadMyCaseEvidence(req: Request, res: Response, next: NextFunction): void {
+export async function uploadMyCaseEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const uploadedFiles = Array.isArray(req.files) ? req.files : [];
-    const evidence = feWebEvidenceService.uploadEvidenceForFieldExecutive(
+    const evidence = await feWebEvidenceService.uploadEvidenceForFieldExecutive(
       requireFieldExecutiveId(req),
       req.params.componentId,
       uploadedFiles.map((file) => ({ originalName: file.originalname, buffer: file.buffer })),

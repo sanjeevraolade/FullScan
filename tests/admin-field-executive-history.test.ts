@@ -86,8 +86,8 @@ beforeAll(async () => {
   assignedComponentId = assigned.body.data.items[0].id;
 });
 
-afterAll(() => {
-  removeTestDb();
+afterAll(async () => {
+  await removeTestDb();
 });
 
 interface HistoryCase {
