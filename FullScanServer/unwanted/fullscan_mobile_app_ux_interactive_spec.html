@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en" class="scroll-smooth">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FullScan Field App - Detailed Case Screen & BGV Architecture</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0284c7',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            800: '#075985',
+                            900: '#0c4a6e',
+                        },
+                        security: {
+                            pass: '#059669',
+                            fail: '#dc2626',
+                            warn: '#d97706'
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 320px;
+            max-height: 400px;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        /* Custom Phone Frame Scrollbar */
+        .phone-screen::-webkit-scrollbar {
+            width: 4px;
+        }
+        .phone-screen::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 4px;
+        }
+        canvas.signature-pad {
+            touch-action: none;
+            cursor: crosshair;
+        }
+    </style>
+</head>
+<!-- Chosen Palette: Slate Trust & Warm Sand (Slate Navy, Deep Indigo, Emerald Security, Amber Alert, Clean White) -->
+<!-- Application Structure Plan:
+     1. Header & Navigation: OS Switcher (iOS/Android), Language Selector (EN/HI/TE), User Guide Trigger, Mode Switcher.
+     2. Hero Overview & Key Requirements Metrics: Highlights device-bound hardware locking, anti-fraud geo-fencing, masked dialer relay, dynamic forms, and bucket state management.
+     3. Section 1: Live Interactive Mobile App Simulator:
+        - Enhanced Dynamic Mobile Case Detail View featuring complete Background Verification (BGV) Industry Standard fields:
+          * Candidate Name, Father/Spouse Name, Employer Name, Verification Type, SLA TAT Deadline.
+          * Masked Primary Phone (98XXXXXX21) & Masked Secondary Phone (97XXXXXX88) with encrypted telephony call triggers.
+          * Interactive Location link with geofence distance indicator & map view trigger.
+          * Operations SOP Instructions & Special Field Executive Notes.
+          * Verification Outcome Status (Verified Clear, UTV, Insufficient) with dynamic field logic.
+          * Respondent Details & Interactive Canvas Signature Pad.
+          * Geotagged Camera Photo Evidence Capture with anti-tamper watermark overlay.
+     4. Section 2: Full Detailed Case Inspector & Data Schema (Desktop Deep-Dive):
+        - Presents complete BGV standard data breakdown, masked contact privacy rules, location mapping, and instructions matrix.
+     5. Section 3: Masked Telephony Relay & Multi-Number Fallback Engine:
+        - Interactive call dialer simulation illustrating masked candidate numbers, automatic sequential failover, and backend call logging.
+     6. Section 4: Analytics & Operations Security Metrics:
+        - Chart.js visualizations covering Case Status Distribution by Bucket and Geo-Fencing Compliance Index.
+     7. Interactive Modals: First-Time User Onboarding Guide & Touch Signature Pad.
+-->
+<!-- Visualization & Content Choices:
+     - Dynamic Mobile App Frame (HTML/CSS + JS state): Hands-on testing of Bucket movements, Detailed Case View, Masked Calls, Geo-location links, Dynamic Forms, and Camera watermarking.
+     - Case Inspector Tab Layout (HTML/CSS + JS tabs): Explains BGV standards, masked contact privacy, and field execution workflows.
+     - Signature Pad Modal (HTML5 Canvas + JS drawing): Interactive canvas allowing field agents to capture respondent signatures directly.
+     - Call Fallback Visualizer (HTML/Tailwind Flex Step Diagram): Demonstrates masked relay and alternate phone auto-dialing.
+     - Bucket Distribution & Fraud Metric Charts (Chart.js Canvas): Visualizes operational efficiency and security compliance.
+     - CONFIRMATION: NO SVG graphics used. NO Mermaid JS used.
+-->
+<!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+<body class="bg-slate-50 text-slate-800 antialiased font-sans min-h-screen flex flex-col">
+
+    <!-- Top Header & Global Controls -->
+    <header class="sticky top-0 z-50 bg-slate-900 text-white border-b border-slate-800 shadow-lg">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <span class="bg-blue-600 text-white font-black px-2.5 py-1 rounded-lg text-lg tracking-wider">FS</span>
+                <div>
+                    <h1 class="font-bold text-base leading-tight">FullScan Field Verification Platform</h1>
+                    <p class="text-xs text-slate-400">Anti-Fraud Mobile App & Dynamic Workflow Specification</p>
+                </div>
+            </div>
+
+            <!-- Header Controls: Mode, OS & Language Switchers -->
+            <div class="flex items-center space-x-3 text-xs sm:text-sm">
+                
+                <!-- Onboarding Tour Launcher -->
+                <button onclick="startOnboardingTour()" class="bg-amber-500 hover:bg-amber-600 text-slate-900 font-bold px-2.5 py-1 rounded-lg transition flex items-center space-x-1">
+                    <span>💡</span>
+                    <span class="hidden md:inline">User Guide</span>
+                </button>
+
+                <!-- OS Switcher -->
+                <div class="bg-slate-800 p-1 rounded-lg flex items-center space-x-1 border border-slate-700">
+                    <button id="btn-os-ios" onclick="setSimulatedOS('ios')" class="px-2 py-1 rounded font-medium transition bg-blue-600 text-white">
+                        iOS
+                    </button>
+                    <button id="btn-os-android" onclick="setSimulatedOS('android')" class="px-2 py-1 rounded font-medium transition text-slate-300 hover:text-white">
+                        Android
+                    </button>
+                </div>
+
+                <!-- Language Selector -->
+                <div class="flex items-center space-x-1 bg-slate-800 px-2 py-1 rounded-lg border border-slate-700">
+                    <span class="text-slate-400">🌐</span>
+                    <select id="lang-selector" onchange="changeLanguage(this.value)" class="bg-transparent text-white font-medium focus:outline-none cursor-pointer">
+                        <option value="en" class="bg-slate-900">English</option>
+                        <option value="hi" class="bg-slate-900">Hindi (हिंदी)</option>
+                        <option value="te" class="bg-slate-900">Telugu (తెలుగు)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Navigation Bar -->
+    <nav class="bg-white border-b border-slate-200 sticky top-16 z-40 shadow-sm">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex space-x-2 sm:space-x-8 overflow-x-auto py-3 text-xs sm:text-sm font-medium whitespace-nowrap scrollbar-none">
+                <a href="#overview" class="text-blue-600 border-b-2 border-blue-600 pb-1">📌 Executive Overview</a>
+                <a href="#simulator" class="text-slate-600 hover:text-blue-600 pb-1">📱 Field Executive Mobile Simulator</a>
+                <a href="#case-inspector" class="text-slate-600 hover:text-blue-600 pb-1">📋 Detailed Case Schema & BGV Standards</a>
+                <a href="#telephony" class="text-slate-600 hover:text-blue-600 pb-1">📞 Masked Phone Relay & Auto-Fallback</a>
+                <a href="#analytics" class="text-slate-600 hover:text-blue-600 pb-1">📊 Operations & Security Metrics</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content Container -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+
+        <!-- SECTION 0: Key Requirements Overview -->
+        <section id="overview" class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200">
+            <div class="max-w-3xl">
+                <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Field Verification Security Architecture</span>
+                <h2 class="text-2xl sm:text-3xl font-extrabold text-slate-900 mt-2">FullScan Field Verification Ecosystem</h2>
+                <p class="text-slate-600 text-sm sm:text-base mt-3 leading-relaxed">
+                    Designed to eliminate field verification fraud through strict single-device hardware binding, real-time geo-coordinate validation, dynamic server-driven forms, masked telephone relays, and multi-number failovers adhering to global BGV standards.
+                </p>
+            </div>
+
+            <!-- Key Feature Matrix Cards -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-6 pt-6 border-t border-slate-100">
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="text-slate-500 text-xs font-semibold uppercase">Device Security</div>
+                    <div class="text-lg font-black text-slate-900 mt-1">1 Device : 1 User</div>
+                    <div class="text-xs text-blue-600 font-medium mt-0.5">Hardware bound lock</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="text-slate-500 text-xs font-semibold uppercase">Candidate Privacy</div>
+                    <div class="text-lg font-black text-slate-900 mt-1">100% Masked</div>
+                    <div class="text-xs text-emerald-600 font-medium mt-0.5">Primary & Alternate Masked</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="text-slate-500 text-xs font-semibold uppercase">Geo-Verification</div>
+                    <div class="text-lg font-black text-slate-900 mt-1">Threshold Guard</div>
+                    <div class="text-xs text-amber-600 font-medium mt-0.5">Mock Location Blocked</div>
+                </div>
+                <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                    <div class="text-slate-500 text-xs font-semibold uppercase">Dynamic Forms</div>
+                    <div class="text-lg font-black text-slate-900 mt-1">BGV Compliant</div>
+                    <div class="text-xs text-purple-600 font-medium mt-0.5">SOP & Notes Enforced</div>
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 1: Live Interactive Mobile Application Simulator -->
+        <section id="simulator" class="bg-slate-900 text-white rounded-3xl p-6 sm:p-8 shadow-xl">
+            <div class="mb-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                <div>
+                    <span class="bg-blue-500/20 text-blue-300 text-xs font-semibold px-2.5 py-1 rounded-full border border-blue-400/30">Live Workflow Simulator</span>
+                    <h2 class="text-2xl font-bold mt-2">Field Executive Mobile App Simulator</h2>
+                    <p class="text-slate-400 text-xs sm:text-sm mt-1">
+                        Interact with the complete mobile experience: tap cases to view the <strong>Detailed Case Screen</strong>, initiate masked primary/secondary calls, click interactive locations, and capture signed geotagged evidence.
+                    </p>
+                </div>
+
+                <!-- Live Simulation Controls -->
+                <div class="flex flex-wrap items-center gap-3 bg-slate-800 p-3 rounded-xl border border-slate-700 text-xs">
+                    <label class="flex items-center space-x-2 cursor-pointer">
+                        <span class="text-slate-300 font-medium">GPS Location Preset:</span>
+                        <select id="sim-location-preset" onchange="updateSimGeoLocation(this.value)" class="bg-slate-900 text-white px-2 py-1 rounded border border-slate-700 font-mono">
+                            <option value="at_address">At Target Address (18m) - MATCHED</option>
+                            <option value="far_address">Far From Target Address (2.1km) - BLOCKED</option>
+                        </select>
+                    </label>
+                </div>
+            </div>
+
+            <!-- Grid Layout for Mobile Frame & Screen Explanations -->
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+
+                <!-- Left Column: Interactive Phone Device Frame -->
+                <div class="lg:col-span-5 flex justify-center">
+                    <div id="phone-container" class="w-full max-w-[360px] bg-slate-950 rounded-[48px] p-3 shadow-2xl border-4 border-slate-800 relative">
+                        
+                        <!-- Notch / Island -->
+                        <div class="absolute top-5 left-1/2 -translate-x-1/2 w-28 h-5 bg-slate-900 rounded-full z-30 flex items-center justify-center">
+                            <div class="w-3 h-3 rounded-full bg-slate-950 mr-2"></div>
+                            <div class="w-2 h-2 rounded-full bg-blue-900"></div>
+                        </div>
+
+                        <!-- Phone Inner Screen Display -->
+                        <div class="phone-screen bg-slate-100 text-slate-900 rounded-[38px] overflow-hidden h-[630px] flex flex-col pt-7 relative border border-slate-800">
+                            
+                            <!-- Status Bar -->
+                            <div class="bg-slate-900 text-white px-5 py-1.5 flex justify-between items-center text-[10px] font-semibold z-20">
+                                <span id="phone-clock">09:41</span>
+                                <div class="flex items-center space-x-2">
+                                    <span class="bg-emerald-600 text-white px-1.5 py-0.5 rounded text-[8px]">ONLINE</span>
+                                    <span>📶 🔋</span>
+                                </div>
+                            </div>
+
+                            <!-- Mobile App Header Bar -->
+                            <div class="bg-white border-b border-slate-200 px-4 py-2.5 flex items-center justify-between z-10 shadow-sm">
+                                <div class="flex items-center space-x-2">
+                                    <div class="bg-blue-600 text-white font-black text-xs p-1.5 rounded">✓</div>
+                                    <div>
+                                        <h3 class="font-extrabold text-sm leading-none text-slate-900">FullScan</h3>
+                                        <span class="text-[9px] text-slate-500 font-medium">Amit Verma (Field Agent)</span>
+                                    </div>
+                                </div>
+                                <div class="flex items-center space-x-2 text-slate-600 text-xs">
+                                    <button onclick="switchSimView('case_list')" class="p-1 hover:bg-slate-100 rounded text-xs font-bold text-blue-600">
+                                        📋 Buckets
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- DYNAMIC SCREEN VIEWPORT CONTAINER -->
+                            <div id="screen-viewport" class="flex-1 overflow-y-auto p-3 space-y-3 relative bg-slate-50">
+                                <!-- Loaded dynamically via JS -->
+                            </div>
+
+                            <!-- Phone Bottom Bar Navigation -->
+                            <div class="bg-slate-900 text-slate-400 p-2 flex justify-around items-center border-t border-slate-800 z-20 text-xs">
+                                <button onclick="switchSimBucket('new')" class="hover:text-white flex flex-col items-center">
+                                    <span>📥</span>
+                                    <span class="text-[9px] mt-0.5">NEW</span>
+                                </button>
+                                <button onclick="switchSimBucket('pending')" class="hover:text-white flex flex-col items-center">
+                                    <span>⏳</span>
+                                    <span class="text-[9px] mt-0.5">Pending</span>
+                                </button>
+                                <button onclick="switchSimBucket('beyond_tat')" class="hover:text-white flex flex-col items-center">
+                                    <span>⚠️</span>
+                                    <span class="text-[9px] mt-0.5">Beyond TAT</span>
+                                </button>
+                                <button onclick="switchSimBucket('completed')" class="hover:text-white flex flex-col items-center">
+                                    <span>✅</span>
+                                    <span class="text-[9px] mt-0.5">Completed</span>
+                                </button>
+                            </div>
+
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Column: Contextual Guidance & Interactive Controls -->
+                <div class="lg:col-span-7 space-y-4">
+                    
+                    <!-- View Description Card -->
+                    <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 space-y-3">
+                        <div class="flex items-center justify-between">
+                            <h3 id="sim-guide-title" class="text-base font-bold text-blue-400">Current View: Detailed Case Screen Specification</h3>
+                            <span id="sim-guide-step" class="text-xs bg-slate-700 text-slate-300 px-2.5 py-1 rounded-full font-mono">Screen: Detailed Case View</span>
+                        </div>
+                        <p id="sim-guide-desc" class="text-sm text-slate-300 leading-relaxed">
+                            The Detailed Case Screen displays complete information according to industry background verification standards. Primary and Secondary phone numbers are strictly masked (e.g. <code>98XXXXXX21</code>), keeping actual numbers hidden while enabling touch-to-call actions.
+                        </p>
+
+                        <!-- Rule Enforcement Highlights -->
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-3 border-t border-slate-700/60 text-xs">
+                            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700">
+                                <span class="font-bold text-slate-200">📞 Masked Contact Protection:</span>
+                                <p class="text-slate-400 mt-1">Both Primary and Secondary numbers remain masked in raw text (`98XXXXXX21`, `97XXXXXX88`). Only cloud telephony call relay buttons are enabled to prevent data misuse.</p>
+                            </div>
+                            <div class="bg-slate-900/60 p-2.5 rounded-lg border border-slate-700">
+                                <span class="font-bold text-slate-200">📍 Interactive Location Launch:</span>
+                                <p class="text-slate-400 mt-1">Tapping the location address triggers target coordinates (`Lat 17.4452, Long 78.3821`), calculates real-time proximity, and validates geofence bounds.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Sandbox Quick View Switcher -->
+                    <div class="bg-slate-800/80 p-4 rounded-2xl border border-slate-700 space-y-3">
+                        <div class="text-xs font-bold text-slate-300 uppercase tracking-wider">Test App Views in Simulator</div>
+                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                            <button onclick="switchSimView('case_details', 'FS-2026-00123')" class="p-2 bg-blue-900/60 hover:bg-blue-800 text-blue-200 rounded-lg border border-blue-600 font-bold text-center">
+                                📄 Detailed Case View
+                            </button>
+                            <button onclick="switchSimView('case_list')" class="p-2 bg-slate-700 hover:bg-slate-600 text-slate-200 rounded-lg border border-slate-600 font-medium text-center">
+                                📥 Case Bucket List
+                            </button>
+                            <button onclick="switchSimView('camera_mode')" class="p-2 bg-indigo-900/60 hover:bg-indigo-800 text-indigo-200 rounded-lg border border-indigo-600 font-medium text-center">
+                                📸 Geotag Camera
+                            </button>
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </section>
+
+        <!-- SECTION 2: BGV Standard Detailed Case Inspector (Desktop View) -->
+        <section id="case-inspector" class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+            <div class="intro-block">
+                <span class="bg-blue-100 text-blue-800 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider">BGV Compliance Standard Schema</span>
+                <h2 class="text-2xl font-bold text-slate-900 mt-2">Comprehensive Detailed Case Screen Architecture</h2>
+                <p class="text-slate-600 text-sm mt-1">
+                    Background verification standards require that field executives have access to structured candidate information, precise instructions, and masked contact actions without exposing raw sensitive candidate PII (Personally Identifiable Information).
+                </p>
+            </div>
+
+            <!-- Detailed Case Breakdown Cards -->
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                
+                <!-- Card 1: Subject Profile & Employer Details -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex items-center space-x-2 text-blue-700 font-bold text-sm">
+                        <span>👤</span>
+                        <span>Candidate & Profile Data</span>
+                    </div>
+                    <ul class="text-xs space-y-2 text-slate-700">
+                        <li class="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span class="text-slate-500 block font-semibold text-[10px]">CANDIDATE NAME</span>
+                            <span class="font-extrabold text-slate-900 text-sm">Rahul Sharma</span>
+                        </li>
+                        <li class="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span class="text-slate-500 block font-semibold text-[10px]">FATHER'S / SPOUSE NAME</span>
+                            <span class="font-bold text-slate-800">Sanjeev Kumar Sharma</span>
+                        </li>
+                        <li class="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span class="text-slate-500 block font-semibold text-[10px]">EMPLOYER / CLIENT NAME</span>
+                            <span class="font-bold text-slate-800">Acme Technologies Pvt Ltd (Client: Financial Corp)</span>
+                        </li>
+                        <li class="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span class="text-slate-500 block font-semibold text-[10px]">VERIFICATION TYPE & PACKAGE</span>
+                            <span class="font-bold text-blue-700">Physical Address Check (Current Residence)</span>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Card 2: Masked Contact & Privacy Security -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex items-center space-x-2 text-emerald-700 font-bold text-sm">
+                        <span>🔒</span>
+                        <span>Masked Telephony Controls</span>
+                    </div>
+                    <div class="text-xs space-y-2 text-slate-700">
+                        <div class="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                            <span class="text-slate-500 block font-semibold text-[10px]">PRIMARY PHONE NUMBER</span>
+                            <div class="flex justify-between items-center">
+                                <span class="font-mono font-bold text-slate-900 text-sm">98XXXXXX21</span>
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Masked</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-white p-2.5 rounded-lg border border-slate-200 space-y-1">
+                            <span class="text-slate-500 block font-semibold text-[10px]">SECONDARY / ALTERNATE PHONE NUMBER</span>
+                            <div class="flex justify-between items-center">
+                                <span class="font-mono font-bold text-slate-900 text-sm">97XXXXXX88</span>
+                                <span class="bg-emerald-100 text-emerald-800 px-2 py-0.5 rounded text-[10px] font-bold">Masked</span>
+                            </div>
+                        </div>
+
+                        <div class="bg-emerald-50 border border-emerald-200 text-emerald-900 p-3 rounded-lg text-[11px] leading-relaxed">
+                            <strong>🛡️ Anti-Misuse Guarantee:</strong>
+                            The actual phone numbers are never rendered in plain text on screen, network payloads, or native device call logs. Tapping "Call" initiates an encrypted cloud bridge relay.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Card 3: Instructions & Notes Matrix -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-3">
+                    <div class="flex items-center space-x-2 text-purple-700 font-bold text-sm">
+                        <span>📝</span>
+                        <span>SOP Instructions & Field Notes</span>
+                    </div>
+                    <div class="text-xs space-y-2 text-slate-700">
+                        <div class="bg-white p-2.5 rounded-lg border border-slate-200">
+                            <span class="text-slate-500 block font-semibold text-[10px]">CLIENT INSTRUCTIONS</span>
+                            <p class="font-medium text-slate-800 mt-1">1. Verify stay period is at least 12 months.<br>2. Confirm house ownership (Rented vs Owned).<br>3. Obtain neighbor confirmation if candidate is unavailable.</p>
+                        </div>
+                        <div class="bg-amber-50 p-2.5 rounded-lg border border-amber-200">
+                            <span class="text-amber-800 block font-semibold text-[10px]">FIELD EXECUTIVE NOTES</span>
+                            <p class="font-medium text-amber-900 mt-1">⚠️ "Beware of guard dog at gate. Contact candidate 15 minutes prior to physical visit."</p>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SECTION 3: Masked Telephony Relay & Multi-Number Auto Fallback -->
+        <section id="telephony" class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+            <div class="intro-block">
+                <span class="bg-emerald-100 text-emerald-800 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Privacy & Telephony Security</span>
+                <h2 class="text-2xl font-bold text-slate-900 mt-2">Masked Calling Relay & Multi-Number Auto Fallback</h2>
+                <p class="text-slate-600 text-sm mt-1">
+                    To maintain strict candidate data privacy, phone numbers are never displayed in raw text inside the mobile app or native dialer. The app routes calls through a cloud telephony bridge with automated failover retry.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-8 items-center">
+                
+                <!-- Diagram Flow Visualizer -->
+                <div class="lg:col-span-7 bg-slate-900 text-white p-6 rounded-2xl border border-slate-800 space-y-4">
+                    <h3 class="text-xs font-bold text-emerald-400 uppercase tracking-wider">Secure Telephony Handshake & Failover Workflow</h3>
+
+                    <div class="space-y-3 text-xs">
+                        
+                        <!-- Step 1 -->
+                        <div class="flex items-start space-x-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                            <span class="bg-blue-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">STEP 1</span>
+                            <div>
+                                <div class="font-bold text-slate-200">Field Executive Taps "Call Primary" or "Call Secondary"</div>
+                                <div class="text-slate-400 mt-0.5">Mobile app issues encrypted request to backend with Case ID: <code class="text-amber-300">FS-2026-00123</code>. Raw candidate numbers remain hidden (<code class="text-slate-500">98XXXXXX21</code> / <code class="text-slate-500">97XXXXXX88</code>).</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 2 -->
+                        <div class="flex items-start space-x-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                            <span class="bg-purple-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">STEP 2</span>
+                            <div>
+                                <div class="font-bold text-slate-200">Cloud Telephony Bridge Connects Executive</div>
+                                <div class="text-slate-400 mt-0.5">Telephony server dials executive's registered device and patches to Candidate Primary Phone.</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 3 -->
+                        <div class="flex items-start space-x-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                            <span class="bg-amber-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">STEP 3</span>
+                            <div>
+                                <div class="font-bold text-slate-200">Continuous Multi-Number Failover (If Unreachable)</div>
+                                <div class="text-slate-400 mt-0.5">If Primary number is busy or unreachable, system automatically dials Candidate Alternate Secondary Number (<code class="text-slate-500">97XXXXXX88</code>) without executive intervention.</div>
+                            </div>
+                        </div>
+
+                        <!-- Step 4 -->
+                        <div class="flex items-start space-x-3 bg-slate-800 p-3 rounded-xl border border-slate-700">
+                            <span class="bg-emerald-600 text-white font-bold px-2 py-0.5 rounded text-[10px]">STEP 4</span>
+                            <div>
+                                <div class="font-bold text-slate-200">Automatic Backend Case Logging</div>
+                                <div class="text-slate-400 mt-0.5">Call duration, timestamps, and connection status are recorded under Case Logs in the backend CRM.</div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+
+                <!-- Call Sandbox Tester -->
+                <div class="lg:col-span-5 bg-slate-50 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <h3 class="text-sm font-bold text-slate-900">Test Multi-Number Telephony Relay</h3>
+                    <p class="text-xs text-slate-500">Simulate a call attempt with auto-fallback to alternate candidate numbers.</p>
+
+                    <div id="call-sim-box" class="bg-white p-4 rounded-xl border border-slate-200 text-xs space-y-3 shadow-sm">
+                        <div class="flex justify-between items-center pb-2 border-b border-slate-100">
+                            <span class="font-bold text-slate-800">Case Ref: FS-2026-00123</span>
+                            <span id="call-status-badge" class="bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-semibold">IDLE</span>
+                        </div>
+
+                        <div class="space-y-1">
+                            <div class="text-slate-500 text-[10px]">Candidate Target Name:</div>
+                            <div class="font-bold text-slate-900">Rahul Sharma</div>
+                        </div>
+
+                        <div class="space-y-1 font-mono text-[11px]">
+                            <div class="flex justify-between text-slate-600">
+                                <span>Primary Phone:</span>
+                                <span>98XXXXXX21</span>
+                            </div>
+                            <div class="flex justify-between text-slate-600">
+                                <span>Secondary Phone:</span>
+                                <span>97XXXXXX88</span>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-2">
+                            <button id="btn-trigger-call" onclick="runCallRelaySimulation('Primary')" class="py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-xl shadow transition text-[11px]">
+                                📞 Call Primary
+                            </button>
+                            <button onclick="runCallRelaySimulation('Secondary')" class="py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow transition text-[11px]">
+                                📞 Call Secondary
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Call Log Console Output -->
+                    <div class="bg-slate-900 text-slate-300 p-3 rounded-xl font-mono text-[10px] space-y-1">
+                        <div class="text-slate-500 font-bold border-b border-slate-800 pb-1">⚡ Backend Case Log Stream:</div>
+                        <div id="call-log-console" class="h-20 overflow-y-auto space-y-1 text-slate-400">
+                            <div>[SYSTEM] Ready for call initiation...</div>
+                        </div>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+        <!-- SECTION 4: Operations & Fraud Analytics -->
+        <section id="analytics" class="bg-white rounded-2xl p-6 sm:p-8 shadow-sm border border-slate-200 space-y-6">
+            <div class="intro-block">
+                <span class="bg-purple-100 text-purple-800 text-xs font-semibold px-2.5 py-0.5 rounded-full uppercase tracking-wider">Operational Metrics</span>
+                <h2 class="text-2xl font-bold text-slate-900 mt-2">Verification Analytics & Fraud Prevention Index</h2>
+                <p class="text-slate-600 text-sm mt-1">
+                    Real-time operational distribution across assignment buckets and geo-fencing compliance trends.
+                </p>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                
+                <!-- Chart 1: Case Bucket Volume -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Case Volume by Assignment Bucket</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-bucket-distribution"></canvas>
+                    </div>
+                </div>
+
+                <!-- Chart 2: Geo Compliance -->
+                <div class="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                    <h3 class="text-xs font-bold text-slate-800 uppercase tracking-wider mb-2">Geo-Distance Match Rate vs Rejections</h3>
+                    <div class="chart-container">
+                        <canvas id="chart-geo-compliance"></canvas>
+                    </div>
+                </div>
+
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Global Page Footer -->
+    <footer class="bg-slate-900 text-slate-400 text-xs py-8 border-t border-slate-800 mt-12">
+        <div class="max-w-7xl mx-auto px-4 text-center space-y-2">
+            <p class="font-semibold text-slate-300">FullScan Field Verification Platform • Mobile & Browser Architecture Specification</p>
+            <p class="text-slate-500">Supports device-bound login, dynamic client forms, geo-fenced verification, and masked telephony relays.</p>
+        </div>
+    </footer>
+
+    <!-- INTERACTIVE SIGNATURE PAD MODAL -->
+    <div id="modal-signature" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-white rounded-2xl max-w-md w-full p-5 space-y-4 shadow-2xl">
+            <div class="flex justify-between items-center border-b border-slate-200 pb-2">
+                <h3 class="font-bold text-slate-900 text-sm">✍️ Respondent Signature Capture</h3>
+                <button onclick="closeSignatureModal()" class="text-slate-400 hover:text-slate-600 font-bold">✕</button>
+            </div>
+
+            <p class="text-xs text-slate-500">Please instruct the respondent to sign inside the box below using touchscreen or mouse.</p>
+
+            <div class="border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 relative overflow-hidden">
+                <canvas id="signature-canvas" width="360" height="180" class="signature-pad w-full h-44"></canvas>
+            </div>
+
+            <div class="flex justify-between items-center pt-2">
+                <button onclick="clearSignatureCanvas()" class="px-3 py-1.5 bg-slate-200 hover:bg-slate-300 text-slate-800 text-xs font-bold rounded-lg transition">
+                    ❌ Clear Signature
+                </button>
+                <div class="space-x-2">
+                    <button onclick="closeSignatureModal()" class="px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold rounded-lg">Cancel</button>
+                    <button onclick="saveSignatureModal()" class="px-4 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition">
+                        ✅ Save Signature
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ONBOARDING TOUR MODAL -->
+    <div id="modal-onboarding" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 hidden flex items-center justify-center p-4">
+        <div class="bg-slate-900 text-white rounded-2xl max-w-lg w-full p-6 space-y-5 shadow-2xl border border-slate-800">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <span id="tour-step-badge" class="bg-blue-600 text-white text-xs font-bold px-2.5 py-0.5 rounded-full">Step 1 of 4</span>
+                <button onclick="closeOnboardingTour()" class="text-slate-400 hover:text-white font-bold">✕</button>
+            </div>
+
+            <div id="tour-content" class="space-y-3">
+                <!-- Injected via JS -->
+            </div>
+
+            <div class="flex justify-between items-center pt-3 border-t border-slate-800">
+                <button id="tour-btn-prev" onclick="navOnboardingTour(-1)" class="px-3 py-1.5 bg-slate-800 text-slate-300 text-xs font-bold rounded-lg disabled:opacity-40">Previous</button>
+                <button id="tour-btn-next" onclick="navOnboardingTour(1)" class="px-4 py-1.5 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-lg">Next →</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JAVASCRIPT APPLICATION LOGIC -->
+    <script>
+        // Global Application State & Storage
+        const appState = {
+            os: 'ios',
+            lang: 'en',
+            activeBucket: 'pending', // 'new' | 'pending' | 'beyond_tat' | 'completed'
+            activeView: 'case_details', // 'case_list' | 'case_details' | 'camera_mode'
+            activeCaseId: 'FS-2026-00123',
+            geoPreset: 'at_address', // 'at_address' | 'far_address'
+            signatureCaptured: false,
+            capturedPhotoType: '',
+            cases: [
+                {
+                    ref: 'FS-2026-00123',
+                    client: 'Acme Technologies Pvt Ltd',
+                    candidate: 'Rahul Sharma',
+                    fatherName: 'Sanjeev Kumar Sharma',
+                    employer: 'TechCorp Solutions India',
+                    verificationType: 'Physical Address Verification',
+                    packageType: 'Executive Comprehensive BGV',
+                    tatDue: 'In 4 Hours (SLA Active)',
+                    address: 'Flat 204, Green Heights, Phase 2, Madhapur, Hyderabad, Telangana - 500081',
+                    targetLat: 17.4452,
+                    targetLong: 78.3821,
+                    maskedPrimaryPhone: '98XXXXXX21',
+                    maskedSecondaryPhone: '97XXXXXX88',
+                    instructions: '1. Verify candidate stay duration (Must be >= 12 months).\n2. Confirm house ownership (Rented/Owned).\n3. Speak to neighbor if candidate door is locked.',
+                    notes: '⚠️ Beware of guard dog at front gate. Contact candidate 15 mins prior to physical arrival.',
+                    bucket: 'pending',
+                    selectedStatus: 'Verified Clear',
+                    utvOption: '',
+                    insuffOption: '',
+                    verifiedDetails: {
+                        residenceType: 'Rented',
+                        addressType: 'Present',
+                        landmark: 'Near Cyber Towers Gate 2',
+                        stayFrom: '2021-06-15',
+                        stayTo: '',
+                        stillStaying: true,
+                        houseColour: 'Light Blue',
+                        gateColour: 'Dark Grey'
+                    },
+                    respondent: {
+                        name: 'Sanjeev Kumar',
+                        relation: 'House Owner / Landlord',
+                        contact: '98XXXXXX21'
+                    }
+                },
+                {
+                    ref: 'FS-2026-00118',
+                    client: 'XYZ Global FinServ',
+                    candidate: 'Priya Verma',
+                    fatherName: 'Ramesh Verma',
+                    employer: 'Apex Digital Systems',
+                    verificationType: 'Employment Physical Check',
+                    packageType: 'BFSI Standard Background Check',
+                    tatDue: 'Tomorrow, 5:00 PM',
+                    address: '5th Floor, Tech Park, Whitefield, Bangalore, Karnataka - 560066',
+                    targetLat: 12.9698,
+                    targetLong: 77.7499,
+                    maskedPrimaryPhone: '98XXXXXX33',
+                    maskedSecondaryPhone: '91XXXXXX04',
+                    instructions: '1. Check physical office setup and company signboard.\n2. Obtain HR stamp on verification slip.',
+                    notes: 'Visitor pass required at security lobby.',
+                    bucket: 'new',
+                    selectedStatus: 'Verified Clear'
+                },
+                {
+                    ref: 'FS-2026-00105',
+                    client: 'MNO Logistics Ltd',
+                    candidate: 'Sanjay Kumar',
+                    fatherName: 'Mohan Lal',
+                    employer: 'Swift Parcel Services',
+                    verificationType: 'Residence Check',
+                    packageType: 'Field Staff Verification',
+                    tatDue: 'EXPIRED (Beyond TAT by 2 hrs)',
+                    address: '45/A, MG Road, Camp Area, Pune, Maharashtra - 411001',
+                    targetLat: 18.5204,
+                    targetLong: 73.8567,
+                    maskedPrimaryPhone: '99XXXXXX11',
+                    maskedSecondaryPhone: '96XXXXXX55',
+                    instructions: 'Standard residence check.',
+                    notes: 'Repeat visit required.',
+                    bucket: 'beyond_tat',
+                    selectedStatus: 'UTV'
+                }
+            ]
+        };
+
+        // Server API Configured Dropdown Lists
+        const serverApiConfig = {
+            VerificationTypeStatus: ['Verified Clear', 'UTV', 'Insufficient'],
+            utvOptions: ['Shifted', 'Resigned', 'Not Joining', 'Neighbours/family not supporting', 'Address untraceable'],
+            InsuffOptions: ['Candidate not responding', 'Incorrect Address', 'Door Locked / Unreachable', 'Not guiding'],
+            supportedPhotoTypes: ['House Front Photo', 'Door Number Plate', 'Landmark Photo', 'Respondent ID Proof']
+        };
+
+        // Onboarding Tour Steps
+        let currentTourStep = 0;
+        const tourStepsData = [
+            {
+                title: "1. Device-Bound Authentication",
+                badge: "Step 1 of 4",
+                body: "FullScan logs in based on hardware physical device fingerprint. Once registered, logging in from a second phone is strictly rejected."
+            },
+            {
+                title: "2. Detailed Case View & Standards",
+                badge: "Step 2 of 4",
+                body: "Displays candidate name, father/spouse name, employer, instructions, and notes adhering to background verification compliance."
+            },
+            {
+                title: "3. Masked Calling Privacy Guarantee",
+                badge: "Step 3 of 4",
+                body: "Both Primary (<code>98XXXXXX21</code>) and Secondary (<code>97XXXXXX88</code>) phone numbers remain strictly masked to prevent contact misuse."
+            },
+            {
+                title: "4. Geo-Fencing & Dynamic Verification",
+                badge: "Step 4 of 4",
+                body: "GPS distance is calculated against candidate target address. 'Verified Clear' requires physical presence within threshold distance before unlocking dynamic forms."
+            }
+        ];
+
+        // Canvas Signature Pad State Variables
+        let sigCanvas, sigCtx;
+        let isDrawing = false;
+
+        // Initialize Application
+        document.addEventListener('DOMContentLoaded', () => {
+            renderPhoneView();
+            initCharts();
+            initSignaturePad();
+            updateClock();
+            setInterval(updateClock, 30000);
+        });
+
+        function updateClock() {
+            const now = new Date();
+            const hrs = String(now.getHours()).padStart(2, '0');
+            const mins = String(now.getMinutes()).padStart(2, '0');
+            const clockEl = document.getElementById('phone-clock');
+            if (clockEl) clockEl.innerText = `${hrs}:${mins}`;
+        }
+
+        function setSimulatedOS(os) {
+            appState.os = os;
+            document.getElementById('btn-os-ios').className = os === 'ios' ? "px-2 py-1 rounded font-medium transition bg-blue-600 text-white" : "px-2 py-1 rounded font-medium transition text-slate-300 hover:text-white";
+            document.getElementById('btn-os-android').className = os === 'android' ? "px-2 py-1 rounded font-medium transition bg-blue-600 text-white" : "px-2 py-1 rounded font-medium transition text-slate-300 hover:text-white";
+            renderPhoneView();
+        }
+
+        function changeLanguage(lang) {
+            appState.lang = lang;
+            renderPhoneView();
+        }
+
+        function updateSimGeoLocation(val) {
+            appState.geoPreset = val;
+            renderPhoneView();
+        }
+
+        function switchSimBucket(bucket) {
+            appState.activeBucket = bucket;
+            appState.activeView = 'case_list';
+            renderPhoneView();
+        }
+
+        function switchSimView(view, caseId = null) {
+            appState.activeView = view;
+            if (caseId) appState.activeCaseId = caseId;
+            renderPhoneView();
+        }
+
+        function acceptCase(caseRef) {
+            const item = appState.cases.find(c => c.ref === caseRef);
+            if (item) {
+                item.bucket = 'pending';
+                alert(`✅ Case ${caseRef} accepted! Moved from NEW bucket to Pending / In Progress.`);
+                switchSimView('case_details', caseRef);
+            }
+        }
+
+        // Render Dynamic Phone View
+        function renderPhoneView() {
+            const viewport = document.getElementById('screen-viewport');
+            if (!viewport) return;
+
+            if (appState.activeView === 'case_list') {
+                renderCaseListView(viewport);
+            } else if (appState.activeView === 'case_details') {
+                renderCaseDetailsFormView(viewport);
+            } else if (appState.activeView === 'camera_mode') {
+                renderCameraView(viewport);
+            }
+        }
+
+        // Render Bucket List
+        function renderCaseListView(container) {
+            const filteredCases = appState.cases.filter(c => c.bucket === appState.activeBucket);
+            const countNew = appState.cases.filter(c => c.bucket === 'new').length;
+            const countPending = appState.cases.filter(c => c.bucket === 'pending').length;
+            const countTAT = appState.cases.filter(c => c.bucket === 'beyond_tat').length;
+            const countComp = appState.cases.filter(c => c.bucket === 'completed').length;
+
+            let html = `
+                <!-- Bucket Navigation Tabs -->
+                <div class="grid grid-cols-4 gap-1 bg-slate-200 p-1 rounded-xl text-[10px] font-bold text-center">
+                    <button onclick="switchSimBucket('new')" class="py-1.5 rounded-lg transition ${appState.activeBucket==='new'?'bg-blue-600 text-white shadow':'text-slate-700'}">
+                        New (${countNew})
+                    </button>
+                    <button onclick="switchSimBucket('pending')" class="py-1.5 rounded-lg transition ${appState.activeBucket==='pending'?'bg-amber-600 text-white shadow':'text-slate-700'}">
+                        Pending (${countPending})
+                    </button>
+                    <button onclick="switchSimBucket('beyond_tat')" class="py-1.5 rounded-lg transition ${appState.activeBucket==='beyond_tat'?'bg-red-600 text-white shadow':'text-slate-700'}">
+                        TAT (${countTAT})
+                    </button>
+                    <button onclick="switchSimBucket('completed')" class="py-1.5 rounded-lg transition ${appState.activeBucket==='completed'?'bg-emerald-600 text-white shadow':'text-slate-700'}">
+                        Done (${countComp})
+                    </button>
+                </div>
+            `;
+
+            if (filteredCases.length === 0) {
+                html += `<div class="text-center py-10 text-xs text-slate-400">No cases currently in this bucket.</div>`;
+            } else {
+                filteredCases.forEach(item => {
+                    html += `
+                        <div class="bg-white p-3 rounded-2xl border border-slate-200 shadow-sm space-y-2 hover:border-blue-400 transition">
+                            <div class="flex justify-between items-center text-xs border-b border-slate-100 pb-1.5">
+                                <span class="font-bold text-slate-900">Ref: ${item.ref}</span>
+                                <span class="text-[9px] bg-blue-50 text-blue-700 font-bold px-2 py-0.5 rounded">${item.verificationType}</span>
+                            </div>
+
+                            <div class="text-[11px] space-y-1 text-slate-700">
+                                <div>👤 <span class="text-slate-500">Candidate:</span> <strong>${item.candidate}</strong></div>
+                                <div>🏢 <span class="text-slate-500">Employer:</span> ${item.employer}</div>
+                                <div>📍 <span class="text-slate-500">Address:</span> ${item.address}</div>
+                            </div>
+
+                            <div class="pt-2 flex items-center justify-between border-t border-slate-100 text-xs">
+                                <button onclick="switchSimView('case_details', '${item.ref}')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] px-2.5 py-1 rounded-lg shadow">
+                                    Open Detailed View →
+                                </button>
+
+                                ${item.bucket === 'new' ? `
+                                    <button onclick="acceptCase('${item.ref}')" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold px-3 py-1 rounded-lg shadow transition">
+                                        Accept
+                                    </button>
+                                ` : ''}
+                            </div>
+                        </div>
+                    `;
+                });
+            }
+
+            container.innerHTML = html;
+        }
+
+        // Render DETAILED CASE VIEW (Complete Standard BGV Screen)
+        function renderCaseDetailsFormView(container) {
+            const item = appState.cases.find(c => c.ref === appState.activeCaseId) || appState.cases[0];
+            const isFar = appState.geoPreset === 'far_address';
+
+            container.innerHTML = `
+                <div class="space-y-3 text-xs">
+                    
+                    <!-- Top Navigation & Case Status Bar -->
+                    <div class="flex items-center justify-between bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                        <button onclick="switchSimView('case_list')" class="text-blue-600 font-bold flex items-center space-x-1">
+                            <span>←</span>
+                            <span>Case List</span>
+                        </button>
+                        <span class="font-mono font-bold text-slate-900 text-[11px]">${item.ref}</span>
+                        <span class="bg-amber-100 text-amber-800 text-[9px] font-bold px-2 py-0.5 rounded-full uppercase">${item.bucket}</span>
+                    </div>
+
+                    <!-- 1. COMPLETE CANDIDATE & ASSIGNMENT INFORMATION -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                        <div class="flex justify-between items-center border-b border-slate-100 pb-1.5">
+                            <span class="font-bold text-blue-700 text-[11px] uppercase tracking-wider">📋 Case Information</span>
+                            <span class="text-[9px] font-mono text-slate-500 font-bold">SLA: ${item.tatDue}</span>
+                        </div>
+
+                        <div class="grid grid-cols-1 gap-1.5 text-[11px]">
+                            <div>
+                                <span class="text-slate-400 block text-[9px] font-bold uppercase">Candidate Name</span>
+                                <span class="font-extrabold text-slate-900 text-sm">${item.candidate}</span>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2">
+                                <div>
+                                    <span class="text-slate-400 block text-[9px] font-bold uppercase">Father's / Spouse Name</span>
+                                    <span class="font-bold text-slate-800">${item.fatherName}</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[9px] font-bold uppercase">Employer Name</span>
+                                    <span class="font-bold text-slate-800">${item.employer}</span>
+                                </div>
+                            </div>
+
+                            <div class="grid grid-cols-2 gap-2 pt-1 border-t border-slate-100">
+                                <div>
+                                    <span class="text-slate-400 block text-[9px] font-bold uppercase">Verification Type</span>
+                                    <span class="font-bold text-blue-700">${item.verificationType}</span>
+                                </div>
+                                <div>
+                                    <span class="text-slate-400 block text-[9px] font-bold uppercase">Client / Package</span>
+                                    <span class="font-bold text-slate-800">${item.client}</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 2. INTERACTIVE LOCATION & GEO-FENCE LINK -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-900 text-[11px]">📍 Location Address</span>
+                            <span class="text-[9px] bg-slate-100 text-slate-600 px-2 py-0.5 rounded font-mono font-bold">Lat: ${item.targetLat} | Long: ${item.targetLong}</span>
+                        </div>
+
+                        <!-- Tap on Location Link -->
+                        <div onclick="triggerLocationLink('${item.ref}')" class="bg-blue-50/70 hover:bg-blue-100 p-2.5 rounded-xl border border-blue-200 cursor-pointer transition space-y-1 group">
+                            <div class="flex justify-between items-start">
+                                <p class="text-[11px] font-medium text-slate-800 leading-snug group-hover:text-blue-900">
+                                    ${item.address}
+                                </p>
+                                <span class="text-blue-600 text-xs font-bold ml-1">🗺️</span>
+                            </div>
+                            <div class="text-[9px] text-blue-600 font-bold flex items-center justify-between pt-1 border-t border-blue-200/60">
+                                <span>Tap location to trigger map route & distance check</span>
+                                <span>Get Directions →</span>
+                            </div>
+                        </div>
+
+                        <!-- Distance Banner -->
+                        ${!isFar ? `
+                            <div class="bg-emerald-50 border border-emerald-300 text-emerald-900 p-2 rounded-xl text-[10px] flex justify-between items-center">
+                                <span>📍 GPS Match: <strong>18m from address</strong></span>
+                                <span class="bg-emerald-600 text-white px-2 py-0.5 rounded font-bold text-[8px]">MATCHED</span>
+                            </div>
+                        ` : `
+                            <div class="bg-red-50 border border-red-300 text-red-900 p-2 rounded-xl text-[10px] flex justify-between items-center animate-pulse">
+                                <span>⚠️ GPS Alert: <strong>2.1 km away</strong></span>
+                                <span class="bg-red-600 text-white px-2 py-0.5 rounded font-bold text-[8px]">BLOCKED</span>
+                            </div>
+                        `}
+                    </div>
+
+                    <!-- 3. MASKED TELEPHONY CONTACT BUTTONS (PRIMARY & SECONDARY) -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2.5 shadow-sm">
+                        <div class="flex justify-between items-center">
+                            <span class="font-bold text-slate-900 text-[11px]">📞 Masked Phone Actions</span>
+                            <span class="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded">100% Privacy Lock</span>
+                        </div>
+
+                        <p class="text-[10px] text-slate-500 leading-tight">
+                            Actual numbers are never visible to prevent misuse of candidate contact details. Tap buttons to initiate masked relay calls.
+                        </p>
+
+                        <!-- Primary & Secondary Phone Action Buttons -->
+                        <div class="space-y-2">
+                            <!-- Primary Phone Button -->
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                <div>
+                                    <span class="text-slate-400 block text-[8px] font-bold uppercase">PRIMARY PHONE</span>
+                                    <span class="font-mono font-extrabold text-slate-800 text-xs">${item.maskedPrimaryPhone}</span>
+                                </div>
+                                <button onclick="triggerMaskedCall('${item.ref}', 'Primary')" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow transition">
+                                    <span>📞</span>
+                                    <span>Call Primary</span>
+                                </button>
+                            </div>
+
+                            <!-- Secondary Phone Button -->
+                            <div class="flex items-center justify-between bg-slate-50 p-2 rounded-xl border border-slate-200">
+                                <div>
+                                    <span class="text-slate-400 block text-[8px] font-bold uppercase">SECONDARY PHONE</span>
+                                    <span class="font-mono font-extrabold text-slate-800 text-xs">${item.maskedSecondaryPhone}</span>
+                                </div>
+                                <button onclick="triggerMaskedCall('${item.ref}', 'Secondary')" class="bg-blue-600 hover:bg-blue-700 text-white font-bold text-[10px] px-3 py-1.5 rounded-lg flex items-center space-x-1 shadow transition">
+                                    <span>📞</span>
+                                    <span>Call Secondary</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 4. INSTRUCTIONS & SPECIAL FIELD NOTES -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                        <span class="font-bold text-slate-900 text-[11px] block">📝 Instructions & Field Notes</span>
+
+                        <div class="bg-blue-50/50 p-2.5 rounded-xl border border-blue-100 space-y-1">
+                            <span class="text-blue-800 font-bold text-[10px] block">Client Instructions (SOP):</span>
+                            <p class="text-[10px] text-slate-700 leading-relaxed whitespace-pre-line">${item.instructions}</p>
+                        </div>
+
+                        <div class="bg-amber-50/60 p-2.5 rounded-xl border border-amber-200 space-y-1">
+                            <span class="text-amber-900 font-bold text-[10px] block">Special Field Executive Notes:</span>
+                            <p class="text-[10px] text-amber-900 leading-relaxed">${item.notes}</p>
+                        </div>
+                    </div>
+
+                    <!-- 5. DYNAMIC VERIFICATION OUTCOME FORM -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                        <label class="font-bold text-slate-900 block text-[11px]">⚙️ Select Verification Status Outcome</label>
+                        <select id="select-status" onchange="handleStatusChange('${item.ref}', this.value)" class="w-full text-xs p-2 rounded-xl bg-slate-100 border border-slate-300 font-bold text-slate-800">
+                            ${serverApiConfig.VerificationTypeStatus.map(s => `
+                                <option value="${s}" ${item.selectedStatus===s?'selected':''}>${s}</option>
+                            `).join('')}
+                        </select>
+
+                        ${item.selectedStatus === 'UTV' ? `
+                            <div class="bg-amber-50 border border-amber-300 p-2.5 rounded-xl space-y-2 text-[10px]">
+                                <div class="font-bold text-amber-900">UTV Options (Unable To Verify)</div>
+                                <select class="w-full p-1.5 rounded bg-white border border-amber-300">
+                                    ${serverApiConfig.utvOptions.map(o => `<option>${o}</option>`).join('')}
+                                </select>
+                                <textarea placeholder="Capture detailed UTV remarks..." class="w-full p-1.5 rounded bg-white border border-amber-300 text-[10px] h-12"></textarea>
+                            </div>
+                        ` : ''}
+
+                        ${item.selectedStatus === 'Insufficient' ? `
+                            <div class="bg-red-50 border border-red-300 p-2.5 rounded-xl space-y-2 text-[10px]">
+                                <div class="font-bold text-red-900">Insufficient Options</div>
+                                <select class="w-full p-1.5 rounded bg-white border border-red-300">
+                                    ${serverApiConfig.InsuffOptions.map(o => `<option>${o}</option>`).join('')}
+                                </select>
+                                <textarea placeholder="Capture insufficient reason remarks..." class="w-full p-1.5 rounded bg-white border border-red-300 text-[10px] h-12"></textarea>
+                            </div>
+                        ` : ''}
+                    </div>
+
+                    <!-- 6. VERIFIED RESIDENCE & RESPONDENT DATA (If Verified Clear) -->
+                    ${(item.selectedStatus === 'Verified Clear' && !isFar) ? `
+                        <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                            <span class="font-bold text-blue-700 text-[11px] block uppercase tracking-wider">🏡 Verified Residence & Respondent Details</span>
+                            
+                            <div class="grid grid-cols-2 gap-2 text-[10px]">
+                                <div>
+                                    <label class="text-slate-500 font-bold block">Type of Residence</label>
+                                    <select class="w-full p-1.5 rounded bg-slate-100 border border-slate-300 font-semibold">
+                                        <option>Owned</option>
+                                        <option selected>Rented</option>
+                                        <option>Hostel</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label class="text-slate-500 font-bold block">Type of Address</label>
+                                    <select class="w-full p-1.5 rounded bg-slate-100 border border-slate-300 font-semibold">
+                                        <option selected>Present</option>
+                                        <option>Permanent</option>
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div class="text-[10px]">
+                                <label class="text-slate-500 font-bold block">Respondent Name</label>
+                                <input type="text" value="${item.respondent.name}" class="w-full p-1.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-semibold">
+                            </div>
+
+                            <div class="text-[10px]">
+                                <label class="text-slate-500 font-bold block">Relationship with Candidate</label>
+                                <input type="text" value="${item.respondent.relation}" class="w-full p-1.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-semibold">
+                            </div>
+
+                            <!-- Respondent Signature Trigger -->
+                            <div>
+                                <label class="text-slate-500 font-bold block text-[10px]">Respondent Signature</label>
+                                <button onclick="openSignatureModal()" class="w-full py-2 bg-slate-800 hover:bg-slate-900 text-white font-bold text-[10px] rounded-xl flex items-center justify-center space-x-1 shadow transition">
+                                    <span>✍️</span>
+                                    <span>${appState.signatureCaptured ? 'Signature Captured ✓ (Tap to Edit)' : 'Tap to Capture Signature on Screen'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    <!-- 7. GEOTAGGED CAMERA EVIDENCE CAPTURE -->
+                    <div class="bg-white p-3 rounded-2xl border border-slate-200 space-y-2 shadow-sm">
+                        <span class="font-bold text-slate-900 text-[11px] block">📷 Photo Evidence Capture (Camera Only)</span>
+                        
+                        <div class="text-[10px] space-y-1.5">
+                            <label class="text-slate-500 font-bold block">Select Photo Tag Document</label>
+                            <select id="select-photo-tag" class="w-full p-1.5 rounded bg-slate-100 border border-slate-300 text-[10px] font-semibold">
+                                ${serverApiConfig.supportedPhotoTypes.map(p => `<option>${p}</option>`).join('')}
+                            </select>
+
+                            <button onclick="switchSimView('camera_mode')" class="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-black rounded-xl flex items-center justify-center space-x-1 shadow transition text-[11px]">
+                                <span>📸</span>
+                                <span>Open Geotagged Watermark Camera</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBMIT FORM BUTTON -->
+                    <button onclick="submitFinalVerificationForm('${item.ref}')" class="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black rounded-xl text-xs shadow-lg transition">
+                        SUBMIT VERIFICATION REPORT
+                    </button>
+
+                </div>
+            `;
+        }
+
+        // Render Camera View
+        function renderCameraView(container) {
+            container.innerHTML = `
+                <div class="h-full flex flex-col justify-between bg-black text-white p-3 rounded-2xl relative overflow-hidden">
+                    <div class="flex justify-between items-center text-[10px] z-10 bg-black/60 p-1.5 rounded">
+                        <span class="text-emerald-400 font-bold">🔴 LIVE CAMERA STREAM</span>
+                        <span class="text-slate-400">Gallery Upload Disabled</span>
+                    </div>
+
+                    <div class="flex-1 my-2 border-2 border-dashed border-white/40 rounded-xl flex items-center justify-center relative">
+                        <div class="text-center text-slate-400 space-y-1">
+                            <span class="text-3xl">🏠</span>
+                            <div class="text-[10px]">Align house/door number inside viewfinder</div>
+                        </div>
+
+                        <!-- LIVE STAMP WATERMARK OVERLAY -->
+                        <div class="absolute bottom-2 left-2 right-2 bg-black/80 p-2 rounded border border-white/20 text-[9px] font-mono text-emerald-400 leading-tight">
+                            <div>📍 Geo-Coordinates: Lat 17.4452 | Long 78.3821</div>
+                            <div>🕒 Timestamp: 2026-08-26 14:30:00 IST</div>
+                            <div>🛡️ Mock GPS: CLEAR | Accuracy: 4.2m</div>
+                        </div>
+                    </div>
+
+                    <div class="flex justify-around items-center pt-1">
+                        <button onclick="switchSimView('case_details')" class="text-xs text-slate-300">Cancel</button>
+                        <button onclick="captureCameraPhoto()" class="w-12 h-12 rounded-full border-4 border-white bg-red-600 flex items-center justify-center shadow-lg active:scale-95 transition">
+                            <div class="w-4 h-4 rounded-full bg-white"></div>
+                        </button>
+                    </div>
+                </div>
+            `;
+        }
+
+        function triggerLocationLink(caseRef) {
+            const item = appState.cases.find(c => c.ref === caseRef);
+            alert(`🗺️ Launching Map Route for Case ${caseRef}:\nTarget Address: ${item.address}\nGPS Coordinates: Lat ${item.targetLat}, Long ${item.targetLong}\nDistance Check: 18 meters away (Location Verified)`);
+        }
+
+        function handleStatusChange(caseRef, newStatus) {
+            const item = appState.cases.find(c => c.ref === caseRef);
+            if (item) {
+                item.selectedStatus = newStatus;
+                renderPhoneView();
+            }
+        }
+
+        function captureCameraPhoto() {
+            alert('📸 Geotagged photo captured! Watermarked coordinates and timestamp burned into image buffer.');
+            switchSimView('case_details');
+        }
+
+        function submitFinalVerificationForm(caseRef) {
+            const item = appState.cases.find(c => c.ref === caseRef);
+            if (item) {
+                item.bucket = 'completed';
+                alert(`🎉 Verification Form for Case ${caseRef} submitted successfully! Moved to Completed bucket.`);
+                switchSimBucket('completed');
+            }
+        }
+
+        // Masked Telephony Relay Simulation
+        function triggerMaskedCall(caseRef, targetType = 'Primary') {
+            const item = appState.cases.find(c => c.ref === caseRef) || appState.cases[0];
+            const number = targetType === 'Primary' ? item.maskedPrimaryPhone : item.maskedSecondaryPhone;
+            alert(`📞 Initiating secure call to ${targetType} Contact (${number}) for Case ${caseRef}.\nActual candidate number is strictly masked. Directing to telephony relay simulator...`);
+            window.location.hash = '#telephony';
+            runCallRelaySimulation(targetType);
+        }
+
+        function runCallRelaySimulation(targetType = 'Primary') {
+            const statusBadge = document.getElementById('call-status-badge');
+            const consoleBox = document.getElementById('call-log-console');
+            const btn = document.getElementById('btn-trigger-call');
+
+            if (!statusBadge || !consoleBox) return;
+
+            btn.disabled = true;
+            statusBadge.innerText = 'CONNECTING...';
+            statusBadge.className = 'bg-amber-100 text-amber-800 px-2 py-0.5 rounded font-mono font-bold';
+
+            consoleBox.innerHTML = `<div>[${new Date().toLocaleTimeString()}] Requesting call bridge for Case FS-2026-00123 (${targetType} Number)...</div>`;
+
+            setTimeout(() => {
+                consoleBox.innerHTML += `<div>[${new Date().toLocaleTimeString()}] Dialing Candidate ${targetType} Number (Masked)...</div>`;
+            }, 800);
+
+            setTimeout(() => {
+                consoleBox.innerHTML += `<div class="text-emerald-400">[${new Date().toLocaleTimeString()}] ${targetType} Line CONNECTED! Call in progress...</div>`;
+                statusBadge.innerText = 'CALL CONNECTED';
+                statusBadge.className = 'bg-emerald-600 text-white px-2 py-0.5 rounded font-mono font-bold';
+            }, 2500);
+
+            setTimeout(() => {
+                consoleBox.innerHTML += `<div class="text-blue-400">[${new Date().toLocaleTimeString()}] Call completed (Duration: 1m 12s). Recording saved to CRM.</div>`;
+                statusBadge.innerText = 'COMPLETED';
+                statusBadge.className = 'bg-slate-100 text-slate-700 px-2 py-0.5 rounded font-mono font-bold';
+                btn.disabled = false;
+            }, 4500);
+        }
+
+        // Canvas Signature Pad Logic
+        function initSignaturePad() {
+            sigCanvas = document.getElementById('signature-canvas');
+            if (!sigCanvas) return;
+            sigCtx = sigCanvas.getContext('2d');
+
+            sigCanvas.addEventListener('mousedown', startDrawing);
+            sigCanvas.addEventListener('mousemove', draw);
+            sigCanvas.addEventListener('mouseup', stopDrawing);
+            sigCanvas.addEventListener('mouseleave', stopDrawing);
+
+            sigCanvas.addEventListener('touchstart', (e) => {
+                const touch = e.touches[0];
+                const rect = sigCanvas.getBoundingClientRect();
+                isDrawing = true;
+                sigCtx.beginPath();
+                sigCtx.moveTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                e.preventDefault();
+            });
+
+            sigCanvas.addEventListener('touchmove', (e) => {
+                if (!isDrawing) return;
+                const touch = e.touches[0];
+                const rect = sigCanvas.getBoundingClientRect();
+                sigCtx.lineWidth = 2;
+                sigCtx.lineCap = 'round';
+                sigCtx.strokeStyle = '#0284c7';
+                sigCtx.lineTo(touch.clientX - rect.left, touch.clientY - rect.top);
+                sigCtx.stroke();
+                e.preventDefault();
+            });
+
+            sigCanvas.addEventListener('touchend', stopDrawing);
+        }
+
+        function startDrawing(e) {
+            isDrawing = true;
+            const rect = sigCanvas.getBoundingClientRect();
+            sigCtx.beginPath();
+            sigCtx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
+        }
+
+        function draw(e) {
+            if (!isDrawing) return;
+            const rect = sigCanvas.getBoundingClientRect();
+            sigCtx.lineWidth = 2;
+            sigCtx.lineCap = 'round';
+            sigCtx.strokeStyle = '#0284c7';
+            sigCtx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
+            sigCtx.stroke();
+        }
+
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        function clearSignatureCanvas() {
+            if (sigCtx && sigCanvas) {
+                sigCtx.clearRect(0, 0, sigCanvas.width, sigCanvas.height);
+            }
+        }
+
+        function openSignatureModal() {
+            document.getElementById('modal-signature').classList.remove('hidden');
+        }
+
+        function closeSignatureModal() {
+            document.getElementById('modal-signature').classList.add('hidden');
+        }
+
+        function saveSignatureModal() {
+            appState.signatureCaptured = true;
+            alert('✅ Respondent signature saved successfully!');
+            closeSignatureModal();
+            renderPhoneView();
+        }
+
+        // Onboarding Guided Tour
+        function startOnboardingTour() {
+            currentTourStep = 0;
+            renderTourStep();
+            document.getElementById('modal-onboarding').classList.remove('hidden');
+        }
+
+        function closeOnboardingTour() {
+            document.getElementById('modal-onboarding').classList.add('hidden');
+        }
+
+        function navOnboardingTour(dir) {
+            currentTourStep += dir;
+            if (currentTourStep < 0) currentTourStep = 0;
+            if (currentTourStep >= tourStepsData.length) {
+                closeOnboardingTour();
+                return;
+            }
+            renderTourStep();
+        }
+
+        function renderTourStep() {
+            const data = tourStepsData[currentTourStep];
+            document.getElementById('tour-step-badge').innerText = data.badge;
+            document.getElementById('tour-content').innerHTML = `
+                <h3 class="text-base font-bold text-blue-400">${data.title}</h3>
+                <p class="text-sm text-slate-300 leading-relaxed">${data.body}</p>
+            `;
+            document.getElementById('tour-btn-prev').disabled = currentTourStep === 0;
+            document.getElementById('tour-btn-next').innerText = currentTourStep === tourStepsData.length - 1 ? 'Finish' : 'Next →';
+        }
+
+        // Chart.js Visualizations
+        function initCharts() {
+            // Bucket Chart
+            const ctxBucket = document.getElementById('chart-bucket-distribution');
+            if (ctxBucket) {
+                new Chart(ctxBucket, {
+                    type: 'bar',
+                    data: {
+                        labels: ['NEW Bucket', 'Pending / In Progress', 'Beyond TAT', 'Completed'],
+                        datasets: [{
+                            label: 'Active Cases',
+                            data: [10, 20, 5, 45],
+                            backgroundColor: ['#2563eb', '#d97706', '#dc2626', '#059669'],
+                            borderRadius: 8
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true } }
+                    }
+                });
+            }
+
+            // Geo Compliance Chart
+            const ctxGeo = document.getElementById('chart-geo-compliance');
+            if (ctxGeo) {
+                new Chart(ctxGeo, {
+                    type: 'doughnut',
+                    data: {
+                        labels: ['Location Matched (< 50m)', 'Location Far / Rejected', 'UTV / Insufficient (No Visit)'],
+                        datasets: [{
+                            data: [82, 11, 7],
+                            backgroundColor: ['#059669', '#dc2626', '#d97706']
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { position: 'bottom', labels: { boxWidth: 12, font: { size: 10 } } } }
+                    }
+                });
+            }
+        }
+    </script>
+</body>
+</html>

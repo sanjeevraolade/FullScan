@@ -1,0 +1,54 @@
+[
+  {
+    "id": "admin-001",
+    "username": "admin001",
+    "name": "Ravi Menon",
+    "email": "ravi.menon@fullscan.test",
+    "password_hash": "$2a$10$UDK0XJ6Bd3vhv7ScA0iiwuZ.tG3zuUmiq73Vx5DnscZo7lKQlymua",
+    "role": "super_admin",
+    "is_active": 1,
+    "last_login_at": null,
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__",
+    "created_by": null
+  },
+  {
+    "id": "admin-002",
+    "username": "admin002",
+    "name": "Priya Nair",
+    "email": "priya.nair@fullscan.test",
+    "password_hash": "$2a$10$tYhdHRvSUqncri.ppIBW1uuLsiH5vLJcf4LnsRAayBEI6NcsQaC4K",
+    "role": "admin",
+    "is_active": 1,
+    "last_login_at": null,
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__",
+    "created_by": null
+  },
+  {
+    "id": "admin-003",
+    "username": "admin003",
+    "name": "Sunil Kulkarni",
+    "email": "sunil.kulkarni@fullscan.test",
+    "password_hash": "$2a$10$/OevGM0gYRYp22eClXROIuFBKDH8L14.bfvHSoS0cQk44CQOOubWK",
+    "role": "admin",
+    "is_active": 1,
+    "last_login_at": null,
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__",
+    "created_by": null
+  },
+  {
+    "id": "admin-004",
+    "username": "admin004",
+    "name": "Deactivated Operator",
+    "email": "inactive.admin@fullscan.test",
+    "password_hash": "$2a$10$2pT6zHXZWSpqQhCIePi16ODvX88VtWtuLsNi2F7QLTsWmxh2JPaMu",
+    "role": "admin",
+    "is_active": 0,
+    "last_login_at": null,
+    "created_at": "__SEED_NOW__",
+    "updated_at": "__SEED_NOW__",
+    "created_by": null
+  }
+]

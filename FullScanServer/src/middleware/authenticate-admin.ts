@@ -1,0 +1,102 @@
+import type { Request, Response, NextFunction } from 'express';
+import { AppError } from '../utils/app-error.js';
+import { verifyAdminToken } from '../services/admin-auth.service.js';
+import { readAdminSessionCookie } from '../utils/admin-session-cookie.js';
+import type { AdminRole } from '../types/admin.types.js';
+
+/** Where the portal's login page lives, for redirecting unauthenticated page requests. */
+export const ADMIN_LOGIN_PATH = '/admin/login';
+
+/**
+ * Accepts the admin token from either transport:
+ * - `Authorization: Bearer <token>` — API clients, curl, tests
+ * - the httpOnly session cookie — the Admin Portal running in a browser
+ */
+function extractAdminToken(req: Request): string | undefined {
+  const header = req.headers.authorization;
+  if (header?.startsWith('Bearer ')) {
+    return header.slice('Bearer '.length);
+  }
+  return readAdminSessionCookie(req);
+}
+
+/**
+ * Guards admin **API** routes. Responds 401 so the portal's fetch layer can react,
+ * rather than redirecting.
+ */
+export async function authenticateAdmin(req: Request, _res: Response, next: NextFunction): Promise<void> {
+  const token = extractAdminToken(req);
+
+  if (!token) {
+    next(new AppError(401, 'Missing admin authentication token'));
+    return;
+  }
+
+  let payload: Awaited<ReturnType<typeof verifyAdminToken>>;
+
+  try {
+    payload = await verifyAdminToken(token);
+  } catch (err) {
+    next(err);
+    return;
+  }
+
+  if (!payload) {
+    next(new AppError(401, 'Invalid or expired admin session'));
+    return;
+  }
+
+  req.adminUserId = payload.adminUserId;
+  req.adminRole = payload.role;
+  next();
+}
+
+/**
+ * Restricts an admin API route to the given roles. Mount **after**
+ * `authenticateAdmin`, which populates `req.adminRole` from the live account row.
+ *
+ * Responds 403 (not 404): the caller is a signed-in admin, and the portal hides
+ * these pages from their role anyway, so there is nothing to conceal.
+ */
+export function requireAdminRole(...allowedRoles: AdminRole[]) {
+  return (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.adminRole || !allowedRoles.includes(req.adminRole)) {
+      next(new AppError(403, 'Your admin role does not have access to this feature'));
+      return;
+    }
+    next();
+  };
+}
+
+/**
+ * Builds a guard for admin **page** routes. An unauthenticated browser is redirected
+ * to `loginPath` (carrying `next` so it lands back where it was headed) instead of
+ * being shown a JSON error.
+ */
+export function createAdminPageGuard(
+  loginPath: string,
+): (req: Request, res: Response, next: NextFunction) => Promise<void> {
+  return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
+    const token = extractAdminToken(req);
+    let payload: Awaited<ReturnType<typeof verifyAdminToken>>;
+
+    try {
+      payload = token ? await verifyAdminToken(token) : undefined;
+    } catch (err) {
+      next(err);
+      return;
+    }
+
+    if (!payload) {
+      res.redirect(`${loginPath}?next=${encodeURIComponent(req.originalUrl)}`);
+      return;
+    }
+
+    req.adminUserId = payload.adminUserId;
+    req.adminRole = payload.role;
+    next();
+  };
+}
+
+/** Page guard for the static Admin Portal at `/admin`. */
+export const authenticateAdminPage = createAdminPageGuard(ADMIN_LOGIN_PATH);

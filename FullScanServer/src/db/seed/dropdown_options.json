@@ -1,0 +1,275 @@
+[
+  {
+    "id": "vts-verified-clear",
+    "category": "verification_type_status",
+    "code": "verified_clear",
+    "label": "Verified Clear",
+    "sort_order": 1
+  },
+  {
+    "id": "vts-utv",
+    "category": "verification_type_status",
+    "code": "utv",
+    "label": "UTV",
+    "sort_order": 2
+  },
+  {
+    "id": "vts-insufficient",
+    "category": "verification_type_status",
+    "code": "insufficient",
+    "label": "Insufficient",
+    "sort_order": 3
+  },
+  {
+    "id": "utv-shifted",
+    "category": "utv_option",
+    "code": "shifted",
+    "label": "Shifted",
+    "sort_order": 1
+  },
+  {
+    "id": "utv-resigned",
+    "category": "utv_option",
+    "code": "resigned",
+    "label": "Resigned",
+    "sort_order": 2
+  },
+  {
+    "id": "utv-not-joining",
+    "category": "utv_option",
+    "code": "not_joining",
+    "label": "Not Joining",
+    "sort_order": 3
+  },
+  {
+    "id": "utv-neighbours-not-supporting",
+    "category": "utv_option",
+    "code": "neighbours_not_supporting",
+    "label": "Neighbours/Family Not Supporting",
+    "sort_order": 4
+  },
+  {
+    "id": "insuff-candidate-not-responding",
+    "category": "insuff_option",
+    "code": "candidate_not_responding",
+    "label": "Candidate Not Responding",
+    "sort_order": 1
+  },
+  {
+    "id": "insuff-incorrect-address",
+    "category": "insuff_option",
+    "code": "incorrect_address",
+    "label": "Incorrect Address",
+    "sort_order": 2
+  },
+  {
+    "id": "insuff-not-guiding",
+    "category": "insuff_option",
+    "code": "not_guiding",
+    "label": "Not Guiding",
+    "sort_order": 3
+  },
+  {
+    "id": "photo-house-1",
+    "category": "photo_type",
+    "code": "house_photo_1",
+    "label": "House Photo 1",
+    "sort_order": 1
+  },
+  {
+    "id": "photo-house-2",
+    "category": "photo_type",
+    "code": "house_photo_2",
+    "label": "House Photo 2",
+    "sort_order": 2
+  },
+  {
+    "id": "photo-aadhar",
+    "category": "photo_type",
+    "code": "aadhar",
+    "label": "Aadhar",
+    "sort_order": 3
+  },
+  {
+    "id": "photo-pan",
+    "category": "photo_type",
+    "code": "pan",
+    "label": "PAN",
+    "sort_order": 4
+  },
+  {
+    "id": "photo-id-proof",
+    "category": "photo_type",
+    "code": "id_proof",
+    "label": "ID Proof",
+    "sort_order": 5
+  },
+  {
+    "id": "cs-new-component",
+    "category": "component_status",
+    "code": "new_component",
+    "label": "New Component",
+    "sort_order": 1
+  },
+  {
+    "id": "cs-additional-verification-requested",
+    "category": "component_status",
+    "code": "additional_verification_requested",
+    "label": "Additional Verification Request Raised",
+    "sort_order": 2
+  },
+  {
+    "id": "cs-component-accepted",
+    "category": "component_status",
+    "code": "component_accepted",
+    "label": "Component Accepted",
+    "sort_order": 3
+  },
+  {
+    "id": "cs-insuff-raised",
+    "category": "component_status",
+    "code": "insuff_raised",
+    "label": "Insuff Raised",
+    "sort_order": 4
+  },
+  {
+    "id": "cs-insuff-cleared",
+    "category": "component_status",
+    "code": "insuff_cleared",
+    "label": "Insuff Cleared",
+    "sort_order": 5
+  },
+  {
+    "id": "cs-addl-doc-requested",
+    "category": "component_status",
+    "code": "addl_doc_requested",
+    "label": "Additional Doc Requested",
+    "sort_order": 6
+  },
+  {
+    "id": "cs-addl-doc-cleared",
+    "category": "component_status",
+    "code": "addl_doc_cleared",
+    "label": "Additional Doc Cleared",
+    "sort_order": 7
+  },
+  {
+    "id": "cs-cost-approval-requested",
+    "category": "component_status",
+    "code": "cost_approval_requested",
+    "label": "Cost Approval Requested",
+    "sort_order": 8
+  },
+  {
+    "id": "cs-cost-approved",
+    "category": "component_status",
+    "code": "cost_approved",
+    "label": "Cost Approved",
+    "sort_order": 9
+  },
+  {
+    "id": "cs-cost-rejected",
+    "category": "component_status",
+    "code": "cost_rejected",
+    "label": "Cost Rejected",
+    "sort_order": 10
+  },
+  {
+    "id": "cs-verified-clear",
+    "category": "component_status",
+    "code": "verified_clear",
+    "label": "Verified Clear",
+    "sort_order": 11
+  },
+  {
+    "id": "cs-discrepancy",
+    "category": "component_status",
+    "code": "discrepancy",
+    "label": "Discrepancy",
+    "sort_order": 12
+  },
+  {
+    "id": "cs-utv",
+    "category": "component_status",
+    "code": "utv",
+    "label": "UTV",
+    "sort_order": 13
+  },
+  {
+    "id": "cs-component-stopped",
+    "category": "component_status",
+    "code": "component_stopped",
+    "label": "Component Stopped",
+    "sort_order": 14
+  },
+  {
+    "id": "as-uploaded",
+    "category": "action_status",
+    "code": "uploaded",
+    "label": "Uploaded",
+    "sort_order": 1
+  },
+  {
+    "id": "as-accepted",
+    "category": "action_status",
+    "code": "accepted",
+    "label": "Accept/Approve",
+    "sort_order": 2
+  },
+  {
+    "id": "as-stopped",
+    "category": "action_status",
+    "code": "stopped",
+    "label": "Stop",
+    "sort_order": 3
+  },
+  {
+    "id": "ps-bgv-profile-created",
+    "category": "profile_status",
+    "code": "bgv_profile_created",
+    "label": "BGV Profile Created",
+    "sort_order": 1
+  },
+  {
+    "id": "ps-wip",
+    "category": "profile_status",
+    "code": "wip",
+    "label": "WIP",
+    "sort_order": 2
+  },
+  {
+    "id": "ps-interim-report-generated",
+    "category": "profile_status",
+    "code": "interim_report_generated",
+    "label": "Interim Report Generated",
+    "sort_order": 3
+  },
+  {
+    "id": "ps-final-report-generated",
+    "category": "profile_status",
+    "code": "final_report_generated",
+    "label": "Final Report Generated",
+    "sort_order": 4
+  },
+  {
+    "id": "ps-completed",
+    "category": "profile_status",
+    "code": "completed",
+    "label": "Completed",
+    "sort_order": 5
+  },
+  {
+    "id": "ps-stop-profile",
+    "category": "profile_status",
+    "code": "stop_profile",
+    "label": "Stop Profile",
+    "sort_order": 6
+  },
+  {
+    "id": "as-rejected",
+    "category": "action_status",
+    "code": "rejected",
+    "label": "Rejected",
+    "sort_order": 4
+  }
+]

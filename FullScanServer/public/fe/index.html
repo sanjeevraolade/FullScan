@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>FullScan Field Executive</title>
+    <link rel="stylesheet" href="/admin/assets/css/admin.css" />
+    <link rel="stylesheet" href="/fe/assets/css/fe.css" />
+  </head>
+  <body>
+    <!--
+      Application shell — the same structure as the Admin Portal, so the shared
+      drawer (/admin/assets/js/drawer.js) and router (/admin/assets/js/router.js)
+      drive it. Menu items come from assets/js/menu.js: Profile and Cases.
+    -->
+    <div class="shell" data-shell>
+      <a class="visually-hidden" href="#main-content">Skip to main content</a>
+
+      <button class="scrim" type="button" data-scrim tabindex="-1" aria-hidden="true"></button>
+
+      <nav class="drawer" id="fe-drawer" data-drawer aria-label="Field executive navigation">
+        <div class="drawer__header">
+          <div class="brand">
+            <span class="brand__mark" aria-hidden="true">FS</span>
+            <span>
+              <span class="brand__name">FullScan</span>
+              <span class="brand__sub">Field Executive</span>
+            </span>
+          </div>
+          <button class="btn btn--icon drawer__close" type="button" data-drawer-close>
+            <span class="visually-hidden">Close navigation</span>
+          </button>
+        </div>
+
+        <div class="drawer__account">
+          <span class="drawer__avatar" data-account-avatar aria-hidden="true"></span>
+          <div class="drawer__account-text">
+            <div class="drawer__account-name" data-account-name></div>
+            <div class="drawer__account-role" data-account-role></div>
+          </div>
+        </div>
+
+        <!-- Menu items, built from the registry -->
+        <div class="drawer__nav" data-drawer-nav></div>
+
+        <!-- Logout stays pinned to the bottom of the drawer -->
+        <div class="drawer__footer">
+          <button class="btn drawer__logout" type="button" data-logout>
+            <span>Logout</span>
+          </button>
+          <p class="drawer__version">FullScan Field Executive</p>
+        </div>
+      </nav>
+
+      <div class="main">
+        <header class="topbar">
+          <button
+            class="btn btn--icon drawer-toggle"
+            type="button"
+            data-drawer-toggle
+            aria-expanded="false"
+            aria-controls="fe-drawer"
+          >
+            <span class="visually-hidden">Open navigation</span>
+          </button>
+          <h1 class="topbar__title" data-topbar-title>FullScan Field Executive</h1>
+        </header>
+
+        <main class="content" id="main-content">
+          <div data-boot-alert hidden></div>
+          <header class="page-header" data-page-header hidden></header>
+          <div data-page-alert hidden></div>
+          <div data-outlet>
+            <div class="state"><span class="spinner"></span></div>
+          </div>
+        </main>
+      </div>
+    </div>
+
+    <script type="module" src="/fe/assets/js/app.js"></script>
+  </body>
+</html>

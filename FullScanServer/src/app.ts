@@ -1,0 +1,80 @@
+import express from 'express';
+import cors from 'cors';
+import helmet from 'helmet';
+import pinoHttp from 'pino-http';
+
+import { logger } from './utils/logger.js';
+import { errorHandler } from './middleware/error-handler.js';
+import { authenticate } from './middleware/authenticate.js';
+import { authenticateAdmin, requireAdminRole } from './middleware/authenticate-admin.js';
+import { authRoutes } from './routes/auth.routes.js';
+import { uiConfigRoutes } from './routes/ui-config.routes.js';
+import { referenceDataRoutes } from './routes/reference-data.routes.js';
+import { caseRoutes } from './routes/case.routes.js';
+import { meRoutes } from './routes/field-executive.routes.js';
+import { securityRoutes } from './routes/security.routes.js';
+import { adminAuthRoutes } from './routes/admin-auth.routes.js';
+import { mobileAppSettingRoutes } from './routes/mobile-app-setting.routes.js';
+import { adminCaseRoutes } from './routes/admin-case.routes.js';
+import { adminFieldExecutiveRoutes } from './routes/admin-field-executive.routes.js';
+import { adminUserRoutes } from './routes/admin-user.routes.js';
+import { adminPortalRoutes } from './routes/admin-portal.routes.js';
+import { feWebAuthRoutes } from './routes/fe-web-auth.routes.js';
+import { feWebCaseRoutes } from './routes/fe-web-case.routes.js';
+import { feWebProfileRoutes } from './routes/fe-web-profile.routes.js';
+import { feWebDeviceChangeRoutes } from './routes/fe-web-device-change.routes.js';
+import { adminDeviceChangeRoutes } from './routes/admin-device-change.routes.js';
+import { authenticateFeWeb } from './middleware/authenticate-fe-web.js';
+import { feWebPortalRoutes } from './routes/fe-web-portal.routes.js';
+import { feWebAppRoutes } from './routes/fe-web-app.routes.js';
+import { adminAppRoutes } from './routes/admin-app.routes.js';
+
+export const app = express();
+
+// Security & parsing
+app.use(helmet());
+app.use(cors());
+app.use(express.json());
+app.use(pinoHttp({ logger }));
+
+// Mobile app routes (field-executive session)
+app.use('/api/v1/auth', authRoutes);
+app.use('/api/v1/ui-config', uiConfigRoutes);
+app.use('/api/v1/reference-data', referenceDataRoutes);
+app.use('/api/v1/cases', authenticate, caseRoutes);
+app.use('/api/v1/me', authenticate, meRoutes);
+app.use('/api/v1/security', authenticate, securityRoutes);
+
+// Admin API (admin-scoped session) — everything but /auth requires a signed-in admin.
+// Both roles: Cases (incl. Add New Case) and Field Executive History.
+// Super admin only: Mobile App Settings and admin-user management (Add New Admin).
+const requireSuperAdmin = requireAdminRole('super_admin');
+
+app.use('/api/v1/admin/auth', adminAuthRoutes);
+app.use('/api/v1/admin/mobile-app-settings', authenticateAdmin, requireSuperAdmin, mobileAppSettingRoutes);
+app.use('/api/v1/admin/cases', authenticateAdmin, adminCaseRoutes);
+app.use('/api/v1/admin/field-executives', authenticateAdmin, adminFieldExecutiveRoutes);
+app.use('/api/v1/admin/device-change-requests', authenticateAdmin, adminDeviceChangeRoutes);
+app.use('/api/v1/admin/admin-users', authenticateAdmin, requireSuperAdmin, adminUserRoutes);
+
+// Field executive web API (web-scoped session cookie, no device binding). Web tokens
+// are refused by the mobile routes above, and mobile tokens by these.
+app.use('/api/v1/fe-web/auth', feWebAuthRoutes);
+app.use('/api/v1/fe-web/cases', authenticateFeWeb, feWebCaseRoutes);
+app.use('/api/v1/fe-web/profile', authenticateFeWeb, feWebProfileRoutes);
+app.use('/api/v1/fe-web/device-change', authenticateFeWeb, feWebDeviceChangeRoutes);
+
+// Admin Portal — server-rendered static front end at /admin (pages guarded server-side)
+app.use('/admin', adminPortalRoutes);
+
+// Admin React app — Vite build of web-admin/ at /admin-app (pages guarded server-side)
+app.use('/admin-app', adminAppRoutes);
+
+// Field Executive web portal — static front end at /fe (pages guarded server-side)
+app.use('/fe', feWebPortalRoutes);
+
+// Field Executive React app — Vite build of web-fe/ at /app (pages guarded server-side)
+app.use('/app', feWebAppRoutes);
+
+// Error handler (must be last)
+app.use(errorHandler);
