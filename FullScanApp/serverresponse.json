@@ -1,0 +1,198 @@
+{
+  "success": true,
+  "data": {
+    "verificationTypeStatuses": [
+      {
+        "code": "verified_clear",
+        "label": "Verified Clear"
+      },
+      {
+        "code": "utv",
+        "label": "UTV"
+      },
+      {
+        "code": "insufficient",
+        "label": "Insufficient"
+      }
+    ],
+    "utvOptions": [
+      {
+        "code": "shifted",
+        "label": "Shifted"
+      },
+      {
+        "code": "resigned",
+        "label": "Resigned"
+      },
+      {
+        "code": "not_joining",
+        "label": "Not Joining"
+      },
+      {
+        "code": "neighbours_not_supporting",
+        "label": "Neighbours/Family Not Supporting"
+      }
+    ],
+    "insuffOptions": [
+      {
+        "code": "candidate_not_responding",
+        "label": "Candidate Not Responding"
+      },
+      {
+        "code": "incorrect_address",
+        "label": "Incorrect Address"
+      },
+      {
+        "code": "not_guiding",
+        "label": "Not Guiding"
+      }
+    ],
+    "photoTypes": [
+      {
+        "code": "house_photo_1",
+        "label": "House Photo 1"
+      },
+      {
+        "code": "house_photo_2",
+        "label": "House Photo 2"
+      },
+      {
+        "code": "aadhar",
+        "label": "Aadhar"
+      },
+      {
+        "code": "pan",
+        "label": "PAN"
+      },
+      {
+        "code": "id_proof",
+        "label": "ID Proof"
+      }
+    ],
+    "componentStatuses": [
+      {
+        "code": "new_component",
+        "label": "New Component"
+      },
+      {
+        "code": "additional_verification_requested",
+        "label": "Additional Verification Request Raised"
+      },
+      {
+        "code": "component_accepted",
+        "label": "Component Accepted"
+      },
+      {
+        "code": "insuff_raised",
+        "label": "Insuff Raised"
+      },
+      {
+        "code": "insuff_cleared",
+        "label": "Insuff Cleared"
+      },
+      {
+        "code": "addl_doc_requested",
+        "label": "Additional Doc Requested"
+      },
+      {
+        "code": "addl_doc_cleared",
+        "label": "Additional Doc Cleared"
+      },
+      {
+        "code": "cost_approval_requested",
+        "label": "Cost Approval Requested"
+      },
+      {
+        "code": "cost_approved",
+        "label": "Cost Approved"
+      },
+      {
+        "code": "cost_rejected",
+        "label": "Cost Rejected"
+      },
+      {
+        "code": "verified_clear",
+        "label": "Verified Clear"
+      },
+      {
+        "code": "discrepancy",
+        "label": "Discrepancy"
+      },
+      {
+        "code": "utv",
+        "label": "UTV"
+      },
+      {
+        "code": "component_stopped",
+        "label": "Component Stopped"
+      }
+    ],
+    "actionStatuses": [
+      {
+        "code": "uploaded",
+        "label": "Uploaded"
+      },
+      {
+        "code": "accepted",
+        "label": "Accept/Approve"
+      },
+      {
+        "code": "stopped",
+        "label": "Stop"
+      },
+      {
+        "code": "rejected",
+        "label": "Rejected"
+      }
+    ],
+    "profileStatuses": [
+      {
+        "code": "bgv_profile_created",
+        "label": "BGV Profile Created"
+      },
+      {
+        "code": "wip",
+        "label": "WIP"
+      },
+      {
+        "code": "interim_report_generated",
+        "label": "Interim Report Generated"
+      },
+      {
+        "code": "final_report_generated",
+        "label": "Final Report Generated"
+      },
+      {
+        "code": "completed",
+        "label": "Completed"
+      },
+      {
+        "code": "stop_profile",
+        "label": "Stop Profile"
+      }
+    ],
+    "mobileAppSettings": {
+      "values": {
+        "geo_fence_radius_meters": 200,
+        "photo_compression_quality": 80,
+        "locationRetryCount": 3,
+        "max_photo_upload_size_mb": 5,
+        "watermark_enabled": true,
+        "min_supported_app_version": "1.0.0",
+        "force_update_enabled": false,
+        "default_language": "en",
+        "support_contact_number": "+911800123456",
+        "maintenance_mode_enabled": false,
+        "maintenance_message": "Scheduled maintenance is in progress. Please try again shortly.",
+        "biometric_login_enabled": true,
+        "mock_location_block_enabled": true,
+        "session_timeout_minutes": 720,
+        "max_login_attempts": 5,
+        "sync_interval_minutes": 15,
+        "offline_queue_retry_limit": 5,
+        "sync_on_wifi_only": false
+      },
+      "updatedAt": "2026-09-03 14:17:05"
+    }
+  }
+}

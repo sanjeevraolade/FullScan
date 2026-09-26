@@ -1,0 +1,287 @@
+{
+  "common": {
+    "appName": "FullScan"
+  },
+  "login": {
+    "title": "Login",
+    "welcome": "Welcome to FullScan",
+    "logoAlt": "FullScan logo",
+    "fields": {
+      "username": "Username",
+      "password": "Password",
+      "rememberMe": "Remember me",
+      "employeeId": "Employee ID (optional)",
+      "showPassword": "Show password",
+      "hidePassword": "Hide password"
+    },
+    "actions": {
+      "submit": "Login",
+      "submitting": "Logging in"
+    },
+    "footer": {
+      "version": "Version {{version}}",
+      "copyright": "© {{year}} FullScan. All rights reserved."
+    },
+    "errors": {
+      "invalidCredentials": "Incorrect username or password. Please try again.",
+      "network": "Unable to connect. Check your internet connection and try again.",
+      "serverUnavailable": "FullScan is temporarily unavailable. Please try again later.",
+      "deviceMismatch": "This account is already logged in from another device. Please contact your administrator to change device binding."
+    },
+    "biometric": {
+      "enroll": {
+        "title": "Enable biometric login?",
+        "body": "Use Face ID or fingerprint to log in faster next time. Your credentials stay securely on this device.",
+        "accept": "Enable",
+        "skip": "Not now",
+        "verifyPromptTitle": "Confirm to enable biometric login"
+      },
+      "login": {
+        "promptTitle": "Log in to FullScan",
+        "faceIdLabel": "Log in with Face ID",
+        "fingerprintLabel": "Log in with fingerprint"
+      },
+      "errors": {
+        "authenticationFailed": "Biometric verification failed. Please log in with your username and password.",
+        "network": "Unable to connect. Check your internet connection and try again.",
+        "serverUnavailable": "FullScan is temporarily unavailable. Please try again later."
+      }
+    }
+  },
+  "validation": {
+    "required": "This field is required"
+  },
+  "drawer": {
+    "items": {
+      "caseList": "Case List",
+      "profile": "Profile",
+      "settings": "Settings",
+      "comingSoon": "This section is coming soon."
+    },
+    "actions": {
+      "logout": "Logout"
+    }
+  },
+  "caseList": {
+    "navBar": {
+      "menuLabel": "Open menu"
+    },
+    "header": {
+      "loadingName": "Loading...",
+      "searchLabel": "Search cases",
+      "filterLabel": "Filter cases",
+      "searchPlaceholder": "Search by case, candidate or client",
+      "filterComingSoon": "Filters are coming soon."
+    },
+    "tabs": {
+      "new": "New",
+      "pending": "Pending",
+      "beyondTat": "TAT",
+      "completed": "Completed"
+    },
+    "card": {
+      "caseRef": "Case Ref: {{caseRef}}",
+      "client": "Client: {{clientName}}",
+      "candidate": "Candidate: {{candidateName}}",
+      "draft": "Draft"
+    },
+    "actions": {
+      "accept": "Accept",
+      "cancel": "Cancel",
+      "call": "Call",
+      "callComingSoon": "Masked calling is coming soon.",
+      "retry": "Retry",
+      "viewFormDetails": "View Form Details"
+    },
+    "loading": "Loading cases...",
+    "empty": "No cases in this bucket.",
+    "errors": {
+      "network": "Unable to load cases. Check your connection and try again."
+    }
+  },
+  "caseDetails": {
+    "title": "Case Ref: {{caseRef}}",
+    "loading": "Loading case...",
+    "submit": "Submit Verification Report",
+    "errors": {
+      "network": "Unable to load this case. Check your connection and try again.",
+      "submitFailed": "Unable to submit the verification report. Check your connection and try again."
+    },
+    "readOnly": {
+      "message": "This case is read-only and cannot be edited.",
+      "newCase": "New cases are view-only until they are accepted.",
+      "completedCase": "Completed cases are read-only."
+    },
+    "acceptConfirmation": {
+      "message": "Are you sure you want to accept this case? Once accepted, you will be able to view and edit all case details."
+    },
+    "unsavedChanges": {
+      "title": "Discard unsaved changes?",
+      "message": "You have entered case details that have not been saved yet. Save them as a draft to continue later, or go back and lose them.",
+      "saveDraft": "Save as Draft & Go Back",
+      "discard": "Discard & Go Back",
+      "keepEditing": "Keep Editing"
+    },
+    "info": {
+      "title": "Case Information",
+      "sla": "SLA: {{tatDue}}",
+      "candidateName": "Candidate Name",
+      "fatherOrSpouseName": "Father's / Spouse Name",
+      "employerName": "Employer Name",
+      "verificationType": "Verification Type",
+      "client": "Client / Package"
+    },
+    "location": {
+      "title": "Location Address",
+      "coordinates": "Lat: {{latitude}} | Long: {{longitude}}",
+      "getDirections": "Directions",
+      "gpsMatch": "GPS Match: {{distance}}",
+      "gpsAlert": "GPS Alert: {{distance}}",
+      "distanceMeters": "{{distance}}m from address",
+      "distanceKilometers": "{{distance}} km from address",
+      "directionsComingSoon": "Turn-by-turn directions are coming soon."
+    },
+    "call": {
+      "title": "Masked Phone Actions",
+      "privacyLock": "100% Privacy Lock",
+      "description": "Actual numbers are never visible to prevent misuse of candidate contact details. Tap buttons to initiate masked relay calls.",
+      "primaryLabel": "Primary Phone",
+      "secondaryLabel": "Secondary Phone",
+      "callButton": "Call",
+      "callPrimary": "Call Primary",
+      "callSecondary": "Call Secondary",
+      "comingSoon": "Masked calling is coming soon."
+    },
+    "instructions": {
+      "title": "Instructions & Field Notes",
+      "clientInstructions": "Client Instructions (SOP):",
+      "fieldExecutiveNotes": "Special Field Executive Notes:"
+    },
+    "outcome": {
+      "title": "Select Verification Status Outcome",
+      "statusLabel": "Verification Status",
+      "utvTitle": "UTV Options (Unable To Verify)",
+      "utvReasonLabel": "Reason",
+      "utvRemarksLabel": "Remarks",
+      "utvRemarksPlaceholder": "Capture detailed UTV remarks...",
+      "insufficientTitle": "Insufficient Options",
+      "insufficientReasonLabel": "Reason",
+      "insufficientRemarksLabel": "Remarks",
+      "insufficientRemarksPlaceholder": "Capture insufficient reason remarks..."
+    },
+    "residence": {
+      "title": "Verified Residence & Respondent Details",
+      "residenceTypeLabel": "Type of Residence",
+      "residenceTypeOptions": {
+        "owned": "Owned",
+        "rented": "Rented",
+        "hostel": "Hostel"
+      },
+      "addressTypeLabel": "Type of Address",
+      "addressTypeOptions": {
+        "present": "Present",
+        "permanent": "Permanent"
+      },
+      "respondentNameLabel": "Respondent Name",
+      "respondentRelationLabel": "Relationship with Candidate",
+      "signatureLabel": "Respondent Signature",
+      "signatureCapture": "Capture Signature",
+      "signatureCaptured": "Signature Captured (Tap to Edit)",
+      "signatureComingSoon": "On-screen signature capture is coming soon."
+    },
+    "photo": {
+      "title": "Photo Evidence Capture (Camera Only)",
+      "tagLabel": "Select Photo Tag Document",
+      "openCamera": "Geotagged Camera",
+      "cameraComingSoon": "Geotagged camera capture is coming soon.",
+      "addAnother": "Capture Another Photo",
+      "capturedLabel": "Captured Photos ({{count}})",
+      "viewLabel": "View photo",
+      "deleteLabel": "Delete photo",
+      "deleteDialogTitle": "Delete this photo?",
+      "deleteDialogMessage": "This evidence photo will be permanently removed from this submission.",
+      "deleteConfirm": "Delete",
+      "deleteCancel": "Cancel",
+      "viewerClose": "Close"
+    },
+    "camera": {
+      "liveLabel": "LIVE CAMERA STREAM",
+      "galleryDisabled": "Gallery Upload Disabled",
+      "viewfinderHint": "Align house/door number inside viewfinder",
+      "geoCoordinates": "Geo-Coordinates: Lat {{latitude}} | Long {{longitude}}",
+      "timestamp": "Timestamp: {{value}}",
+      "mockGpsClear": "Mock GPS: CLEAR | Accuracy: {{accuracy}}m",
+      "mockGpsDetected": "Mock GPS: DETECTED | Accuracy: {{accuracy}}m",
+      "acquiringLocation": "Acquiring GPS fix…",
+      "cancel": "Cancel",
+      "capture": "Capture Photo",
+      "done": "Done ({{count}})",
+      "sessionThumbnailLabel": "Captured this session",
+      "cameraPermissionDenied": "Camera permission is required to capture evidence.",
+      "grantPermission": "Grant Camera Access",
+      "loadingDevice": "Preparing camera…",
+      "locationError": {
+        "permissionDenied": "Location permission is required for geotagging.",
+        "unavailable": "Unable to determine your location. Move to an open area and try again."
+      },
+      "captureError": {
+        "cameraNotReady": "Camera isn't ready yet. Wait for a GPS fix and try again.",
+        "mockLocationDetected": "Mock location detected — capture is disabled until location services are genuine.",
+        "captureFailed": "Failed to capture photo. Please try again."
+      }
+    },
+    "geoFence": {
+      "findingDistance": "Finding your distance from the case address…",
+      "findingDistanceHint": "Using your current GPS location.",
+      "resolvingLocation": "Determining the case location…",
+      "awaitingLocation": "Waiting for a valid device location before checking the distance.",
+      "configurationUnavailable": "Geo-fence settings could not be loaded from the server. Retry once you are connected — the case cannot be opened without them.",
+      "outside": "GPS Alert: {{distance}}. You must be within {{radius}}m of the address to continue.",
+      "unresolvedOffline": "Case location could not be determined. Connect to the internet and try again.",
+      "unresolvedNotFound": "The case address could not be located on the map. Contact the back office to correct it.",
+      "unresolvedNotConfigured": "Address lookup is not configured. Contact the back office.",
+      "unresolvedInvalidAddress": "This case has no usable address or coordinates. Contact the back office.",
+      "unresolvedGeneric": "Case location could not be determined. Please try again.",
+      "recalculate": "Recalculate Distance",
+      "forceProceed": "Proceed Without Distance",
+      "bypassActive": "You are working on this case without a verified distance. It will be scrutinized after submission.",
+      "cachedCaseLocation": "Case location from saved data (available offline).",
+      "methodLocal": "Distance measured on device (straight line).",
+      "methodDirections": "Distance measured by road route.",
+      "consent": {
+        "title": "Proceed without distance?",
+        "body": "You are about to open this case without being inside the required distance from the address.",
+        "scrutinyWarning": "This case will be scrutinized after submission because the geo-fence requirement was not met.",
+        "agree": "Agree"
+      },
+      "remainingAttempts_one": "{{count}} recalculation attempt left before you can proceed without distance.",
+      "remainingAttempts_other": "{{count}} recalculation attempts left before you can proceed without distance."
+    },
+    "draft": {
+      "saved": "📝 Draft saved {{time}}"
+    },
+    "saveDraft": "Save as Draft"
+  },
+  "location": {
+    "mandatory": "Location permission is mandatory to work.",
+    "permissionRequired": "Grant FullScan access to your location to continue.",
+    "permissionBlocked": "Location access is turned off for FullScan. Open Settings and allow location to continue.",
+    "serviceDisabled": "Device location services are switched off. Turn location on to continue.",
+    "unsupported": "This device does not support location, so verification work cannot be done on it.",
+    "obtaining": "Getting your location…",
+    "obtainingDetail": "Move to an open area for a faster GPS fix.",
+    "mock": {
+      "title": "Mock location detected.",
+      "detail": "FullScan cannot be used while a fake GPS app is active. Disable mock location in Developer options, then retry."
+    },
+    "errors": {
+      "unavailable": "Unable to determine your location. Move to an open area and retry.",
+      "timeout": "Getting a GPS fix took too long. Move to an open area and retry."
+    },
+    "actions": {
+      "grantPermission": "Grant Location Access",
+      "openSettings": "Open Settings",
+      "retry": "Retry"
+    }
+  }
+}
