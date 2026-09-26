@@ -1,0 +1,8 @@
+{
+	"folders": [
+		{ "name": "FullScan (root)", "path": "." },
+		{ "path": "FullScanApp" },
+		{ "path": "FullScanServer" }
+	],
+	"settings": {}
+}
