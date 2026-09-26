@@ -19,7 +19,7 @@
     "lint": "eslint src/",
     "migrate": "tsx src/db/migrate.ts",
     "db:dev": "tsx scripts/dev-mongo.ts",
-    "db:generate-seed": "tsx scripts/generate-mongo-seed.ts",
+    "db:generate-seed": "tsx scripts/generate-mongo-seed.ts"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",
