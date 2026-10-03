@@ -648,7 +648,8 @@ The drawer's one page today, and a demonstration of the data-driven pattern.
 ### 8.5 Delivering settings to the mobile app
 
 Settings would be inert if the app never saw them. They are delivered on the **existing**
-`GET /api/v1/reference-data` call — the single post-login batch fetch the app already makes
+`GET /api/v1/master-data` call (served at `/reference-data` until the enhance-login change) — the
+single post-login batch fetch the app already makes
 (`fetchReferenceData()` in `use-login-form.ts` and `use-biometric-login.ts`) — as one extra field:
 
 ```jsonc
@@ -666,7 +667,7 @@ Settings would be inert if the app never saw them. They are delivered on the **e
 }
 ```
 
-**Why this endpoint and not a new one.** `/reference-data` is already the login-time configuration
+**Why this endpoint and not a new one.** `/master-data` is already the login-time configuration
 batch, it needs no extra round trip, it is re-fetched on every login (including biometric), and one
 call means one failure mode. `reference-data.service.ts` reuses `getAllMobileAppSettings()` rather
 than re-reading the DAO, so type coercion lives in exactly one place.
@@ -789,7 +790,7 @@ otherwise whatever had been typed into the other cards would be discarded.
 | A component named in an update belongs to that case          | `admin-case.service.ts`            | `404`   |
 | Bucket, address type, residence type, coordinate ranges      | `admin-case.schema.ts` (zod)       | `400`   |
 
-Status codes are checked against the same `dropdown_options` rows `/reference-data` serves the app,
+Status codes are checked against the same `dropdown_options` rows `/master-data` serves the app,
 so the portal can never store a status the device has no label for. Writes run inside one SQLite
 transaction: a payload whose second component is invalid leaves nothing behind.
 

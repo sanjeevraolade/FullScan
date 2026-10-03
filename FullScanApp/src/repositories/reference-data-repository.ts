@@ -9,10 +9,22 @@ interface ApiEnvelope<T> {
   readonly data: T;
 }
 
-/** Bulk dropdown/option data (statuses, UTV/Insufficient reasons, photo types) fetched once after login. */
+/**
+ * Server endpoint for the reference-data payload. The server calls it "master
+ * data"; every layer above this repository keeps the `ReferenceData` name, so
+ * the rename stops here.
+ */
+const MASTER_DATA_PATH = '/master-data';
+
+/**
+ * Bulk dropdown/option data (statuses, UTV/Insufficient reasons, photo types)
+ * plus `mobileAppSettings`, fetched once after login from `GET /master-data`.
+ */
 export async function fetchReferenceData(): Promise<ReferenceData> {
-  LoggerService.info(`${FILE_NAME}: fetchReferenceData: requesting reference data`);
-  const response = await apiClient.get<ApiEnvelope<ReferenceData>>('/reference-data');
+  LoggerService.info(`${FILE_NAME}: fetchReferenceData: requesting reference data`, {
+    path: MASTER_DATA_PATH,
+  });
+  const response = await apiClient.get<ApiEnvelope<ReferenceData>>(MASTER_DATA_PATH);
   const referenceData = response.data.data;
   LoggerService.info(`${FILE_NAME}: fetchReferenceData: received reference data`);
   LoggerService.info(`${FILE_NAME}: fetchReferenceData: option counts`, {

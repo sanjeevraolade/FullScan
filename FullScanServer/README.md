@@ -75,6 +75,117 @@ existing `data/fullscan.sqlite` across (`npm run db:migrate-sqlite`).
 
 Once running, the API is available at `http://localhost:<PORT>/api/v1`.
 
+## Environment, build & run (step by step)
+
+A full local walkthrough, from a fresh clone to a running server. All commands run from
+`FullScanServer/`.
+
+### Environment
+
+| Requirement | Version / value | Notes |
+| ----------- | --------------- | ----- |
+| Node.js     | 18+ (verified on 22.22) | |
+| npm         | verified on 10.9 | |
+| MongoDB     | replica set `rs0` on `127.0.0.1:27017` | `npm run db:dev` provides one. Its first run downloads a MongoDB binary, so it needs internet once |
+| Ports       | `3000` (API + portals), `27017` (MongoDB) | Both must be free |
+
+The `.env` variables are listed under [Setup](#setup). `MONGODB_URI` and `MONGODB_DB` fall back to
+the values `npm run db:dev` uses, so an `.env` without them still connects. These variables are read
+too, but are not in `.env.example`:
+
+| Variable | Effect |
+| -------- | ------ |
+| `NODE_ENV` | `production` gives JSON logs and `Secure` session cookies, so the portals then need HTTPS. Any other value gives pretty logs and lets cookies work over `http://localhost` |
+| `LOG_LEVEL` | Pino log level. Default `info` |
+| `ADMIN_APP_DIR` / `FE_WEB_APP_DIR` | Where the built React apps are served from. Default `web-admin/dist` / `web-fe/dist` |
+
+`pino-pretty` is a dev dependency. If you install with `npm ci --omit=dev`, set
+`NODE_ENV=production`, or the logger fails at startup.
+
+### 1. Install and configure (once)
+
+```bash
+npm install
+cp .env.example .env
+```
+
+The React apps at `/app` and `/admin-app` are optional. Build them only if you need them; until then,
+those paths return a 503 that names the command:
+
+```bash
+npm run build:web         # web-fe    -> served at /app
+npm run build:admin-web   # web-admin -> served at /admin-app
+```
+
+### 2. Start MongoDB (terminal 1, leave it running)
+
+```bash
+npm run db:dev
+```
+
+When it's ready, it prints:
+
+```text
+MongoDB replica set running: mongodb://127.0.0.1:27017/?replicaSet=rs0
+Data: <repo>/FullScanServer/data/mongo
+```
+
+Data persists in `data/mongo`, which is gitignored. To start over with a freshly seeded database,
+stop MongoDB, delete that folder, and start it again. `MONGO_DEV_PORT` and `MONGO_DEV_DATA_DIR`
+override the port and folder. If you change the port, change `MONGODB_URI` to match.
+
+### 3. Build and run the API (terminal 2)
+
+| Mode | Commands | Use when |
+| ---- | -------- | -------- |
+| Development | `npm run dev` | Day-to-day work. `tsx watch` reloads on save, with no build step |
+| Built | `npm run build` then `npm start` | Running the compiled `dist/`, as in deployment. Rebuild and restart after every change |
+
+`npm run build` runs `tsc` and copies `src/db/seed/` into `dist/`. On a successful start the log
+shows:
+
+```text
+INFO: Database initialized: fullscan at mongodb://127.0.0.1:27017/?replicaSet=rs0
+INFO: Server running on port 3000
+```
+
+### 4. Check that it's up
+
+There is no health endpoint (`/api/v1/health` returns 404). Use a guarded route instead:
+
+```bash
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/api/v1/cases   # 401: up, auth enforced
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:3000/admin          # 302: redirect to portal login
+```
+
+| URL | What |
+| --- | ---- |
+| `http://localhost:3000/api/v1` | REST API used by FullScanApp |
+| `http://localhost:3000/admin` | Admin portal (static) |
+| `http://localhost:3000/admin-app` | Admin React app (needs `npm run build:admin-web`) |
+| `http://localhost:3000/fe` | Field Executive portal (static) |
+| `http://localhost:3000/app` | Field Executive React app (needs `npm run build:web`) |
+
+To sign in, use [Test credentials](#test-credentials) (mobile app and FE) or
+[Admin test credentials](#admin-test-credentials).
+
+### Stopping
+
+Press Ctrl+C in each terminal. The API closes its database connection on `SIGINT`/`SIGTERM`, and
+MongoDB keeps its data for the next run.
+
+### Troubleshooting
+
+| Symptom | Cause and fix |
+| ------- | ------------- |
+| `EADDRINUSE` on `:3000` | Another server is already running. Find it with `lsof -nP -iTCP:3000 -sTCP:LISTEN`, then stop it or change `PORT` |
+| `Server failed to start` after ~30 s | MongoDB isn't reachable. Start `npm run db:dev`, or check `MONGODB_URI` |
+| Transaction errors from MongoDB | `MONGODB_URI` points at a standalone `mongod`. It must be a replica set |
+| `Could not start MongoDB` from `db:dev` | Port 27017 is taken, usually by another `mongod`. Stop it, or set `MONGO_DEV_PORT` and `MONGODB_URI` to match |
+| `/app` or `/admin-app` returns 503 | The React app isn't built. Run `npm run build:web` / `npm run build:admin-web` |
+| Portal login doesn't stick on `http://localhost` | `NODE_ENV=production` marks cookies `Secure`. Unset it for local runs |
+| Startup error mentioning `pino-pretty` | Dev dependencies aren't installed. Run `npm install`, or set `NODE_ENV=production` |
+
 ## Testing & linting
 
 ```bash
@@ -97,11 +208,11 @@ All routes are mounted under `/api/v1`:
 
 | Route                              | Method | Purpose                                              |
 | ----------------------------------- | ------ | ----------------------------------------------------- |
-| `/auth/login`                       | POST   | Validate username + password, returns a session token |
+| `/auth/login`                       | POST   | Validate username + password, returns a session token + the field executive's profile (same shape as `/me`) |
 | `/ui-config`                        | GET    | Download all screen configs                          |
 | `/ui-config/:screenId`              | GET    | Download a single screen config                       |
 | `/ui-config/:screenId`              | PUT    | Update a screen config (admin only)                    |
-| `/reference-data`                   | GET    | Download dropdown/reference data **+ mobile app settings** (post-login) |
+| `/master-data`                      | GET    | Download dropdown/reference data **+ mobile app settings** (post-login). Replaces `/reference-data`, which now returns 404 |
 | `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
@@ -177,7 +288,7 @@ is the field executive's actual unit of work: `/cases` returns one row per compo
 detail plus `siblingComponents` — the rest of its parent case, for context.
 
 Component/action/profile status codes come from `dropdown_options` (categories `component_status`,
-`action_status`, `profile_status`), fetched via `/reference-data` like every other dropdown — see
+`action_status`, `profile_status`), fetched via `/master-data` like every other dropdown — see
 migration `009_create_case_components.sql`.
 
 ## Field Executive Web Portal
@@ -284,7 +395,7 @@ payload must never silently delete the rest of a candidate's verification trail.
 executive's own outcome columns (`selected_verification_status`, respondent, the status date trail)
 are never written by the admin editor: they are the record of what happened on site.
 
-Status codes are validated against `dropdown_options` — the same rows `/reference-data` serves the
+Status codes are validated against `dropdown_options` — the same rows `/master-data` serves the
 app — so the portal can never store a status the device has no label for. Note `:caseId` on the admin
 routes is a **case** id, unlike the mobile `/cases/:caseId` routes, where it is a component id.
 
@@ -315,7 +426,7 @@ excluding noise must never mean hiding evidence.
 
 ### Mobile App Settings delivery
 
-Settings saved in the portal reach the mobile app on the **existing** `GET /reference-data` call —
+Settings saved in the portal reach the mobile app on the **existing** `GET /master-data` call —
 the one post-login batch fetch the app already makes — as an extra `mobileAppSettings` field:
 
 ```jsonc

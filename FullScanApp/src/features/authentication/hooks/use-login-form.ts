@@ -7,7 +7,6 @@ import axios from 'axios';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { login } from '@/repositories/authentication-repository';
-import { fetchCurrentFieldExecutive } from '@/repositories/field-executive-repository';
 import { fetchReferenceData } from '@/repositories/reference-data-repository';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
@@ -135,20 +134,21 @@ export function useLoginForm(): UseLoginFormResult {
         setLoginError(null);
         try {
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: authenticating credentials`);
-          await login({ username: values.username, password: values.password });
+          const fieldExecutive = await login({
+            username: values.username,
+            password: values.password,
+          });
           LoggerService.info(
-            `${FILE_NAME}: useLoginForm.submitLogin: credentials accepted, loading profile and reference data`,
+            `${FILE_NAME}: useLoginForm.submitLogin: credentials accepted, loading reference data`,
+            { fieldExecutiveId: fieldExecutive.id },
           );
-          const [fieldExecutive, referenceData] = await Promise.all([
-            fetchCurrentFieldExecutive(),
-            fetchReferenceData(),
-          ]);
-          // Configuration before session, deliberately: establishing the
-          // session is what starts location validation (see
-          // `ApplicationShell`), and that validation reads
-          // `mobileAppSettings` — so the settings have to already be in the
-          // store. This is the `Login Success → Load mobileAppSettings →
-          // Validate Location → App Ready` order.
+          const referenceData = await fetchReferenceData();
+          // Configuration before session, deliberately: the profile is already
+          // in hand from `login()`, but establishing the session is what starts
+          // location validation (see `ApplicationShell`), and that validation
+          // reads `mobileAppSettings` — so the session is held back until the
+          // settings are in the store. This is the `Login Success → Load
+          // mobileAppSettings → Validate Location → App Ready` order.
           useReferenceDataStore.getState().setReferenceData(referenceData);
           useSessionStore.getState().setFieldExecutive(fieldExecutive);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);

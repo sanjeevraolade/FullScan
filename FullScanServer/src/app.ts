@@ -40,7 +40,7 @@ app.use(pinoHttp({ logger }));
 // Mobile app routes (field-executive session)
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/ui-config', uiConfigRoutes);
-app.use('/api/v1/reference-data', referenceDataRoutes);
+app.use('/api/v1/master-data', referenceDataRoutes);
 app.use('/api/v1/cases', authenticate, caseRoutes);
 app.use('/api/v1/me', authenticate, meRoutes);
 app.use('/api/v1/security', authenticate, securityRoutes);

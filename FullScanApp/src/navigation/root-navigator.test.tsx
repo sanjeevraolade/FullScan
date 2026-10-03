@@ -5,13 +5,11 @@ import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
 import * as authenticationRepository from '@/repositories/authentication-repository';
 import * as caseRepository from '@/repositories/case-repository';
-import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
 import * as referenceDataRepository from '@/repositories/reference-data-repository';
 
 import { RootNavigator } from './root-navigator';
 
 jest.mock('@/repositories/authentication-repository');
-jest.mock('@/repositories/field-executive-repository');
 jest.mock('@/repositories/case-repository');
 jest.mock('@/repositories/reference-data-repository');
 
@@ -27,14 +25,14 @@ async function loginAndOpenDrawer(): Promise<void> {
 describe('RootNavigator', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
-    jest.mocked(authenticationRepository.login).mockResolvedValue(undefined);
-    jest.mocked(authenticationRepository.logout).mockResolvedValue(undefined);
-    jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue({
+    // The profile the drawer shows comes from `login()` itself — no separate profile request.
+    jest.mocked(authenticationRepository.login).mockResolvedValue({
       id: 'fe-001',
       name: 'Amit Verma',
       email: 'amit.verma@fullscan.example',
       role: 'Field Agent',
     });
+    jest.mocked(authenticationRepository.logout).mockResolvedValue(undefined);
     jest.mocked(caseRepository.fetchCases).mockResolvedValue([]);
     jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue({
       verificationTypeStatuses: [],

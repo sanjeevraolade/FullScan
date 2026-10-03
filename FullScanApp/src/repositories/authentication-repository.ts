@@ -33,19 +33,38 @@ interface ApiEnvelope<T> {
   readonly data: T;
 }
 
+/** Same shape as `GET /me`'s `data` — both are built by the server's `toFieldExecutive()`. */
+interface FieldExecutiveDto {
+  readonly id: string;
+  readonly name: string;
+  readonly email: string;
+  readonly role: string;
+}
+
 interface LoginResponseDto {
   readonly token: string;
-  readonly fieldExecutive: FieldExecutive;
+  readonly fieldExecutive: FieldExecutiveDto;
+}
+
+function mapFieldExecutive(dto: FieldExecutiveDto): FieldExecutive {
+  // Name and email identify a person — only the id and role are logged.
+  LoggerService.info(`${FILE_NAME}: mapFieldExecutive: mapping field executive profile`, {
+    fieldExecutiveId: dto.id,
+    role: dto.role,
+  });
+  return { id: dto.id, name: dto.name, email: dto.email, role: dto.role };
 }
 
 /**
- * Authenticates against POST /auth/login with device binding info and persists
+ * Authenticates against POST /auth/login with device binding info, persists
  * the issued bearer token to secure storage (Keychain/Keystore) — the api-client's
  * request interceptor reads it back from there and attaches it to every subsequent
- * authenticated request. Rejects with the underlying AxiosError on failure;
- * callers map that to a user-facing error key, never a raw message.
+ * authenticated request — and resolves with the logged-in field executive's
+ * profile, which the login response carries so no separate `GET /me` is needed.
+ * Resolves only once the token is stored. Rejects with the underlying AxiosError
+ * on failure; callers map that to a user-facing error key, never a raw message.
  */
-export async function login(credentials: LoginCredentials): Promise<void> {
+export async function login(credentials: LoginCredentials): Promise<FieldExecutive> {
   // Credentials are never logged — only non-identifying metadata.
   LoggerService.info(`${FILE_NAME}: login: submitting credentials with device binding`, {
     hasUsername: credentials.username.trim().length > 0,
@@ -74,12 +93,19 @@ export async function login(credentials: LoginCredentials): Promise<void> {
   LoggerService.info(`${FILE_NAME}: login: response received`, {
     success: response.data.success,
     hasToken: token.length > 0,
-    fieldExecutiveId: response.data.data.fieldExecutive.id,
   });
+
+  // Mapped before the token is stored: if the profile can't be read, the login
+  // rejects without leaving a token behind for a session that never starts.
+  const fieldExecutive = mapFieldExecutive(response.data.data.fieldExecutive);
 
   await TokenStorageService.saveToken(token);
 
-  LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored, device bound`);
+  LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored, device bound`, {
+    fieldExecutiveId: fieldExecutive.id,
+    role: fieldExecutive.role,
+  });
+  return fieldExecutive;
 }
 
 /** Clears the persisted session token — call on logout or session expiry. */

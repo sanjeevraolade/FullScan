@@ -4,11 +4,13 @@ import { app, extractSessionCookie, removeTestDb, SEEDED_ADMIN } from './helpers
 
 /**
  * Mobile app settings are delivered to the app on the existing post-login
- * reference-data call rather than a dedicated endpoint. These tests cover that
- * contract and the admin-edit → app-payload round trip.
+ * reference-data call (`GET /api/v1/master-data`) rather than a dedicated endpoint.
+ * These tests cover that contract and the admin-edit → app-payload round trip.
  */
 
-const REFERENCE_DATA = '/api/v1/reference-data';
+const MASTER_DATA = '/api/v1/master-data';
+/** The pre-enhance-login path — removed, not aliased. */
+const REMOVED_REFERENCE_DATA = '/api/v1/reference-data';
 const ADMIN_SETTINGS = '/api/v1/admin/mobile-app-settings';
 
 let cookie: string;
@@ -25,9 +27,9 @@ afterAll(async () => {
   await removeTestDb();
 });
 
-describe(`GET ${REFERENCE_DATA}`, () => {
+describe(`GET ${MASTER_DATA}`, () => {
   it('still returns every dropdown list it did before', async () => {
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
 
     expect(response.status).toBe(200);
     expect(Object.keys(response.body.data)).toEqual(
@@ -44,7 +46,7 @@ describe(`GET ${REFERENCE_DATA}`, () => {
   });
 
   it('carries every seeded mobile app setting', async () => {
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     const { values } = response.body.data.mobileAppSettings;
 
     const adminView = await request(app).get(ADMIN_SETTINGS).set('Cookie', cookie);
@@ -52,7 +54,7 @@ describe(`GET ${REFERENCE_DATA}`, () => {
   });
 
   it('delivers each value in its declared type, not as text', async () => {
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     const { values } = response.body.data.mobileAppSettings;
 
     expect(values.geo_fence_radius_meters).toBeTypeOf('number');
@@ -63,7 +65,7 @@ describe(`GET ${REFERENCE_DATA}`, () => {
   });
 
   it('carries locationRetryCount under its camelCase contract key', async () => {
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     const { values } = response.body.data.mobileAppSettings;
 
     expect(values).toHaveProperty('locationRetryCount');
@@ -73,7 +75,7 @@ describe(`GET ${REFERENCE_DATA}`, () => {
   });
 
   it('omits the portal-only presentation metadata', async () => {
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     const { mobileAppSettings } = response.body.data;
 
     // Labels/descriptions are admin-facing English; the app localizes its own text.
@@ -87,7 +89,7 @@ describe(`GET ${REFERENCE_DATA}`, () => {
       .set('Cookie', cookie)
       .send({ settings: [{ key: 'max_photo_upload_size_mb', value: 7 }] });
 
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     const { mobileAppSettings } = response.body.data;
 
     const adminView = await request(app).get(ADMIN_SETTINGS).set('Cookie', cookie);
@@ -101,9 +103,17 @@ describe(`GET ${REFERENCE_DATA}`, () => {
   });
 });
 
+describe(`GET ${REMOVED_REFERENCE_DATA}`, () => {
+  it('is no longer served — the endpoint moved to master-data with no alias', async () => {
+    const response = await request(app).get(REMOVED_REFERENCE_DATA);
+
+    expect(response.status).toBe(404);
+  });
+});
+
 describe('admin edit → mobile payload round trip', () => {
   it('serves an admin-saved value on the next reference-data fetch', async () => {
-    const before = await request(app).get(REFERENCE_DATA);
+    const before = await request(app).get(MASTER_DATA);
     expect(before.body.data.mobileAppSettings.values.geo_fence_radius_meters).not.toBe(425);
 
     await request(app)
@@ -117,7 +127,7 @@ describe('admin edit → mobile payload round trip', () => {
         ],
       });
 
-    const after = await request(app).get(REFERENCE_DATA);
+    const after = await request(app).get(MASTER_DATA);
     const { values } = after.body.data.mobileAppSettings;
 
     expect(values.geo_fence_radius_meters).toBe(425);
@@ -131,7 +141,7 @@ describe('admin edit → mobile payload round trip', () => {
       .set('Cookie', cookie)
       .send({ settings: [{ key: 'locationRetryCount', value: 6 }] });
 
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
 
     expect(response.body.data.mobileAppSettings.values.locationRetryCount).toBe(6);
   });
@@ -144,7 +154,7 @@ describe('admin edit → mobile payload round trip', () => {
 
     expect(rejected.status).toBe(400);
 
-    const response = await request(app).get(REFERENCE_DATA);
+    const response = await request(app).get(MASTER_DATA);
     expect(response.body.data.mobileAppSettings.values.photo_compression_quality).not.toBe(500);
   });
 });

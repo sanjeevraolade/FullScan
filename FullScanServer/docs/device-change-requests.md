@@ -163,7 +163,7 @@ the Mobile App Settings page (no portal change needed — the form is data-drive
 So the rule reads "an FE can request at most **2** device changes every **30** days" by default.
 
 Like every mobile app setting, both are also included in the `mobileAppSettings` values of
-`GET /api/v1/reference-data`. The mobile app does not use them today; the server enforces the limit.
+`GET /api/v1/master-data`. The mobile app does not use them today; the server enforces the limit.
 
 If a row were missing or unreadable, the server falls back to 2 / 30.
 

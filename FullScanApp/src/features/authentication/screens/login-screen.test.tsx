@@ -11,14 +11,50 @@ import { ThemeProvider } from '@/theme';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import * as authenticationRepository from '@/repositories/authentication-repository';
-import * as fieldExecutiveRepository from '@/repositories/field-executive-repository';
 import * as referenceDataRepository from '@/repositories/reference-data-repository';
+import { useSessionStore } from '@/store/session';
+import { useReferenceDataStore } from '@/store/reference-data';
+import type { FieldExecutive } from '@/domain/field-executive';
+import type { ReferenceData } from '@/domain/reference-data';
 
 import { LoginScreen } from './login-screen';
 
 jest.mock('@/repositories/authentication-repository');
-jest.mock('@/repositories/field-executive-repository');
 jest.mock('@/repositories/reference-data-repository');
+
+const FIELD_EXECUTIVE: FieldExecutive = {
+  id: 'fe-001',
+  name: 'Amit Verma',
+  email: 'amit.verma@fullscan.example',
+  role: 'Field Agent',
+};
+
+const REFERENCE_DATA: ReferenceData = {
+  verificationTypeStatuses: [],
+  utvOptions: [],
+  insuffOptions: [],
+  photoTypes: [],
+  componentStatuses: [],
+  actionStatuses: [],
+  profileStatuses: [],
+  mobileAppSettings: { values: {}, updatedAt: null },
+};
+
+/**
+ * Records whether reference data was already in its store at the moment the
+ * session was established — the session is what starts location validation,
+ * which reads `mobileAppSettings`, so it must never arrive first.
+ */
+function watchSessionOrdering(): { wasReferenceDataStoredFirst: () => boolean | null } {
+  let wasReferenceDataStoredFirst: boolean | null = null;
+  const unsubscribe = useSessionStore.subscribe((state) => {
+    if (state.fieldExecutive !== null && wasReferenceDataStoredFirst === null) {
+      wasReferenceDataStoredFirst = useReferenceDataStore.getState().referenceData !== null;
+      unsubscribe();
+    }
+  });
+  return { wasReferenceDataStoredFirst: () => wasReferenceDataStoredFirst };
+}
 
 const Stack = createNativeStackNavigator<RootStackParamList>();
 
@@ -51,23 +87,13 @@ async function renderLoginScreen(): Promise<void> {
 describe('LoginScreen', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
-    jest.mocked(authenticationRepository.login).mockResolvedValue(undefined);
-    jest.mocked(fieldExecutiveRepository.fetchCurrentFieldExecutive).mockResolvedValue({
-      id: 'fe-001',
-      name: 'Amit Verma',
-      email: 'amit.verma@fullscan.example',
-      role: 'Field Agent',
-    });
-    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue({
-      verificationTypeStatuses: [],
-      utvOptions: [],
-      insuffOptions: [],
-      photoTypes: [],
-      componentStatuses: [],
-      actionStatuses: [],
-      profileStatuses: [],
-      mobileAppSettings: { values: {}, updatedAt: null },
-    });
+    // `login()` carries the profile now — there is no separate profile request.
+    jest.mocked(authenticationRepository.login).mockResolvedValue(FIELD_EXECUTIVE);
+    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue(REFERENCE_DATA);
+    // Both stores are module singletons — start every test logged out so a
+    // session asserted below can only have come from that test's own login.
+    useSessionStore.getState().clearSession();
+    useReferenceDataStore.getState().clearReferenceData();
     // `mockResolvedValue` (persistent, not "Once") isn't undone by `clearAllMocks`
     // in the afterEach below — reset these two to a known "unsupported" baseline
     // every test, so a prior test's persistent biometric setup never leaks in.
@@ -187,6 +213,39 @@ describe('LoginScreen', () => {
     );
   });
 
+  it('establishes the session with the profile login() returned, after storing reference data', async () => {
+    const ordering = watchSessionOrdering();
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() => expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE));
+    expect(useReferenceDataStore.getState().referenceData).toEqual(REFERENCE_DATA);
+    expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
+    expect(referenceDataRepository.fetchReferenceData).toHaveBeenCalledTimes(1);
+  });
+
+  it('shows the network error and starts no session when reference data cannot be loaded (offline)', async () => {
+    jest
+      .mocked(referenceDataRepository.fetchReferenceData)
+      .mockRejectedValueOnce({ isAxiosError: true, response: undefined });
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() =>
+      expect(screen.getByTestId('login-error-alert')).toHaveTextContent(
+        'Unable to connect. Check your internet connection and try again.',
+      ),
+    );
+    expect(useSessionStore.getState().fieldExecutive).toBeNull();
+    expect(useReferenceDataStore.getState().referenceData).toBeNull();
+  });
+
   it('keeps the entered value in the field it belongs to', async () => {
     await renderLoginScreen();
 
@@ -278,7 +337,58 @@ describe('LoginScreen', () => {
           password: 'secret-value',
         }),
       );
-      expect(fieldExecutiveRepository.fetchCurrentFieldExecutive).toHaveBeenCalled();
+      await waitFor(() =>
+        expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE),
+      );
+    });
+
+    it('restores the session from the profile login() returned, after storing reference data', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+        username: 'field.executive',
+        password: 'secret-value',
+        service: 'com.fullscan.auth.biometric',
+        storage: STORAGE_TYPE.AES_GCM,
+      });
+      const ordering = watchSessionOrdering();
+      await renderLoginScreen();
+
+      await waitFor(() => expect(screen.getByTestId('biometric-login-button')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('biometric-login-button'));
+
+      await waitFor(() =>
+        expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE),
+      );
+      expect(useReferenceDataStore.getState().referenceData).toEqual(REFERENCE_DATA);
+      expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
+      expect(referenceDataRepository.fetchReferenceData).toHaveBeenCalledTimes(1);
+    });
+
+    it('keeps the vault and starts no session when reference data cannot be loaded after biometric login (offline)', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+        username: 'field.executive',
+        password: 'secret-value',
+        service: 'com.fullscan.auth.biometric',
+        storage: STORAGE_TYPE.AES_GCM,
+      });
+      jest
+        .mocked(referenceDataRepository.fetchReferenceData)
+        .mockRejectedValueOnce({ isAxiosError: true, response: undefined });
+      await renderLoginScreen();
+
+      await waitFor(() => expect(screen.getByTestId('biometric-login-button')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('biometric-login-button'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('biometric-login-error-alert')).toHaveTextContent(
+          'Unable to connect. Check your internet connection and try again.',
+        ),
+      );
+      expect(useSessionStore.getState().fieldExecutive).toBeNull();
+      expect(Keychain.resetGenericPassword).not.toHaveBeenCalled();
     });
 
     it('clears the vault and shows an error when the stored password is rejected by the server', async () => {
@@ -306,6 +416,8 @@ describe('LoginScreen', () => {
       expect(screen.getByTestId('biometric-login-error-alert')).toHaveTextContent(
         'Biometric verification failed. Please log in with your username and password.',
       );
+      expect(referenceDataRepository.fetchReferenceData).not.toHaveBeenCalled();
+      expect(useSessionStore.getState().fieldExecutive).toBeNull();
     });
 
     it('shows a biometric error and leaves the vault intact when the prompt is cancelled', async () => {

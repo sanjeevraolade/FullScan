@@ -2,7 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import * as referenceDataService from '../services/reference-data.service.js';
 
 /**
- * GET /api/v1/reference-data
+ * GET /api/v1/master-data
  * Bulk dropdown/option data (statuses, UTV/Insufficient reasons, photo
  * types) fetched once after login.
  */

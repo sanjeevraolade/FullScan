@@ -8,7 +8,8 @@ Login screen rendered). For the design rationale behind each piece, see
 [location-geo-fence-validation.md](location-geo-fence-validation.md); this document is only about
 sequence and control flow.
 
-Line references are accurate as of 2026-09-04.
+Line references are accurate as of 2026-09-04, except §1's references into `use-login-form.ts`,
+which were re-checked on 2026-10-03.
 
 ---
 
@@ -17,7 +18,7 @@ Line references are accurate as of 2026-09-04.
 ```text
  tap Login
     │
- 1. useLoginForm.submitLogin      POST /auth/login, then profile + reference data in parallel
+ 1. useLoginForm.submitLogin      POST /auth/login (token + profile), then GET /master-data
     │                             setReferenceData()  ← configuration first
     │                             setFieldExecutive() ← session second
     ▼
@@ -51,33 +52,39 @@ Two structural points that explain most of the ordering below:
 
 ## 1. Login succeeds
 
-`submitLogin` — [use-login-form.ts:107](../../src/features/authentication/hooks/use-login-form.ts#L107)
+`submitLogin` — [use-login-form.ts:124](../../src/features/authentication/hooks/use-login-form.ts#L124)
 
 React Hook Form's `handleSubmit` runs field validation first; the callback below only fires when the
 form is valid (the failure branch just logs which fields blocked it).
 
-| Line  | Call                                                                | Effect                                        |
-| ----- | ------------------------------------------------------------------- | --------------------------------------------- |
-| `119` | `await login({ username, password })`                               | Token persisted to Keychain by the repository |
-| `120` | `Promise.all([fetchCurrentFieldExecutive(), fetchReferenceData()])` | Profile + `mobileAppSettings`, in parallel    |
-| `130` | `useReferenceDataStore.getState().setReferenceData(...)`            | **Configuration first**                       |
-| `131` | `useSessionStore.getState().setFieldExecutive(...)`                 | **Session second**                            |
-| `134` | `evaluateBiometricEnrollmentEligibility(...)`                       | May hand navigation to the enrollment dialog  |
-| `147` | `navigation.replace(ROUTE_NAMES.MAIN)`                              | Login removed from the stack                  |
+| Line  | Call                                                         | Effect                                                  |
+| ----- | ------------------------------------------------------------ | ------------------------------------------------------- |
+| `137` | `const fieldExecutive = await login({ username, password })` | Token persisted to Keychain; resolves with the profile  |
+| `145` | `await fetchReferenceData()`                                 | `GET /master-data` — option lists + `mobileAppSettings` |
+| `152` | `useReferenceDataStore.getState().setReferenceData(...)`     | **Configuration first**                                 |
+| `153` | `useSessionStore.getState().setFieldExecutive(...)`          | **Session second**                                      |
+| `156` | `evaluateBiometricEnrollmentEligibility(...)`                | May hand navigation to the enrollment dialog            |
+| `178` | `navigation.replace(ROUTE_NAMES.MAIN)`                       | Login removed from the stack                            |
 
-**Why 130 before 131.** Writing the session is what starts location validation (§2), and that
-validation reads `mobileAppSettings` (§3, line 108). If these two lines were swapped, the first
-evaluation would race the configuration and could read
+Login is two requests, in sequence: `/auth/login` returns the token **and** the profile (there is no
+separate `GET /me` any more), then `GET /master-data` returns the reference data.
+
+**Why 152 before 153.** Writing the session is what starts location validation (§2), and that
+validation reads `mobileAppSettings` (§3, line 108). The profile is already in hand once `login()`
+resolves at 137, but it is deliberately held back until the reference data has been stored. If these
+two lines were swapped, the first evaluation would race the configuration and could read
 `DEFAULT_MOBILE_APP_SETTINGS` instead of the server's values. This is the
 `Login Success → Load mobileAppSettings → Validate Location → App Ready` sequence, enforced by
 statement order.
 
-On failure, `resolveLoginErrorKey` at [:148](../../src/features/authentication/hooks/use-login-form.ts#L148)
+On failure, `resolveLoginErrorKey` at [:180](../../src/features/authentication/hooks/use-login-form.ts#L180)
 maps the error to a localization key; neither store is written, so nothing in §2 onwards runs.
 
-**Biometric login** takes the same shape: `restoreSession()` in
-[use-biometric-login.ts](../../src/features/authentication/hooks/use-biometric-login.ts) fetches the
-same two payloads and applies the same configuration-before-session ordering.
+**Biometric login** takes the same shape: `loginWithBiometrics` in
+[use-biometric-login.ts](../../src/features/authentication/hooks/use-biometric-login.ts) keeps the
+profile `login()` resolves with and hands it to `restoreSession(fieldExecutive)`, which fetches only
+the reference data and applies the same configuration-before-session ordering. A `401` from `login()`
+clears the biometric vault and writes neither store.
 
 ---
 
@@ -94,7 +101,7 @@ useLocationReadinessMonitor(isAuthenticated);                                   
 </LocationGuard>
 ```
 
-Step 1's line 131 re-renders this component with `isAuthenticated: true`, which simultaneously starts
+Step 1's line 153 re-renders this component with `isAuthenticated: true`, which simultaneously starts
 validation (`:34`) and arms the blocking UI (`:42`). Before login both are inert, so the Login screen
 never sees a permission prompt or a banner.
 
