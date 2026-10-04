@@ -16,7 +16,7 @@ const REQUEST_TIMEOUT_MS = 15000;
  * development.
  */
 const DEV_API_BASE_URL = Platform.select({
-  android: 'http://192.168.1.3:3000/api/v1',
+  android: 'http://10.0.2.2:3000/api/v1',
   default: 'http://localhost:3000/api/v1',
 });
 

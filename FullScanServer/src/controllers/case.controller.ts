@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as caseService from '../services/case.service.js';
-import { caseListQuerySchema } from '../routes/schemas/case.schema.js';
+import * as mobileEvidenceService from '../services/mobile-evidence.service.js';
+import { caseListQuerySchema, mobileEvidenceBodySchema } from '../routes/schemas/case.schema.js';
 import { AppError } from '../utils/app-error.js';
 
 /** `authenticate` sets it on every request it lets through; this only guards the type. */
@@ -86,6 +87,30 @@ export async function submitVerificationOutcome(req: Request, res: Response, nex
     const { caseId } = req.params;
     const updated = await caseService.submitVerificationOutcome(caseId, req.body);
     res.json({ success: true, data: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * POST /api/v1/cases/:caseId/evidence
+ * One camera photo (multipart `file`) with its capture metadata. `201` with the new
+ * record, or `200` with the existing one when the same bytes were already uploaded.
+ */
+export async function uploadCaseEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const fieldExecutiveId = currentFieldExecutiveId(req);
+    // `validate()` has already checked the text parts; parsing again converts and types them.
+    const metadata = mobileEvidenceBodySchema.parse(req.body);
+    const file = req.file ? { originalName: req.file.originalname, buffer: req.file.buffer } : undefined;
+
+    const { evidence, isNew } = await mobileEvidenceService.uploadMobileCaptureEvidence(
+      fieldExecutiveId,
+      req.params.caseId,
+      metadata,
+      file,
+    );
+    res.status(isNew ? 201 : 200).json({ success: true, data: evidence });
   } catch (err) {
     next(err);
   }

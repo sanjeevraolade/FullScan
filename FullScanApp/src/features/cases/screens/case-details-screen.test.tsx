@@ -9,8 +9,10 @@ import { ThemeProvider } from '@/theme';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import * as caseRepository from '@/repositories/case-repository';
+import * as caseEvidenceRepository from '@/repositories/case-evidence-repository';
+import { CaseEvidenceUploadError } from '@/repositories/case-evidence-repository.errors';
 import { GeocodingFailedError, GeocodingService } from '@/infrastructure/geocoding';
-import type { Case, CaseDetail } from '@/domain/case';
+import type { Case, CaseDetail, UploadedCaseEvidence } from '@/domain/case';
 import type { ReferenceData } from '@/domain/reference-data';
 import type { DeviceLocation } from '@/infrastructure/location';
 import { useLocationStore } from '@/store/location';
@@ -19,10 +21,12 @@ import { useReferenceDataStore } from '@/store/reference-data';
 import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 
 import { DraftStorageService } from '../services/draft-storage';
+import { EvidenceReceiptStorageService } from '../services/evidence-receipt-storage';
 
 import { CaseDetailsScreen } from './case-details-screen';
 
 jest.mock('@/repositories/case-repository');
+jest.mock('@/repositories/case-evidence-repository');
 jest.mock('@/infrastructure/geocoding', () => {
   class TestGeocodingFailedError extends Error {
     readonly reason: string;
@@ -651,5 +655,128 @@ describe('CaseDetailsScreen unsaved-changes back guard', () => {
     expect(screen.queryByTestId('case-unsaved-changes-dialog')).toBeNull();
     await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
     expect(DraftStorageService.loadDraft('case-1')?.capturedPhotos).toHaveLength(1);
+  });
+});
+
+describe('CaseDetailsScreen evidence upload on submit', () => {
+  const UPLOADED_EVIDENCE: UploadedCaseEvidence = {
+    id: 'evidence-1',
+    caseId: 'case-1',
+    fileName: 'house_photo_1-1788512700000.jpg',
+    mimeType: 'image/jpeg',
+    sizeBytes: 482113,
+    sha256: 'sha-evidence-1',
+    documentTypeCode: 'house_photo_1',
+    latitude: CAPTURED_PHOTO.latitude,
+    longitude: CAPTURED_PHOTO.longitude,
+    accuracyMeters: CAPTURED_PHOTO.accuracyMeters,
+    isMockLocation: false,
+    capturedAt: new Date('2026-09-04T09:05:00.000Z'),
+    uploadedAt: new Date('2026-09-04T09:10:00.000Z'),
+    wasAlreadyUploaded: false,
+  };
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await LocalizationEngine.initialize();
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    jest.mocked(caseEvidenceRepository.uploadCaseEvidence).mockResolvedValue(UPLOADED_EVIDENCE);
+    seedGeoFenceSettings(200);
+    useGeoFenceBypassStore.getState().clearConsents();
+    useLocationStore.setState({
+      status: 'ready',
+      location: DEVICE_LOCATION,
+      errorReason: null,
+      isEvaluating: false,
+      evaluate: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    LocalizationEngine.dispose();
+    useLocationStore.getState().reset();
+    DraftStorageService.deleteDraft('case-1');
+    EvidenceReceiptStorageService.clearReceipts('case-1');
+  });
+
+  it('shows upload progress on the submit button, then submits and leaves', async () => {
+    let finishUpload: (evidence: UploadedCaseEvidence) => void = () => undefined;
+    jest.mocked(caseEvidenceRepository.uploadCaseEvidence).mockReturnValueOnce(
+      new Promise<UploadedCaseEvidence>((resolve) => {
+        finishUpload = resolve;
+      }),
+    );
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() => expect(screen.getByText('Uploading photos 0 of 1')).toBeTruthy());
+    expect(screen.getByLabelText('Uploading photos 0 of 1')).toBeTruthy();
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+
+    await act(async () => {
+      finishUpload(UPLOADED_EVIDENCE);
+    });
+
+    await waitFor(() => expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByTestId('case-details-submit-button')).toBeNull());
+  });
+
+  it('tells the executive the case is closed to new evidence on a 409, without submitting', async () => {
+    jest
+      .mocked(caseEvidenceRepository.uploadCaseEvidence)
+      .mockRejectedValueOnce(new CaseEvidenceUploadError('caseClosed', 409));
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-error')).toBeTruthy());
+    expect(
+      screen.getByText(
+        'This case is closed to new evidence, so your photos could not be uploaded. The verification report was not submitted.',
+      ),
+    ).toBeTruthy();
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    // Still on the case, with the button back to its normal label.
+    expect(screen.getByText('Submit Verification Report')).toBeTruthy();
+  });
+
+  it('shows the generic photo-upload message for any other upload failure', async () => {
+    jest
+      .mocked(caseEvidenceRepository.uploadCaseEvidence)
+      .mockRejectedValueOnce(new CaseEvidenceUploadError('network'));
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Your photos could not be uploaded, so the verification report was not submitted. Check your connection and try again.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+  });
+
+  it('keeps the report-submission message for an outcome failure after the photos uploaded', async () => {
+    jest.mocked(caseRepository.submitVerificationOutcome).mockRejectedValueOnce(new Error('offline'));
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() =>
+      expect(
+        screen.getByText(
+          'Unable to submit the verification report. Check your connection and try again.',
+        ),
+      ).toBeTruthy(),
+    );
+    expect(caseEvidenceRepository.uploadCaseEvidence).toHaveBeenCalledTimes(1);
   });
 });

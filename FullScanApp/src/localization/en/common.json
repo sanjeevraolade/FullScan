@@ -113,9 +113,12 @@
     "title": "Case Ref: {{caseRef}}",
     "loading": "Loading case...",
     "submit": "Submit Verification Report",
+    "uploadingPhotos": "Uploading photos {{uploadedCount}} of {{totalCount}}",
     "errors": {
       "network": "Unable to load this case. Check your connection and try again.",
-      "submitFailed": "Unable to submit the verification report. Check your connection and try again."
+      "submitFailed": "Unable to submit the verification report. Check your connection and try again.",
+      "evidenceCaseClosed": "This case is closed to new evidence, so your photos could not be uploaded. The verification report was not submitted.",
+      "evidenceUploadFailed": "Your photos could not be uploaded, so the verification report was not submitted. Check your connection and try again."
     },
     "readOnly": {
       "message": "This case is read-only and cannot be edited.",

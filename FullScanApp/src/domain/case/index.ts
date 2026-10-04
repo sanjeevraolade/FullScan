@@ -6,6 +6,7 @@ export {
   resolveVerificationOutcomeTransition,
 } from './case-bucket-transition';
 export type { CapturedPhotoEvidence } from './case-photo-evidence.entity';
+export type { UploadedCaseEvidence } from './case-evidence.entity';
 export type {
   AddressType,
   CaseDetail,

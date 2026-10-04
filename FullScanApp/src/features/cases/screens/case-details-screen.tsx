@@ -45,11 +45,20 @@ import { CaseVerificationOutcomeSection } from '../components/case-verification-
 import { CaseUnsavedChangesDialog } from '../components/case-unsaved-changes-dialog';
 import { CaseVerifiedResidenceSection } from '../components/case-verified-residence-section';
 import { useCaseDetails } from '../hooks/use-case-details';
+import type { CaseDetailsSubmitErrorKey } from '../hooks/use-case-details';
+import { toCapturedPhotoEvidence } from '../utils/captured-photo-serialization';
 
 const FILE_NAME = 'case-details-screen.tsx';
 
 /** Stable empty list, so a case with no captured evidence does not churn the hook's inputs. */
 const NO_CAPTURED_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
+
+/** The message shown for each way Accept/Submit can fail. */
+const SUBMIT_ERROR_MESSAGE_KEYS: Readonly<Record<CaseDetailsSubmitErrorKey, string>> = {
+  network: 'caseDetails.errors.submitFailed',
+  evidenceCaseClosed: 'caseDetails.errors.evidenceCaseClosed',
+  evidenceUploadFailed: 'caseDetails.errors.evidenceUploadFailed',
+};
 
 type CaseDetailsRoute = RouteProp<RootStackParamList, typeof ROUTE_NAMES.CASE_DETAILS>;
 
@@ -90,10 +99,7 @@ export function CaseDetailsScreen(): ReactElement {
     LoggerService.info(`${FILE_NAME}: capturedPhotos: rehydrating captured photos from params`, {
       count: serializedCapturedPhotos.length,
     });
-    return serializedCapturedPhotos.map(({ capturedAtIso, ...rest }) => ({
-      ...rest,
-      capturedAt: new Date(capturedAtIso),
-    }));
+    return serializedCapturedPhotos.map(toCapturedPhotoEvidence);
   }, [serializedCapturedPhotos]);
   const {
     caseDetail,
@@ -132,6 +138,7 @@ export function CaseDetailsScreen(): ReactElement {
     selectedPhotoTag,
     selectPhotoTag,
     isSubmitting,
+    evidenceUploadProgress,
     submitError,
     submit,
     hasDraft,
@@ -374,6 +381,18 @@ export function CaseDetailsScreen(): ReactElement {
     saveDraft();
   };
 
+  /*
+   * While photos upload the button reports how far it has got, so a slow
+   * connection reads as progress rather than a hung submit. The label doubles
+   * as the accessibility label, so screen readers hear the same progress.
+   */
+  const submitButtonLabel = evidenceUploadProgress
+    ? t('caseDetails.uploadingPhotos', {
+        uploadedCount: evidenceUploadProgress.uploadedCount,
+        totalCount: evidenceUploadProgress.totalCount,
+      })
+    : t('caseDetails.submit');
+
   const handleSubmit = (): void => {
     LoggerService.info(`${FILE_NAME}: CaseDetailsScreen.handleSubmit: submit pressed`, { caseId: params.caseId });
     submit(() => {
@@ -431,6 +450,8 @@ export function CaseDetailsScreen(): ReactElement {
     hasUnsavedChanges,
     hasNotice: noticeKey !== null,
     hasSubmitError: submitError !== null,
+    submitError,
+    isUploadingEvidence: evidenceUploadProgress !== null,
     capturedPhotoCount: capturedPhotos.length,
   });
 
@@ -561,7 +582,7 @@ export function CaseDetailsScreen(): ReactElement {
         {submitError ? (
           <Alert action="error" testID="case-details-submit-error">
             <AlertIcon as={AlertCircleIcon} mr="$2" />
-            <AlertText>{t('caseDetails.errors.submitFailed')}</AlertText>
+            <AlertText>{t(SUBMIT_ERROR_MESSAGE_KEYS[submitError])}</AlertText>
           </Alert>
         ) : null}
 
@@ -602,11 +623,11 @@ export function CaseDetailsScreen(): ReactElement {
               borderRadius="$xl"
               onPress={handleSubmit}
               isDisabled={isSubmitting}
-              accessibilityLabel={t('caseDetails.submit')}
+              accessibilityLabel={submitButtonLabel}
               testID="case-details-submit-button"
             >
               {isSubmitting ? <ButtonSpinner mr="$2" /> : null}
-              <ButtonText>{t('caseDetails.submit')}</ButtonText>
+              <ButtonText>{submitButtonLabel}</ButtonText>
             </Button>
           </VStack>
         ) : null}

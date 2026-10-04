@@ -1,5 +1,6 @@
 import * as caseDao from '../db/case.dao.js';
 import * as referenceDataDao from '../db/reference-data.dao.js';
+import { canUploadEvidence } from './case-evidence.service.js';
 import { AppError } from '../utils/app-error.js';
 import type { CaseComponentRow } from '../types/case.types.js';
 import type {
@@ -12,9 +13,6 @@ import type {
 
 /** Display order of the groups on the web home page. */
 const FE_WEB_CASE_BUCKETS: readonly FeWebCaseBucket[] = ['pending', 'beyond_tat', 'completed'];
-
-/** Buckets whose components still accept evidence. */
-const EVIDENCE_OPEN_BUCKETS: ReadonlySet<CaseComponentRow['bucket']> = new Set(['pending', 'beyond_tat']);
 
 async function findComponentStatusLabels(): Promise<ReadonlyMap<string, string>> {
   return new Map(
@@ -105,10 +103,6 @@ export async function findOwnComponent(
   }
 
   return { ...row, bucket: row.bucket };
-}
-
-export function canUploadEvidence(row: CaseComponentRow): boolean {
-  return EVIDENCE_OPEN_BUCKETS.has(row.bucket);
 }
 
 /** One of the signed-in executive's own components, with its case-wide siblings. */

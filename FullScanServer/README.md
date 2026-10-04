@@ -221,6 +221,7 @@ All routes are mounted under `/api/v1`:
 | `/cases/:caseId`                    | GET    | Case Details for one component, with `siblingComponents` (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/cases/:caseId/verification-outcome` | POST | Record the verification outcome (→ Completed) (auth required) |
+| `/cases/:caseId/evidence`          | POST   | Upload **one** camera photo (multipart `file`, JPEG, ≤10 MB) with its capture metadata (`documentTypeCode`, `latitude`, `longitude`, `accuracyMeters`, `capturedAt`, `isMockLocation`); own Pending/Beyond TAT components only; `201` new / `200` same bytes already recorded (idempotent by SHA-256) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
 | `/security/mock-location`           | POST   | Record a faked/mocked device location detected by the app (auth required) |
 | `/fe-web/auth/login`                | POST   | Field executive **web** sign-in (no device binding), sets `fs_fe_session` cookie |
@@ -228,8 +229,8 @@ All routes are mounted under `/api/v1`:
 | `/fe-web/auth/me`                   | GET    | Current field executive's profile (FE web session required) |
 | `/fe-web/cases`                     | GET    | The FE's own Pending / Beyond TAT / Completed cases, grouped, read-only (FE web session required) |
 | `/fe-web/cases/:componentId`        | GET    | One of the FE's own case components, read-only; 404 for anything else (FE web session required) |
-| `/fe-web/cases/:componentId/evidence` | GET  | Evidence uploaded from the web for that component (FE web session required) |
-| `/admin/cases/:caseId/evidence`     | GET    | Web-uploaded evidence across a case's components, with uploader (admin session required) |
+| `/fe-web/cases/:componentId/evidence` | GET  | That component's evidence — web uploads and mobile captures (with `documentTypeCode`, coordinates, `isMockLocation`, `capturedAt`; null on web uploads), newest first (FE web session required) |
+| `/admin/cases/:caseId/evidence`     | GET    | Evidence across a case's components — web uploads and mobile captures, with uploader (admin session required) |
 | `/fe-web/cases/:componentId/evidence` | POST | Multipart image upload (`files`, JPEG/PNG/WebP, ≤10 files, ≤10 MB each); Pending/Beyond TAT only (FE web session required) |
 | `/fe-web/profile`                   | GET    | The FE's profile + the mobile device their account is bound to, or `null` (FE web session required) |
 | `/fe-web/device-change`             | GET    | Whether the FE can request a device change now, plus their request and phone history (FE web session required) |
@@ -353,7 +354,10 @@ npm run test:web       # client unit tests
 - `/app/*` pages are guarded server-side like `/fe` (anonymous → `/app/login?next=…`), with the same
   portal CSP. `/app` answers `503` until `web-fe` has been built.
 - **Web evidence is an exception to camera-only.** Uploads are stored with `source = 'web_upload'`,
-  have no GPS or watermark, and are type-checked by magic bytes on the server.
+  have no GPS or watermark, and are type-checked by magic bytes on the server. Photos taken with the
+  mobile app's camera are uploaded through `POST /cases/:caseId/evidence` and stored with
+  `source = 'mobile_capture'` plus their capture metadata; the evidence list shows both, marking app
+  captures.
 
 Details: [`docs/field-executive-web-app.md`](docs/field-executive-web-app.md).
 
@@ -362,7 +366,8 @@ Details: [`docs/field-executive-web-app.md`](docs/field-executive-web-app.md).
 [`web-admin/`](web-admin/): the same stack as `web-fe`, next to the static `/admin` portal and using the same
 admin API and `fs_admin_session` cookie. It has the same pages and role rules (Cases and the case editor, Add
 New Case, Field Executive History, Device Change Requests, and for super admins Mobile App Settings and Add
-New Admin). The case editor also lists each component's web-uploaded evidence.
+New Admin). The case editor also lists each component's evidence — web uploads and app captures, with the
+document type and a flag on captures the app reported under a mocked location.
 
 ```bash
 npm run build:admin-web   # build web-admin/ -> served at http://localhost:<PORT>/admin-app

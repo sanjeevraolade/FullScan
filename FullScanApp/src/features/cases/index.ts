@@ -11,6 +11,11 @@ export type {
 export { CaseListCache } from './services/case-list-cache';
 export type { CaseListCacheSnapshot, CaseListTab } from './services/case-list-cache';
 export { useCaseDetails } from './hooks/use-case-details';
-export type { UseCaseDetailsResult, CaseDetailsLoadErrorKey, CaseDetailsSubmitErrorKey } from './hooks/use-case-details';
+export type {
+  UseCaseDetailsResult,
+  CaseDetailsLoadErrorKey,
+  CaseDetailsSubmitErrorKey,
+  EvidenceUploadProgress,
+} from './hooks/use-case-details';
 export { useCaseCamera } from './hooks/use-case-camera';
 export type { UseCaseCameraResult, CaseCameraLocationErrorKey, CaseCameraCaptureErrorKey } from './hooks/use-case-camera';

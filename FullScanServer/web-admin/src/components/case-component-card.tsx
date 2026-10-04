@@ -137,7 +137,7 @@ export function CaseComponentCard({
 
       {component.id && evidence ? (
         <div className="border-t border-slate-200 px-5 py-4 dark:border-slate-800">
-          <h3 className="mb-2 text-sm font-semibold">Web evidence</h3>
+          <h3 className="mb-2 text-sm font-semibold">Evidence</h3>
           <CaseEvidenceList evidence={evidence.filter((item) => item.componentId === component.id)} />
         </div>
       ) : null}

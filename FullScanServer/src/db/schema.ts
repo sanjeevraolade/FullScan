@@ -1,7 +1,7 @@
 import { ObjectId, type CollationOptions, type Db, type Document, type IndexDescription } from 'mongodb';
 import { ADDRESS_TYPES, CASE_BUCKETS, RESIDENCE_TYPES } from '../types/admin-case.types.js';
 import { DEVICE_CHANGE_REQUEST_STATUSES, type DeviceReleaseReason } from '../types/device-change.types.js';
-import type { EvidenceMimeType } from '../types/fe-web-evidence.types.js';
+import { EVIDENCE_SOURCES, type EvidenceMimeType } from '../types/case-evidence.types.js';
 import type { SettingValueType } from '../types/mobile-app-setting.types.js';
 import type { DropdownCategory } from '../types/reference-data.types.js';
 
@@ -71,6 +71,28 @@ const RELEASE_REASONS = ['device_change_approved', 'binding_replaced'] as const 
 
 const EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const satisfies readonly EvidenceMimeType[];
 
+/** Any numeric BSON type — the driver stores a whole-number JS value as an int. */
+const NUMBER_BSON_TYPES = ['int', 'long', 'double', 'decimal'];
+
+/**
+ * `case_evidence` fields only a mobile capture carries: required on `mobile_capture`
+ * rows, absent (or null) on `web_upload` rows.
+ */
+const MOBILE_CAPTURE_FIELD_RULES: Readonly<Record<string, Document>> = {
+  document_type_code: { bsonType: 'string', minLength: 1 },
+  latitude: { bsonType: NUMBER_BSON_TYPES, minimum: -90, maximum: 90 },
+  longitude: { bsonType: NUMBER_BSON_TYPES, minimum: -180, maximum: 180 },
+  accuracy_meters: { bsonType: NUMBER_BSON_TYPES, minimum: 0 },
+  is_mock_location: { bsonType: 'bool' },
+  captured_at: { bsonType: 'string' },
+};
+
+/**
+ * Makes a mobile capture idempotent by content: one `mobile_capture` per component per
+ * SHA-256. The DAO recognises a duplicate-key error on it by this name.
+ */
+export const MOBILE_CAPTURE_SHA256_INDEX = 'component_sha256_mobile_capture_unique';
+
 interface CollectionSpec {
   /**
    * The SQLite primary key column, stored as `_id`. A MongoDB-only collection names
@@ -85,6 +107,11 @@ interface CollectionSpec {
   readonly hasInsertOrder: boolean;
   readonly notNull: readonly string[];
   readonly checks?: Readonly<Record<string, Document>>;
+  /**
+   * Rules that depend on another field's value: a document must match exactly one of
+   * these `$jsonSchema` fragments (`oneOf`), on top of `notNull` and `checks`.
+   */
+  readonly variants?: readonly Document[];
   readonly indexes: readonly IndexDescription[];
 }
 
@@ -274,13 +301,33 @@ export const COLLECTIONS: Readonly<Record<CollectionName, CollectionSpec>> = {
       'uploaded_at',
     ],
     checks: {
-      source: oneOf(['web_upload']),
+      source: oneOf(EVIDENCE_SOURCES),
       mime_type: oneOf(EVIDENCE_MIME_TYPES),
       size_bytes: { bsonType: ['int', 'long', 'double'], minimum: 1 },
     },
+    variants: [
+      // A web upload carries no capture metadata.
+      {
+        properties: {
+          source: oneOf(['web_upload']),
+          ...Object.fromEntries(Object.keys(MOBILE_CAPTURE_FIELD_RULES).map((field) => [field, { bsonType: 'null' }])),
+        },
+      },
+      // A mobile capture is always a JPEG and always carries all of it.
+      {
+        required: Object.keys(MOBILE_CAPTURE_FIELD_RULES),
+        properties: { source: oneOf(['mobile_capture']), mime_type: oneOf(['image/jpeg']), ...MOBILE_CAPTURE_FIELD_RULES },
+      },
+    ],
     indexes: [
       { key: { component_id: 1, uploaded_at: -1 }, name: 'component_uploaded_at' },
       { key: { storage_path: 1 }, name: 'storage_path_unique', unique: true },
+      {
+        key: { component_id: 1, sha256: 1 },
+        name: MOBILE_CAPTURE_SHA256_INDEX,
+        unique: true,
+        partialFilterExpression: { source: 'mobile_capture' },
+      },
     ],
   },
   app_metadata: {
@@ -306,10 +353,21 @@ function buildValidator(spec: CollectionSpec): Document {
     properties[field] = properties[field] ? { allOf: [properties[field], rule] } : rule;
   }
 
-  return { $jsonSchema: { bsonType: 'object', required: [...spec.notNull], properties } };
+  const jsonSchema: Document = { bsonType: 'object', required: [...spec.notNull], properties };
+
+  if (spec.variants) {
+    jsonSchema.oneOf = [...spec.variants];
+  }
+
+  return { $jsonSchema: jsonSchema };
 }
 
-/** Creates missing collections, (re)applies every validator and ensures every index. */
+/**
+ * Creates missing collections, (re)applies every validator and ensures every index.
+ * On an existing database `collMod` replaces each validator (existing documents are
+ * not re-checked) and `createIndexes` adds any index that is new — so a widened rule
+ * or a new index reaches a deployment on its next start, with no migration.
+ */
 export async function applySchema(db: Db): Promise<void> {
   const existing = new Set(
     (await db.listCollections({}, { nameOnly: true }).toArray()).map((collection) => collection.name),

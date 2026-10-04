@@ -271,7 +271,7 @@ on every start.
 | `mock_location_events` | `id` | — | `client_event_id` unique, `(field_executive_id, detected_at)`, `device_id` |
 | `device_change_requests` | `id` | `status` enum | `(field_executive_id, requested_at)`, `(status, requested_at)`, **one pending per executive** (unique, partial `status: 'pending'`) |
 | `field_executive_devices` | `id` | `release_reason` enum or null | `(field_executive_id, created_at)`, **one open binding per executive** (unique, partial `released_at` null), `bound_after_request_id` unique when set |
-| `case_evidence` | `id` | `source`, `mime_type` enums, `size_bytes ≥ 1` | `(component_id, uploaded_at)`, `storage_path` unique |
+| `case_evidence` | `id` | `source` (`web_upload` \| `mobile_capture`), `mime_type` enums, `size_bytes ≥ 1`; capture fields required on `mobile_capture` (JPEG only), absent/null on `web_upload` (`oneOf`) | `(component_id, uploaded_at)`, `storage_path` unique, **one `mobile_capture` per `(component_id, sha256)`** (unique, partial `source: 'mobile_capture'`) |
 | `migrations` | migration name | — | — |
 
 Collections added after the move have no SQLite table behind them. `schema.ts` lists them in

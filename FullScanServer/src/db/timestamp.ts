@@ -4,7 +4,12 @@
  * apps and the mobile app already read that shape, and it sorts correctly as a string,
  * so the documents keep it rather than switching to BSON dates.
  */
-function formatTimestamp(date: Date): string {
+
+/**
+ * `date` in the stored timestamp format — also used to store a client-supplied ISO 8601
+ * time. Sub-second precision is truncated, not rounded.
+ */
+export function formatTimestamp(date: Date): string {
   return date.toISOString().replace('T', ' ').slice(0, 19);
 }
 

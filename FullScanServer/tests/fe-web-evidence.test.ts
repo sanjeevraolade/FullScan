@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { afterAll, describe, expect, it } from 'vitest';
 import request from 'supertest';
+import type { Document } from 'mongodb';
 import {
   app,
   extractSessionCookie,
@@ -11,6 +12,7 @@ import {
   testDbDir,
 } from './helpers/test-app.js';
 import { MAX_EVIDENCE_FILE_BYTES, MAX_EVIDENCE_FILES } from '../src/middleware/evidence-upload.js';
+import { signInMobile, uploadMobileCapture } from './helpers/mobile-capture.js';
 
 const JPEG = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 const PNG = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0x00, 0x00]);
@@ -22,7 +24,18 @@ interface EvidenceEntry {
   readonly mimeType: string;
   readonly sizeBytes: number;
   readonly source: string;
+  readonly [field: string]: unknown;
 }
+
+/** Every list item carries these; web uploads have them all null. */
+const NULL_CAPTURE_FIELDS = {
+  documentTypeCode: null,
+  latitude: null,
+  longitude: null,
+  accuracyMeters: null,
+  isMockLocation: null,
+  capturedAt: null,
+};
 
 afterAll(async () => {
   await removeTestDb();
@@ -36,7 +49,7 @@ async function signIn(account = SEEDED_FIELD_EXECUTIVE): Promise<string> {
   return extractSessionCookie(response.headers['set-cookie'], 'fs_fe_session');
 }
 
-async function findComponentId(filter: Record<string, string>): Promise<string> {
+async function findComponentId(filter: Document): Promise<string> {
   const row = await getCollection('case_components').findOne(filter, { projection: { _id: 1 } });
 
   if (!row) {
@@ -83,6 +96,9 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
     expect(evidence.map((entry) => entry.fileName).sort()).toEqual(['door.jpg', 'nameplate.png', 'street.webp']);
     expect(evidence.map((entry) => entry.mimeType).sort()).toEqual(['image/jpeg', 'image/png', 'image/webp']);
     expect(evidence.every((entry) => entry.source === 'web_upload')).toBe(true);
+    for (const entry of evidence) {
+      expect(entry).toMatchObject(NULL_CAPTURE_FIELDS);
+    }
     expect(await countEvidenceRows(componentId)).toBe(3);
     expect(listStoredFiles(componentId)).toHaveLength(3);
     expect(JSON.stringify(response.body)).not.toContain('storage');
@@ -185,5 +201,43 @@ describe('POST /api/v1/fe-web/cases/:componentId/evidence', () => {
     expect((await tooMany).status).toBe(400);
 
     expect(await countEvidenceRows(componentId)).toBe(before);
+  });
+});
+
+describe('GET /api/v1/fe-web/cases/:componentId/evidence', () => {
+  it('lists mobile captures alongside web uploads, newest first, with the capture fields', async () => {
+    const cookie = await signIn();
+    const componentId = await findComponentId({
+      assigned_field_executive_id: 'fe-001',
+      bucket: 'pending',
+      _id: { $ne: await findComponentId({ assigned_field_executive_id: 'fe-001', bucket: 'pending' }) },
+    });
+
+    const capture = await uploadMobileCapture(await signInMobile(), componentId);
+    expect(capture.status).toBe(201);
+    const web = await request(app)
+      .post(`/api/v1/fe-web/cases/${componentId}/evidence`)
+      .set('Cookie', cookie)
+      .attach('files', JPEG, 'door.jpg');
+    expect(web.status).toBe(201);
+
+    const listed = await request(app).get(`/api/v1/fe-web/cases/${componentId}/evidence`).set('Cookie', cookie);
+
+    expect(listed.status).toBe(200);
+    const evidence = listed.body.data.evidence as EvidenceEntry[];
+    expect(evidence).toHaveLength(2);
+    // Newest first: the web upload came second (same second → insert order).
+    expect(evidence[0]).toMatchObject({ source: 'web_upload', fileName: 'door.jpg', ...NULL_CAPTURE_FIELDS });
+    expect(evidence[1]).toEqual(capture.body.data);
+    expect(evidence[1]).toMatchObject({
+      source: 'mobile_capture',
+      documentTypeCode: 'house_photo_1',
+      latitude: 17.4935,
+      longitude: 78.3129,
+      accuracyMeters: 8.5,
+      isMockLocation: false,
+      capturedAt: '2026-10-04 09:15:02',
+    });
+    expect(JSON.stringify(listed.body)).not.toContain('storage');
   });
 });

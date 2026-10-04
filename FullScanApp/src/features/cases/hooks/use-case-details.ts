@@ -9,7 +9,13 @@ import {
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
 } from '@/domain/case';
-import type { AddressType, CaseDetail, ResidenceType } from '@/domain/case';
+import type {
+  AddressType,
+  CaseDetail,
+  ResidenceType,
+  VerificationOutcomeSubmission,
+} from '@/domain/case';
+import { isCaseEvidenceUploadError } from '@/repositories/case-evidence-repository.errors';
 import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import { useReferenceDataStore } from '@/store/reference-data';
 import { useLocationStore } from '@/store/location';
@@ -22,7 +28,11 @@ import {
 import { useCaseGeoFence } from './use-case-geo-fence';
 import type { UseCaseGeoFenceResult } from './use-case-geo-fence';
 import { CaseListCache } from '../services/case-list-cache';
+import { uploadPendingCaseEvidence } from '../services/case-evidence-uploader';
+import type { EvidenceUploadProgress } from '../services/case-evidence-uploader';
 import { DraftStorageService } from '../services/draft-storage';
+import { EvidenceReceiptStorageService } from '../services/evidence-receipt-storage';
+import { toCapturedPhotoEvidence } from '../utils/captured-photo-serialization';
 
 const FILE_NAME = 'use-case-details.ts';
 
@@ -90,7 +100,29 @@ function buildCapturedPhotoKey(capturedPhotos: readonly SerializedCapturedPhotoE
 }
 
 export type CaseDetailsLoadErrorKey = 'network';
-export type CaseDetailsSubmitErrorKey = 'network';
+/**
+ * Why the last Accept/Submit failed. `network` — the accept or outcome request
+ * itself failed. `evidenceCaseClosed` — the server refused a photo because
+ * the case is closed to new evidence. `evidenceUploadFailed` — any other photo
+ * upload failure (network, timeout, unreadable local file, other statuses).
+ * Either evidence error means the outcome was never sent.
+ */
+export type CaseDetailsSubmitErrorKey = 'network' | 'evidenceCaseClosed' | 'evidenceUploadFailed';
+export type { EvidenceUploadProgress } from '../services/case-evidence-uploader';
+
+/** Maps an evidence-upload failure to the submit error the screen shows. */
+function resolveEvidenceUploadErrorKey(error: unknown): CaseDetailsSubmitErrorKey {
+  const errorKey: CaseDetailsSubmitErrorKey =
+    isCaseEvidenceUploadError(error) && error.reason === 'caseClosed'
+      ? 'evidenceCaseClosed'
+      : 'evidenceUploadFailed';
+  LoggerService.warn(`${FILE_NAME}: resolveEvidenceUploadErrorKey: mapped upload failure`, {
+    reason: isCaseEvidenceUploadError(error) ? error.reason : 'unknown',
+    status: isCaseEvidenceUploadError(error) ? error.status : null,
+    errorKey,
+  });
+  return errorKey;
+}
 
 export interface UseCaseDetailsResult {
   readonly caseDetail: CaseDetail | null;
@@ -158,7 +190,16 @@ export interface UseCaseDetailsResult {
   readonly selectPhotoTag: (tag: string) => void;
 
   readonly isSubmitting: boolean;
+  /**
+   * How far Submit has got uploading the captured photos, or null when no
+   * upload is in progress (including while the outcome itself is being sent).
+   */
+  readonly evidenceUploadProgress: EvidenceUploadProgress | null;
   readonly submitError: CaseDetailsSubmitErrorKey | null;
+  /**
+   * Uploads every captured photo the server doesn't hold yet, then — only if
+   * all of them made it — submits the verification outcome.
+   */
   readonly submit: (onSubmitted: () => void) => void;
 }
 
@@ -195,6 +236,9 @@ export function useCaseDetails(
   const [selectedPhotoTag, setSelectedPhotoTag] = useState('');
 
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [evidenceUploadProgress, setEvidenceUploadProgress] = useState<EvidenceUploadProgress | null>(
+    null,
+  );
   const [submitError, setSubmitError] = useState<CaseDetailsSubmitErrorKey | null>(null);
 
   const [hasDraft, setHasDraft] = useState(false);
@@ -574,7 +618,11 @@ export function useCaseDetails(
         LoggerService.warn(`${FILE_NAME}: submit: refused — case is read-only`, { caseId });
         return;
       }
-      LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, { caseId, verificationStatus });
+      LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, {
+        caseId,
+        verificationStatus,
+        capturedPhotoCount: capturedPhotos.length,
+      });
       setIsSubmitting(true);
       setSubmitError(null);
       // The tab the case is listed under — captured now, before anything reloads the detail.
@@ -621,7 +669,7 @@ export function useCaseDetails(
         forceProceed: geoFence.bypassConsent !== null,
       });
 
-      submitVerificationOutcome(caseId, {
+      const outcome: VerificationOutcomeSubmission = {
         verificationStatus,
         utvReason: isUtvSectionVisible ? utvReason || null : null,
         utvRemarks: isUtvSectionVisible ? utvRemarks || null : null,
@@ -641,8 +689,38 @@ export function useCaseDetails(
         currentLongitude: currentLocation?.longitude ?? null,
         distanceToCaseMeters: geoFence.distanceMeters,
         forceProceed: geoFence.bypassConsent !== null,
-      })
-        .then(() => {
+      };
+
+      const uploadEvidenceThenSubmitOutcome = async (): Promise<void> => {
+        LoggerService.info(`${FILE_NAME}: submit: uploading captured evidence before the outcome`, {
+          caseId,
+          capturedPhotoCount: capturedPhotos.length,
+        });
+        /*
+         * Every photo must be on the server before the outcome is sent: a
+         * submitted case is closed to new evidence, so an outcome that went
+         * ahead of its photos could never be completed.
+         */
+        try {
+          await uploadPendingCaseEvidence(
+            caseId,
+            capturedPhotos.map(toCapturedPhotoEvidence),
+            setEvidenceUploadProgress,
+          );
+        } catch (error: unknown) {
+          const errorKey = resolveEvidenceUploadErrorKey(error);
+          LoggerService.error(`${FILE_NAME}: submit: evidence upload failed — outcome not sent`, {
+            caseId,
+            errorKey,
+          });
+          setSubmitError(errorKey);
+          return;
+        } finally {
+          setEvidenceUploadProgress(null);
+        }
+
+        try {
+          await submitVerificationOutcome(caseId, outcome);
           LoggerService.info(`${FILE_NAME}: submit: outcome submitted`, { caseId });
           if (submittedFromBucket === null) {
             LoggerService.warn(
@@ -657,28 +735,34 @@ export function useCaseDetails(
             );
           }
           DraftStorageService.deleteDraft(caseId);
+          // The receipts only existed to make a retry resumable; the case is done.
+          EvidenceReceiptStorageService.clearReceipts(caseId);
           setBaselineSnapshot(currentFormSnapshot);
           setBaselinePhotoKey(capturedPhotoKey);
-          LoggerService.info(`${FILE_NAME}: submit: draft cleared after successful submission`, {
-            caseId,
-          });
+          LoggerService.info(
+            `${FILE_NAME}: submit: draft and upload receipts cleared after successful submission`,
+            { caseId },
+          );
           onSubmitted();
-        })
-        .catch((error: unknown) => {
+        } catch (error: unknown) {
+          // Upload receipts stay: a retry goes straight back to the outcome.
           LoggerService.error(`${FILE_NAME}: submit: failed`, {
             caseId,
             reason: error instanceof Error ? error.message : 'unknown error',
           });
           setSubmitError('network');
-        })
-        .finally(() => {
-          LoggerService.info(`${FILE_NAME}: submit: request settled`, { caseId });
-          setIsSubmitting(false);
-        });
+        }
+      };
+
+      void uploadEvidenceThenSubmitOutcome().finally(() => {
+        LoggerService.info(`${FILE_NAME}: submit: request settled`, { caseId });
+        setIsSubmitting(false);
+      });
     },
     [
       addressType,
       capturedPhotoKey,
+      capturedPhotos,
       caseDetail?.bucket,
       caseId,
       currentFormSnapshot,
@@ -769,6 +853,8 @@ export function useCaseDetails(
     isSignatureCaptured,
     selectedPhotoTag,
     isSubmitting,
+    evidenceUploadedCount: evidenceUploadProgress?.uploadedCount ?? null,
+    evidenceTotalCount: evidenceUploadProgress?.totalCount ?? null,
     hasSubmitError: submitError !== null,
     hasDraft,
     hasUnsavedChanges,
@@ -815,6 +901,7 @@ export function useCaseDetails(
     selectPhotoTag,
 
     isSubmitting,
+    evidenceUploadProgress,
     submitError,
     submit,
 

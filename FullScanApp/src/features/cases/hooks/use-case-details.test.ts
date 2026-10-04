@@ -1,17 +1,22 @@
 import { act, renderHook, waitFor } from '@testing-library/react-native';
 
 import * as caseRepository from '@/repositories/case-repository';
+import * as caseEvidenceRepository from '@/repositories/case-evidence-repository';
+import { CaseEvidenceUploadError } from '@/repositories/case-evidence-repository.errors';
+import type { CaseEvidenceUploadFailureReason } from '@/repositories/case-evidence-repository.errors';
 import { useReferenceDataStore } from '@/store/reference-data';
-import type { Case, CaseDetail } from '@/domain/case';
+import type { Case, CaseDetail, UploadedCaseEvidence } from '@/domain/case';
 import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import type { ReferenceData } from '@/domain/reference-data';
 
 import { CaseListCache } from '../services/case-list-cache';
 import { DraftStorageService } from '../services/draft-storage';
 import type { CaseDraft } from '../services/draft-storage';
+import { EvidenceReceiptStorageService } from '../services/evidence-receipt-storage';
 import { useCaseDetails } from './use-case-details';
 
 jest.mock('@/repositories/case-repository');
+jest.mock('@/repositories/case-evidence-repository');
 
 /** A case with no evidence captured this session — a stable reference so the hook does not re-render on it. */
 const NO_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
@@ -563,6 +568,322 @@ describe('useCaseDetails', () => {
       expect(readTabIds('pending')).toEqual(['case-3']);
       expect(readTabIds('completed')).toEqual(['case-5']);
       expect(CaseListCache.getSnapshot().counts?.completed).toBe(4);
+    });
+  });
+
+  describe('evidence upload on submit', () => {
+    const HOUSE_PHOTO: SerializedCapturedPhotoEvidence = {
+      filePath: '/data/user/0/com.fullscan/cache/house-photo.jpg',
+      latitude: 17.4461,
+      longitude: 78.3821,
+      accuracyMeters: 6,
+      isMockLocation: false,
+      capturedAtIso: '2026-10-04T09:15:02.123Z',
+      documentTypeCode: 'house_photo_1',
+    };
+    const DOOR_PHOTO: SerializedCapturedPhotoEvidence = {
+      filePath: '/data/user/0/com.fullscan/cache/door-number.jpg',
+      latitude: 17.4462,
+      longitude: 78.3822,
+      accuracyMeters: 7,
+      isMockLocation: false,
+      capturedAtIso: '2026-10-04T09:16:40.000Z',
+      documentTypeCode: 'door_number',
+    };
+    /** Capture order: house first. A stable reference so the hook does not re-render on it. */
+    const TWO_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [HOUSE_PHOTO, DOOR_PHOTO];
+
+    function buildUploadedEvidence(id: string, documentTypeCode: string): UploadedCaseEvidence {
+      return {
+        id,
+        caseId: 'case-1',
+        fileName: `${documentTypeCode}-1791105302123.jpg`,
+        mimeType: 'image/jpeg',
+        sizeBytes: 482113,
+        sha256: `sha-${id}`,
+        documentTypeCode,
+        latitude: 17.4461,
+        longitude: 78.3821,
+        accuracyMeters: 6,
+        isMockLocation: false,
+        capturedAt: new Date('2026-10-04T09:15:02.000Z'),
+        uploadedAt: new Date('2026-10-04T09:20:11.000Z'),
+        wasAlreadyUploaded: false,
+      };
+    }
+
+    function createDeferred<TValue>(): {
+      readonly promise: Promise<TValue>;
+      readonly resolve: (value: TValue) => void;
+    } {
+      let resolvePromise: (value: TValue) => void = () => undefined;
+      const promise = new Promise<TValue>((resolve) => {
+        resolvePromise = resolve;
+      });
+      return { promise, resolve: (value) => resolvePromise(value) };
+    }
+
+    function uploadedDocumentTypeCodes(): string[] {
+      return jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mock.calls.map(([, photo]) => photo.documentTypeCode);
+    }
+
+    async function renderLoadedCase(photos: readonly SerializedCapturedPhotoEvidence[]) {
+      const rendered = await renderHook(() => useCaseDetails('case-1', photos));
+      await waitFor(() => expect(rendered.result.current.isLoading).toBe(false));
+      return rendered;
+    }
+
+    beforeEach(() => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+      jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockImplementation(async (_caseId, photo) =>
+          buildUploadedEvidence(`evidence-${photo.documentTypeCode}`, photo.documentTypeCode),
+        );
+    });
+
+    afterEach(() => {
+      EvidenceReceiptStorageService.clearReceipts('case-1');
+      DraftStorageService.deleteDraft('case-1');
+    });
+
+    it('uploads every captured photo, in capture order, before sending the outcome', async () => {
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      const uploadMock = jest.mocked(caseEvidenceRepository.uploadCaseEvidence).mock;
+      expect(uploadMock.calls.map(([caseId]) => caseId)).toEqual(['case-1', 'case-1']);
+      expect(uploadedDocumentTypeCodes()).toEqual(['house_photo_1', 'door_number']);
+      // The repository gets the domain shape, capture time rehydrated as a Date.
+      expect(uploadMock.calls[0]?.[1]).toEqual({
+        filePath: HOUSE_PHOTO.filePath,
+        latitude: HOUSE_PHOTO.latitude,
+        longitude: HOUSE_PHOTO.longitude,
+        accuracyMeters: HOUSE_PHOTO.accuracyMeters,
+        isMockLocation: false,
+        capturedAt: new Date(HOUSE_PHOTO.capturedAtIso),
+        documentTypeCode: 'house_photo_1',
+      });
+      const [outcomeCallOrder] = jest.mocked(caseRepository.submitVerificationOutcome).mock
+        .invocationCallOrder;
+      expect(outcomeCallOrder).toBeGreaterThan(Math.max(...uploadMock.invocationCallOrder));
+    });
+
+    it('skips photos that already have an upload receipt', async () => {
+      EvidenceReceiptStorageService.markUploaded('case-1', HOUSE_PHOTO.filePath, 'evidence-earlier');
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(uploadedDocumentTypeCodes()).toEqual(['door_number']);
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1);
+    });
+
+    it('goes straight to the outcome when no photos were captured', async () => {
+      const { result } = await renderLoadedCase(NO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1);
+      expect(result.current.evidenceUploadProgress).toBeNull();
+    });
+
+    it('exposes upload progress while photos upload, and clears it before the outcome', async () => {
+      const firstUpload = createDeferred<UploadedCaseEvidence>();
+      const secondUpload = createDeferred<UploadedCaseEvidence>();
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockReturnValueOnce(firstUpload.promise)
+        .mockReturnValueOnce(secondUpload.promise);
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() =>
+        expect(result.current.evidenceUploadProgress).toEqual({ uploadedCount: 0, totalCount: 2 }),
+      );
+      expect(result.current.isSubmitting).toBe(true);
+
+      await act(async () => {
+        firstUpload.resolve(buildUploadedEvidence('evidence-1', 'house_photo_1'));
+      });
+      await waitFor(() =>
+        expect(result.current.evidenceUploadProgress).toEqual({ uploadedCount: 1, totalCount: 2 }),
+      );
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+
+      await act(async () => {
+        secondUpload.resolve(buildUploadedEvidence('evidence-2', 'door_number'));
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+      expect(result.current.evidenceUploadProgress).toBeNull();
+      expect(result.current.isSubmitting).toBe(false);
+    });
+
+    it('clears the case’s upload receipts once the outcome is accepted', async () => {
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(EvidenceReceiptStorageService.getReceipts('case-1')).toEqual({});
+    });
+
+    it('keeps the receipts when the outcome fails, so the retry re-sends only the outcome', async () => {
+      jest
+        .mocked(caseRepository.submitVerificationOutcome)
+        .mockRejectedValueOnce(new Error('offline'))
+        .mockResolvedValueOnce(buildCase());
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('network'));
+
+      expect(onSubmitted).not.toHaveBeenCalled();
+      expect(EvidenceReceiptStorageService.getReceipts('case-1')).toEqual({
+        [HOUSE_PHOTO.filePath]: 'evidence-house_photo_1',
+        [DOOR_PHOTO.filePath]: 'evidence-door_number',
+      });
+
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(caseEvidenceRepository.uploadCaseEvidence).toHaveBeenCalledTimes(2);
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(2);
+      expect(result.current.submitError).toBeNull();
+    });
+
+    it('stops before the outcome and reports evidenceCaseClosed when the server answers 409', async () => {
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockRejectedValueOnce(new CaseEvidenceUploadError('caseClosed', 409));
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('evidenceCaseClosed'));
+
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+      expect(onSubmitted).not.toHaveBeenCalled();
+      expect(uploadedDocumentTypeCodes()).toEqual(['house_photo_1']);
+      expect(result.current.isSubmitting).toBe(false);
+      expect(result.current.evidenceUploadProgress).toBeNull();
+    });
+
+    it.each<[CaseEvidenceUploadFailureReason, number | null]>([
+      ['rejected', 500],
+      ['rejected', 404],
+      ['network', null],
+      ['timeout', null],
+      ['invalidResponse', 201],
+      ['invalidPhoto', null],
+      ['unexpected', null],
+    ])(
+      'stops before the outcome and reports evidenceUploadFailed for %s (%s)',
+      async (reason, status) => {
+        jest
+          .mocked(caseEvidenceRepository.uploadCaseEvidence)
+          .mockRejectedValueOnce(new CaseEvidenceUploadError(reason, status));
+        const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+        const onSubmitted = jest.fn();
+        await act(async () => {
+          result.current.submit(onSubmitted);
+        });
+        await waitFor(() => expect(result.current.submitError).toBe('evidenceUploadFailed'));
+
+        expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+        expect(onSubmitted).not.toHaveBeenCalled();
+      },
+    );
+
+    it('reports evidenceUploadFailed for a failure that is not a typed upload error', async () => {
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockRejectedValueOnce(new Error('something else'));
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('evidenceUploadFailed'));
+
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    });
+
+    it('keeps the receipts of photos uploaded before a failure, and the retry resumes after them', async () => {
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockResolvedValueOnce(buildUploadedEvidence('evidence-1', 'house_photo_1'))
+        .mockRejectedValueOnce(new CaseEvidenceUploadError('network'));
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('evidenceUploadFailed'));
+
+      expect(EvidenceReceiptStorageService.getReceipts('case-1')).toEqual({
+        [HOUSE_PHOTO.filePath]: 'evidence-1',
+      });
+      expect(DraftStorageService.hasDraft('case-1')).toBe(false);
+
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      // house, door (failed), door (retried) — the house photo is never re-sent.
+      expect(uploadedDocumentTypeCodes()).toEqual(['house_photo_1', 'door_number', 'door_number']);
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1);
+      expect(EvidenceReceiptStorageService.getReceipts('case-1')).toEqual({});
+    });
+
+    it('keeps a saved draft when the evidence upload fails', async () => {
+      jest
+        .mocked(caseEvidenceRepository.uploadCaseEvidence)
+        .mockRejectedValueOnce(new CaseEvidenceUploadError('timeout'));
+      const { result } = await renderLoadedCase(TWO_PHOTOS);
+      await act(async () => {
+        result.current.saveDraft();
+      });
+
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('evidenceUploadFailed'));
+
+      expect(DraftStorageService.loadDraft('case-1')?.capturedPhotos).toHaveLength(2);
     });
   });
 });

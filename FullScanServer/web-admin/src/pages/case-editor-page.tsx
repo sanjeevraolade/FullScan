@@ -113,7 +113,7 @@ export function CaseEditorPage({ mode }: CaseEditorPageProps) {
   });
   const evidenceResource = useApiResource((signal) => casesApi.fetchCaseEvidence(caseId, signal), [caseId], {
     isEnabled: !isCreate && caseId !== '',
-    fallbackError: 'Could not load web evidence.',
+    fallbackError: 'Could not load evidence.',
   });
 
   const applyLoadedCase = useCallback((detail: AdminCaseDetail): void => {

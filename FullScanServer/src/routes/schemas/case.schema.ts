@@ -69,3 +69,52 @@ export const submitVerificationOutcomeSchema = z.object({
   }),
   query: z.object({}).strict().optional(),
 });
+
+/* ------------------------------------------------ POST /cases/:caseId/evidence */
+
+/** A decimal number as multipart text: optional sign, digits, optional fraction and exponent. */
+const DECIMAL_TEXT = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
+
+function decimalText(label: string, range: z.ZodNumber) {
+  return z
+    .string()
+    .regex(DECIMAL_TEXT, `${label} must be a decimal number`)
+    .transform(Number)
+    .pipe(range);
+}
+
+/**
+ * The text parts of a mobile capture upload. Multipart text is always a string, so
+ * numbers and booleans are parsed here. Exported on its own so the controller can read
+ * the typed, converted values back: `validate()` checks the request but does not write
+ * parsed values to `req.body`.
+ */
+export const mobileEvidenceBodySchema = z
+  .object({
+    documentTypeCode: z.string().min(1).max(100),
+    latitude: decimalText('latitude', z.number().finite().min(-90).max(90)),
+    longitude: decimalText('longitude', z.number().finite().min(-180).max(180)),
+    accuracyMeters: decimalText('accuracyMeters', z.number().finite().min(0)),
+    capturedAt: z.string().datetime({ offset: true, message: 'capturedAt must be an ISO 8601 datetime with an offset or Z' }),
+    isMockLocation: z
+      .enum(['true', 'false'], { message: 'isMockLocation must be "true" or "false"' })
+      .transform((value) => value === 'true'),
+  })
+  .strict();
+
+const caseEvidenceParams = z.object({
+  caseId: z.string().min(1).max(100),
+});
+
+/** Checked before the multipart body is read: just the target and the query. */
+export const uploadCaseEvidenceTargetSchema = z.object({
+  params: caseEvidenceParams,
+  query: z.object({}).strict().optional(),
+});
+
+/** Checked after `parseMobileEvidenceUpload` has put the text parts on `req.body`. */
+export const uploadCaseEvidenceSchema = z.object({
+  params: caseEvidenceParams,
+  body: mobileEvidenceBodySchema,
+  query: z.object({}).strict().optional(),
+});

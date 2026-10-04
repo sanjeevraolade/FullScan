@@ -257,7 +257,8 @@ async function getCurrentLocation(options: CurrentLocationOptions = {}): Promise
   return new Promise<DeviceLocation>((resolve, reject) => {
     Geolocation.getCurrentPosition(
       (position) => {
-        const location = toDeviceLocation(position);
+        let location = toDeviceLocation(position);
+        // location = { ...location, isMockLocation: true };
         // Coordinates themselves are business evidence — log only metadata.
         LoggerService.info(`${FILE_NAME}: getCurrentLocation: fix obtained`, {
           accuracyMeters: location.accuracyMeters,

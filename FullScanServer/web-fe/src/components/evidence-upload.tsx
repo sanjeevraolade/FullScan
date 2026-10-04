@@ -9,6 +9,7 @@ import { formatBytes, formatUtcTimestamp } from '../utils/format';
 import { validateEvidenceSelection } from '../utils/validation';
 import { Alert } from './alert';
 import { Spinner } from './spinner';
+import { StatusLabel } from './status-badge';
 
 interface EvidenceUploadProps {
   /** The assignment (case component) every upload from this panel is stored against. */
@@ -261,8 +262,12 @@ export function EvidenceUpload({ componentId, canUpload }: EvidenceUploadProps) 
           <ul className="mt-2 divide-y divide-slate-200 dark:divide-slate-800">
             {evidence.items.map((item) => (
               <li key={item.id} className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 py-2.5 text-sm">
-                <span className="min-w-0 truncate font-medium">{item.fileName}</span>
+                <span className="flex min-w-0 items-center gap-2">
+                  <span className="min-w-0 truncate font-medium">{item.fileName}</span>
+                  {item.source === 'mobile_capture' ? <StatusLabel label="App capture" /> : null}
+                </span>
                 <span className="text-slate-500 dark:text-slate-400">
+                  {item.documentTypeCode ? `${item.documentTypeCode} · ` : null}
                   {formatBytes(item.sizeBytes)} ·{' '}
                   <time dateTime={item.uploadedAt}>{formatUtcTimestamp(item.uploadedAt)}</time>
                 </span>

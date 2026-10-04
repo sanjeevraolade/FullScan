@@ -532,6 +532,69 @@ curl -s -X POST "$BASE/security/mock-location" \
 
 Errors: `404 No field executive session found`.
 
+### 1.14 `POST /cases/:caseId/evidence` — upload one camera photo (multipart)
+
+Bearer. `:caseId` is a **component** id assigned to you, in Pending or Beyond TAT. One photo per request,
+JPEG only (checked against the file's real bytes), ≤ 10 MB, in the part `file`. Idempotent by the
+photo's SHA-256: the same bytes again for the same component return the existing record with `200`.
+Contract: `docs/api-contracts/mobile-evidence-upload.md` (monorepo root).
+
+```bash
+curl -s -X POST "$BASE/cases/case-0123-comp-1/evidence" \
+  -H "Authorization: Bearer $TOKEN" \
+  -F "file=@./house_photo_1-1791105302123.jpg;type=image/jpeg" \
+  -F "documentTypeCode=house_photo_1" \
+  -F "latitude=17.4935" \
+  -F "longitude=78.3129" \
+  -F "accuracyMeters=8.5" \
+  -F "capturedAt=2026-10-04T09:15:02.123Z" \
+  -F "isMockLocation=false"
+```
+
+| Part               | Rules                                                                    |
+| ------------------ | ------------------------------------------------------------------------ |
+| `file`             | exactly one; JPEG; ≤ 10 MB; its name is kept as a sanitized display name  |
+| `documentTypeCode` | **required**, a `photo_type` master-data code                             |
+| `latitude`         | **required**, decimal −90..90                                             |
+| `longitude`        | **required**, decimal −180..180                                           |
+| `accuracyMeters`   | **required**, decimal ≥ 0                                                 |
+| `capturedAt`       | **required**, ISO 8601 with offset or `Z` (device clock, not checked against server time) |
+| `isMockLocation`   | **required**, `true` \| `false` — `true` is accepted and recorded         |
+
+No other parts are accepted.
+
+`201` (new) / `200` (same bytes already recorded — first write wins, this request's metadata is ignored):
+
+```json
+{
+  "success": true,
+  "data": {
+    "id": "3f1c9a52-6a0e-4a8e-9d55-0c3a3a5f2b11",
+    "componentId": "case-0123-comp-1",
+    "source": "mobile_capture",
+    "fileName": "house_photo_1-1791105302123.jpg",
+    "mimeType": "image/jpeg",
+    "sizeBytes": 482113,
+    "sha256": "9b0f…e41a",
+    "documentTypeCode": "house_photo_1",
+    "latitude": 17.4935,
+    "longitude": 78.3129,
+    "accuracyMeters": 8.5,
+    "isMockLocation": false,
+    "capturedAt": "2026-10-04 09:15:02",
+    "uploadedAt": "2026-10-04 09:20:11"
+  }
+}
+```
+
+Errors: `400 Validation failed` (missing/invalid/unknown text part, with `details`) ·
+`400 Unknown documentTypeCode` · `400 Attach the photo in the "file" part` ·
+`400 Send exactly one photo per request` · `400 The photo must be sent in the "file" part` ·
+`400 Too many form fields` · `400 Form field too long` · `400 Invalid upload` ·
+`404 Case not found` (unknown, or not assigned to you) · `409 Accept the case before adding evidence` (New) ·
+`409 Evidence can no longer be added to a completed case` · `413 The photo must be 10 MB or smaller` ·
+`415 Upload evidence as multipart/form-data` · `415 The photo must be a JPEG image`.
+
 ---
 
 ## 2. Admin API
@@ -849,7 +912,10 @@ curl -s "$BASE/admin/cases/case-0123" -H "Authorization: Bearer $ADMIN_TOKEN"
 
 Errors: `404 Case not found: <caseId>`.
 
-### 2.10 `GET /admin/cases/:caseId/evidence` — web-uploaded evidence for the case
+### 2.10 `GET /admin/cases/:caseId/evidence` — evidence for the case (web uploads and app captures)
+
+Newest first. Web uploads have `source: "web_upload"` and null capture fields; photos from the app have
+`source: "mobile_capture"` and the capture fields set (see 1.14).
 
 ```bash
 curl -s "$BASE/admin/cases/case-0123/evidence" -H "Authorization: Bearer $ADMIN_TOKEN"
@@ -871,7 +937,13 @@ curl -s "$BASE/admin/cases/case-0123/evidence" -H "Authorization: Bearer $ADMIN_
         "mimeType": "image/jpeg",
         "sizeBytes": 482113,
         "sha256": "e3b0c44298fc1c149afbf4c8996fb924…",
-        "uploadedAt": "2026-10-04T08:12:00.000Z",
+        "documentTypeCode": null,
+        "latitude": null,
+        "longitude": null,
+        "accuracyMeters": null,
+        "isMockLocation": null,
+        "capturedAt": null,
+        "uploadedAt": "2026-10-04 08:12:00",
         "uploadedBy": { "id": "fe-001", "name": "Amit Verma", "username": "fe001" }
       }
     ]
@@ -1335,6 +1407,9 @@ Errors: `404 Case not found` (also for components assigned to someone else, or i
 
 ### 3.6 `GET /fe-web/cases/:componentId/evidence`
 
+Newest first; includes photos captured in the app (`source: "mobile_capture"`, capture fields set — see 1.14).
+Web uploads carry null capture fields.
+
 ```bash
 curl -s "$BASE/fe-web/cases/case-0123-comp-1/evidence" -b fe.cookies
 ```
@@ -1355,7 +1430,13 @@ curl -s "$BASE/fe-web/cases/case-0123-comp-1/evidence" -b fe.cookies
         "mimeType": "image/jpeg",
         "sizeBytes": 482113,
         "sha256": "e3b0c44298fc1c149afbf4c8996fb924…",
-        "uploadedAt": "2026-10-04T08:12:00.000Z"
+        "documentTypeCode": null,
+        "latitude": null,
+        "longitude": null,
+        "accuracyMeters": null,
+        "isMockLocation": null,
+        "capturedAt": null,
+        "uploadedAt": "2026-10-04 08:12:00"
       }
     ]
   }

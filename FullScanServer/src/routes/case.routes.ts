@@ -1,12 +1,15 @@
 import { Router } from 'express';
 import * as controller from '../controllers/case.controller.js';
 import { validate } from '../middleware/validate.js';
+import { parseMobileEvidenceUpload } from '../middleware/evidence-upload.js';
 import {
   acceptCaseSchema,
   getCaseCountsSchema,
   getCaseDetailSchema,
   listCasesSchema,
   submitVerificationOutcomeSchema,
+  uploadCaseEvidenceSchema,
+  uploadCaseEvidenceTargetSchema,
 } from './schemas/case.schema.js';
 
 export const caseRoutes = Router();
@@ -30,4 +33,15 @@ caseRoutes.post(
   '/:caseId/verification-outcome',
   validate(submitVerificationOutcomeSchema),
   controller.submitVerificationOutcome,
+);
+
+// POST /api/v1/cases/:caseId/evidence — one camera photo (multipart `file` + capture metadata).
+// The text parts only exist on req.body once the multipart parser has run, so the body
+// is validated after it. 201 new / 200 same bytes already recorded.
+caseRoutes.post(
+  '/:caseId/evidence',
+  validate(uploadCaseEvidenceTargetSchema),
+  parseMobileEvidenceUpload,
+  validate(uploadCaseEvidenceSchema),
+  controller.uploadCaseEvidence,
 );

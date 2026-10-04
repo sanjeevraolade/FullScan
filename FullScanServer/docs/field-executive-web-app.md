@@ -43,7 +43,7 @@ Routes (basename `/app`): `/login`, `/` (dashboard), `/assignments` (`?bucket=pe
 | `src/routes/fe-web-app.routes.ts`           | Serves `web-fe/dist` at `/app`. `/app/login` is open (a signed-in FE is sent to `/app`), `/app/assets` is served with immutable caching, and every other path is guarded and gets the `no-store` shell. `503` if the app is not built. `FE_WEB_APP_DIR` overrides the build directory |
 | `src/middleware/authenticate-fe-web.ts`     | `createFeWebPageGuard(loginPath)`. `authenticateFeWebPage` is now built from it; behaviour unchanged |
 | `GET /api/v1/fe-web/cases/:componentId`     | Read-only detail of one of the FE's **own** components in Pending, Beyond TAT or Completed. Another FE's component, an unclaimed New component and an unknown id all get the same `404`. No phones, GPS targets, respondent or detection data. Sibling components carry `isAssignedToYou` |
-| `GET  /api/v1/fe-web/cases/:componentId/evidence` | That component's web evidence, newest first                                      |
+| `GET  /api/v1/fe-web/cases/:componentId/evidence` | That component's evidence (web uploads and mobile captures), newest first        |
 | `POST /api/v1/fe-web/cases/:componentId/evidence` | Multipart upload, see §4                                                          |
 | `src/db/migrations/022_create_case_evidence.sql` | `case_evidence` table (metadata only; append-only)                               |
 
@@ -52,8 +52,10 @@ Routes (basename `/app`): `/login`, `/` (dashboard), `/assignments` (`?bucket=pe
 The mobile rule is camera-only evidence with GPS, timestamp and watermark. A browser cannot enforce that,
 so web uploads are **kept separate** instead:
 
-- Each row has `source = 'web_upload'` (the only value the CHECK constraint allows today), so it can never
-  pass as a camera capture. The UI says so above the upload area.
+- Each row has `source = 'web_upload'`, so it can never pass as a camera capture. The UI says so above
+  the upload area. Photos from the mobile app's camera are `source = 'mobile_capture'` and carry the
+  capture metadata (document type, coordinates, accuracy, mock-location flag, capture time); the list
+  shows both and marks app captures. See the monorepo's `docs/api-contracts/mobile-evidence-upload.md`.
 - **Accepted:** field `files`, 1–10 files, ≤10 MB each, and only JPEG/PNG/WebP. The type is decided by
   the file's **magic bytes**. The browser's `Content-Type` and the file extension are ignored.
 - **Only open work:** Pending or Beyond TAT. Completed returns `409`, and anything not the FE's own returns `404`.
