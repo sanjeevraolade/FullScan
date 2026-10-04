@@ -13,17 +13,24 @@ export type PendingBiometricEnrollment = BiometricCredentials;
 export interface UseBiometricEnrollmentResult {
   /** True while the "enable biometric login?" consent dialog should be shown. */
   readonly isPromptVisible: boolean;
-  /** Checks device support + prior enrollment; returns true when the consent dialog was shown. */
-  evaluateEligibility(credentials: PendingBiometricEnrollment): Promise<boolean>;
+  /**
+   * Runs after every successful password login: refreshes an existing vault
+   * with the credentials that just worked, or offers enrollment when there is
+   * none. Returns true when the consent dialog was shown.
+   */
+  syncAfterPasswordLogin(credentials: PendingBiometricEnrollment): Promise<boolean>;
   confirmEnrollment(): Promise<void>;
   skipEnrollment(): void;
 }
 
 /**
- * Owns the post-login "enable biometric login?" consent flow. Only asked to
- * evaluate eligibility right after a successful password login — never
- * persists the plaintext password anywhere outside its own state, and clears
- * it once the enrollment settles (enabled, declined, or failed).
+ * Owns the biometric vault after a password login: the "enable biometric
+ * login?" consent flow, and keeping an existing vault in step with the last
+ * credentials that worked — otherwise a vault enrolled by another account on
+ * this device (or before a password change) keeps replaying stale credentials,
+ * which the server rejects. Never persists the plaintext password anywhere
+ * outside the vault and its own state, and clears that state once the
+ * enrollment settles (enabled, declined, or failed).
  */
 export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrollmentResult {
   LoggerService.info(`${FILE_NAME}: useBiometricEnrollment: initializing enrollment flow`);
@@ -34,39 +41,78 @@ export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrol
     null,
   );
 
-  const evaluateEligibility = useCallback(
+  /**
+   * Overwrites the vault with the credentials that just logged in. A failed
+   * or cancelled write (Android may prompt for it) clears the vault instead —
+   * a vault that can't be refreshed may hold another account's credentials,
+   * and the next password login offers enrollment again.
+   */
+  const refreshEnrollment = useCallback(
+    async (credentials: PendingBiometricEnrollment): Promise<void> => {
+      LoggerService.info(
+        `${FILE_NAME}: useBiometricEnrollment.refreshEnrollment: refreshing biometric vault`,
+      );
+      try {
+        await BiometricCredentialStorageService.save(
+          credentials,
+          t('login.biometric.refresh.promptTitle'),
+        );
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricEnrollment.refreshEnrollment: biometric vault refreshed`,
+        );
+      } catch (error: unknown) {
+        LoggerService.warn(
+          `${FILE_NAME}: useBiometricEnrollment.refreshEnrollment: refresh failed, clearing vault`,
+        );
+        await BiometricCredentialStorageService.clear();
+      }
+    },
+    [t],
+  );
+
+  const syncAfterPasswordLogin = useCallback(
     async (credentials: PendingBiometricEnrollment): Promise<boolean> => {
       LoggerService.info(
-        `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: checking eligibility`,
+        `${FILE_NAME}: useBiometricEnrollment.syncAfterPasswordLogin: checking device and vault`,
       );
       const [deviceSupportsBiometrics, hasExistingEnrollment] = await Promise.all([
         BiometricsService.isSupported(),
         BiometricCredentialStorageService.exists(),
       ]);
-      const shouldPrompt = deviceSupportsBiometrics && !hasExistingEnrollment;
       LoggerService.info(
-        `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: resolved eligibility`,
-        {
-          shouldPrompt,
-          deviceSupportsBiometrics,
-          hasExistingEnrollment,
-        },
+        `${FILE_NAME}: useBiometricEnrollment.syncAfterPasswordLogin: resolved device and vault`,
+        { deviceSupportsBiometrics, hasExistingEnrollment },
       );
-      if (shouldPrompt) {
-        LoggerService.info(
-          `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: showing consent prompt`,
-        );
-        setPendingCredentials(credentials);
-        setIsPromptVisible(true);
-      } else {
-        LoggerService.info(
-          `${FILE_NAME}: useBiometricEnrollment.evaluateEligibility: prompt skipped — not eligible`,
-          { deviceSupportsBiometrics, hasExistingEnrollment },
-        );
+
+      if (hasExistingEnrollment) {
+        if (deviceSupportsBiometrics) {
+          await refreshEnrollment(credentials);
+        } else {
+          // Biometrics were removed from the device — the vault can never be
+          // unlocked again, so drop it rather than leave the credentials behind.
+          LoggerService.warn(
+            `${FILE_NAME}: useBiometricEnrollment.syncAfterPasswordLogin: biometrics unavailable, clearing vault`,
+          );
+          await BiometricCredentialStorageService.clear();
+        }
+        return false;
       }
-      return shouldPrompt;
+
+      if (!deviceSupportsBiometrics) {
+        LoggerService.info(
+          `${FILE_NAME}: useBiometricEnrollment.syncAfterPasswordLogin: prompt skipped — no biometrics`,
+        );
+        return false;
+      }
+
+      LoggerService.info(
+        `${FILE_NAME}: useBiometricEnrollment.syncAfterPasswordLogin: showing consent prompt`,
+      );
+      setPendingCredentials(credentials);
+      setIsPromptVisible(true);
+      return true;
     },
-    [],
+    [refreshEnrollment],
   );
 
   const confirmEnrollment = useCallback(async (): Promise<void> => {
@@ -121,5 +167,5 @@ export function useBiometricEnrollment(onSettled: () => void): UseBiometricEnrol
     onSettled();
   }, [onSettled]);
 
-  return { isPromptVisible, evaluateEligibility, confirmEnrollment, skipEnrollment };
+  return { isPromptVisible, syncAfterPasswordLogin, confirmEnrollment, skipEnrollment };
 }

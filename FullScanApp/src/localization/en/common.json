@@ -41,10 +41,14 @@
         "faceIdLabel": "Log in with Face ID",
         "fingerprintLabel": "Log in with fingerprint"
       },
+      "refresh": {
+        "promptTitle": "Confirm to update biometric login"
+      },
       "errors": {
         "authenticationFailed": "Biometric verification failed. Please log in with your username and password.",
         "network": "Unable to connect. Check your internet connection and try again.",
-        "serverUnavailable": "FullScan is temporarily unavailable. Please try again later."
+        "serverUnavailable": "FullScan is temporarily unavailable. Please try again later.",
+        "deviceMismatch": "Biometric login couldn't sign you in on this device. Log in with your username and password to update it."
       }
     }
   },

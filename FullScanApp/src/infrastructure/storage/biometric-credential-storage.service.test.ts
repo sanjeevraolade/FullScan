@@ -23,6 +23,18 @@ describe('BiometricCredentialStorageService', () => {
     );
   });
 
+  it('titles the save prompt when one is given', async () => {
+    await BiometricCredentialStorageService.save(CREDENTIALS, 'Confirm to update biometric login');
+
+    expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
+      'field.executive',
+      'secret-value',
+      expect.objectContaining({
+        authenticationPrompt: { title: 'Confirm to update biometric login' },
+      }),
+    );
+  });
+
   it('returns the stored credentials after a successful biometric prompt', async () => {
     jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
       username: 'field.executive',

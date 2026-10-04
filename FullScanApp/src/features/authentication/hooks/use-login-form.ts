@@ -98,7 +98,7 @@ export function useLoginForm(): UseLoginFormResult {
 
   const {
     isPromptVisible: isBiometricEnrollmentPromptVisible,
-    evaluateEligibility: evaluateBiometricEnrollmentEligibility,
+    syncAfterPasswordLogin: syncBiometricsAfterPasswordLogin,
     confirmEnrollment: confirmBiometricEnrollment,
     skipEnrollment: skipBiometricEnrollment,
   } = useBiometricEnrollment(() => {
@@ -155,14 +155,15 @@ export function useLoginForm(): UseLoginFormResult {
           useSessionStore.getState().setFieldExecutive(fieldExecutive);
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: login succeeded`);
 
-          const willPromptBiometricEnrollment = await evaluateBiometricEnrollmentEligibility({
+          // Every successful password login refreshes an existing biometric
+          // vault with these credentials, or offers enrollment when there is none.
+          const willPromptBiometricEnrollment = await syncBiometricsAfterPasswordLogin({
             username: values.username,
             password: values.password,
           });
-          LoggerService.info(
-            `${FILE_NAME}: useLoginForm.submitLogin: biometric enrollment eligibility resolved`,
-            { willPromptBiometricEnrollment },
-          );
+          LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: biometric vault synced`, {
+            willPromptBiometricEnrollment,
+          });
           if (willPromptBiometricEnrollment) {
             // The enrollment dialog now owns navigation once the user
             // enables or skips it — see `useBiometricEnrollment`'s `onSettled`.
@@ -190,7 +191,7 @@ export function useLoginForm(): UseLoginFormResult {
         });
       },
     )();
-  }, [handleSubmit, navigation, evaluateBiometricEnrollmentEligibility]);
+  }, [handleSubmit, navigation, syncBiometricsAfterPasswordLogin]);
 
   return {
     control,

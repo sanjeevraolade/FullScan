@@ -26,11 +26,25 @@ enrollment is offered again and writes a clean entry.
 - `use-biometric-enrollment.ts` drives the post-login "enable biometric login?" consent dialog
   (writes the vault, then does a verifying read to force the real OS prompt, rolling back on
   failure).
-- `use-biometric-login.ts` drives the Login screen's icon and tap-to-unlock flow: on a
+  - **Every successful password login refreshes an existing vault** with the credentials that
+    just worked (`syncAfterPasswordLogin`). Without this, a vault enrolled by another account on
+    the same device, or before a password change, kept replaying stale credentials. Device binding
+    then refused them with a 403 ("This device is already bound to …").
+  - If the refresh fails or is cancelled, the vault is cleared and the login carries on. The next
+    password login offers enrollment again. A vault on a device whose biometrics were removed is
+    also cleared.
+  - iOS writes silently. On Android, react-native-keychain's biometric AES-GCM key also gates
+    encryption, so the refresh shows a fingerprint prompt unless the user authenticated in the
+    last 5 seconds. That prompt is titled `login.biometric.refresh.promptTitle`.
+- `use-biometric-login.ts` drives the Login screen's icon and tap-to-unlock flow. On a
   successful biometric prompt it calls `login({ username, password })` with the stored
-  credentials, restores the session (`/me` + reference data), and navigates. A 401 from
-  `/auth/login` (stored password rejected server-side) clears the vault and fails securely;
-  other errors (network/5xx) leave the vault intact so the user can retry.
+  credentials, restores the session from the profile `login()` returns plus reference data, and
+  navigates.
+  - A 401 from `/auth/login` (stored password rejected server-side) clears the vault and fails
+    securely.
+  - A 403 (device binding) shows `login.biometric.errors.deviceMismatch` and keeps the vault. The
+    next password login refreshes it.
+  - Other errors (network/5xx) leave the vault intact so the user can retry.
 
 ## Screen
 

@@ -15,13 +15,14 @@ const FILE_NAME = 'biometric-credential-storage.service.ts';
  */
 const KEYCHAIN_SERVICE = 'com.fullscan.auth.biometric';
 
-async function save(credentials: BiometricCredentials): Promise<void> {
+async function save(credentials: BiometricCredentials, promptMessage?: string): Promise<void> {
   // Never log the username, the password, or their lengths.
   LoggerService.info(`${FILE_NAME}: save: persisting biometric credentials to secure storage`);
   await Keychain.setGenericPassword(credentials.username, credentials.password, {
     service: KEYCHAIN_SERVICE,
     accessControl: Keychain.ACCESS_CONTROL.BIOMETRY_CURRENT_SET,
     accessible: Keychain.ACCESSIBLE.WHEN_UNLOCKED_THIS_DEVICE_ONLY,
+    ...(promptMessage ? { authenticationPrompt: { title: promptMessage } } : {}),
   });
   LoggerService.info(`${FILE_NAME}: save: biometric credentials persisted to secure storage`);
 }

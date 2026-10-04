@@ -18,7 +18,11 @@ import { useReferenceDataStore } from '@/store/reference-data';
 
 const FILE_NAME = 'use-biometric-login.ts';
 
-export type BiometricLoginErrorKey = 'authenticationFailed' | 'network' | 'serverUnavailable';
+export type BiometricLoginErrorKey =
+  | 'authenticationFailed'
+  | 'deviceMismatch'
+  | 'network'
+  | 'serverUnavailable';
 
 export interface UseBiometricLoginResult {
   /** True once the device supports biometrics and a vault entry exists to unlock. */
@@ -42,6 +46,15 @@ function resolveBiometricLoginErrorKey(error: unknown): BiometricLoginErrorKey {
         { status },
       );
       return 'authenticationFailed';
+    }
+    if (status === 403) {
+      // Device binding refused the vault's account on this device — usually a
+      // vault left by another account. The next password login refreshes it.
+      LoggerService.warn(
+        `${FILE_NAME}: resolveBiometricLoginErrorKey: forbidden — device binding mismatch`,
+        { status },
+      );
+      return 'deviceMismatch';
     }
     const errorKey: BiometricLoginErrorKey =
       status !== undefined && status >= 500 ? 'serverUnavailable' : 'network';

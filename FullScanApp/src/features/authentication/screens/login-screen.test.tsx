@@ -115,6 +115,12 @@ describe('LoginScreen', () => {
     // every test, so a prior test's persistent biometric setup never leaks in.
     jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(null);
     jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(false);
+    // Same for the vault read/write — one test below swaps in a stateful vault.
+    jest.mocked(Keychain.setGenericPassword).mockResolvedValue({
+      service: 'com.fullscan.auth.biometric',
+      storage: STORAGE_TYPE.AES_GCM,
+    });
+    jest.mocked(Keychain.getGenericPassword).mockResolvedValue(false);
   });
 
   afterEach(() => {
@@ -453,6 +459,32 @@ describe('LoginScreen', () => {
       expect(useSessionStore.getState().fieldExecutive).toBeNull();
     });
 
+    it('shows the device-mismatch error and keeps the vault when the server refuses the device binding (403)', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+        username: 'another.executive',
+        password: 'their-password',
+        service: 'com.fullscan.auth.biometric',
+        storage: STORAGE_TYPE.AES_GCM,
+      });
+      jest
+        .mocked(authenticationRepository.login)
+        .mockRejectedValueOnce({ isAxiosError: true, response: { status: 403 } });
+      await renderLoginScreen();
+
+      await waitFor(() => expect(screen.getByTestId('biometric-login-button')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('biometric-login-button'));
+
+      await waitFor(() =>
+        expect(screen.getByTestId('biometric-login-error-alert')).toHaveTextContent(
+          "Biometric login couldn't sign you in on this device. Log in with your username and password to update it.",
+        ),
+      );
+      expect(Keychain.resetGenericPassword).not.toHaveBeenCalled();
+      expect(useSessionStore.getState().fieldExecutive).toBeNull();
+    });
+
     it('shows a biometric error and leaves the vault intact when the prompt is cancelled', async () => {
       jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
       jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
@@ -609,6 +641,93 @@ describe('LoginScreen', () => {
           'secret-value',
           expect.objectContaining({ service: 'com.fullscan.auth.biometric' }),
         ),
+      );
+    });
+
+    it('refreshes an existing vault with the credentials that just logged in, without offering enrollment', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      await renderLoginScreen();
+
+      await submitPasswordLogin();
+
+      await waitFor(() => expect(screen.getByText('Main')).toBeTruthy());
+      expect(Keychain.setGenericPassword).toHaveBeenCalledWith(
+        'field.executive',
+        'secret-value',
+        expect.objectContaining({
+          service: 'com.fullscan.auth.biometric',
+          authenticationPrompt: { title: 'Confirm to update biometric login' },
+        }),
+      );
+      expect(screen.queryByTestId('biometric-enrollment-dialog')).toBeNull();
+      expect(Keychain.resetGenericPassword).not.toHaveBeenCalled();
+    });
+
+    it('clears the vault and still logs in when refreshing it fails', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.setGenericPassword).mockRejectedValueOnce(new Error('prompt cancelled'));
+      await renderLoginScreen();
+
+      await submitPasswordLogin();
+
+      await waitFor(() => expect(screen.getByText('Main')).toBeTruthy());
+      expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
+        service: 'com.fullscan.auth.biometric',
+      });
+      expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE);
+    });
+
+    it('clears a vault the device can no longer unlock once biometrics are removed', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(null);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      await renderLoginScreen();
+
+      await submitPasswordLogin();
+
+      await waitFor(() => expect(screen.getByText('Main')).toBeTruthy());
+      expect(Keychain.resetGenericPassword).toHaveBeenCalledWith({
+        service: 'com.fullscan.auth.biometric',
+      });
+      expect(Keychain.setGenericPassword).not.toHaveBeenCalledWith(
+        expect.any(String),
+        expect.any(String),
+        expect.objectContaining({ service: 'com.fullscan.auth.biometric' }),
+      );
+    });
+
+    it("replaces another account's vault so the next biometric login sends this account's credentials", async () => {
+      // A stateful vault: what the password login writes is what biometric login reads back.
+      let vault = { username: 'another.executive', password: 'their-password' };
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.setGenericPassword).mockImplementation(async (username, password) => {
+        vault = { username, password };
+        return { service: 'com.fullscan.auth.biometric', storage: STORAGE_TYPE.AES_GCM };
+      });
+      jest.mocked(Keychain.getGenericPassword).mockImplementation(async () => ({
+        ...vault,
+        service: 'com.fullscan.auth.biometric',
+        storage: STORAGE_TYPE.AES_GCM,
+      }));
+      await renderLoginScreen();
+
+      await submitPasswordLogin();
+      await waitFor(() => expect(screen.getByText('Main')).toBeTruthy());
+
+      await screen.unmount();
+      useSessionStore.getState().clearSession();
+      jest.mocked(authenticationRepository.login).mockClear();
+      await renderLoginScreen();
+      await waitFor(() => expect(screen.getByTestId('biometric-login-button')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('biometric-login-button'));
+
+      await waitFor(() =>
+        expect(authenticationRepository.login).toHaveBeenCalledWith({
+          username: 'field.executive',
+          password: 'secret-value',
+        }),
       );
     });
 
