@@ -25,7 +25,7 @@ import { MongoClient, type Db } from 'mongodb';
 import { getMongoConfig, redactUri } from '../src/db/connection.js';
 import { recordMigrationsApplied } from '../src/db/migrations/index.js';
 import { seedInitialData } from '../src/db/migrations/001_seed_initial_data.js';
-import { applySchema, COLLECTION_NAMES, MIGRATIONS_COLLECTION, toDocument } from '../src/db/schema.js';
+import { applySchema, COLLECTION_NAMES, LEGACY_TABLE_NAMES, MIGRATIONS_COLLECTION, toDocument } from '../src/db/schema.js';
 import { applyLegacyMigrations, readAllTables } from './sqlite-legacy/sqlite-source.js';
 
 dotenv.config();
@@ -129,7 +129,9 @@ async function migrate({ sqlitePath, shouldDrop }: Options): Promise<void> {
 
     await applySchema(db);
 
-    for (const name of COLLECTION_NAMES) {
+    // MongoDB-only collections (e.g. `app_metadata`) have no table to copy; the server's
+    // migrations populate them on its next start.
+    for (const name of LEGACY_TABLE_NAMES) {
       const documents = tables[name].map((row) => toDocument(name, row));
 
       for (let start = 0; start < documents.length; start += INSERT_BATCH_SIZE) {
@@ -143,7 +145,7 @@ async function migrate({ sqlitePath, shouldDrop }: Options): Promise<void> {
     let hasMismatch = false;
     log('\nCollection                 SQLite rows   MongoDB docs');
 
-    for (const name of COLLECTION_NAMES) {
+    for (const name of LEGACY_TABLE_NAMES) {
       const copied = await db.collection(name).countDocuments();
       const expected = tables[name].length;
       hasMismatch ||= copied !== expected;

@@ -106,6 +106,9 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
     // state so it can't be replayed after logout.
     void logout();
     clearSession();
+    // In-memory copy only — the persisted master-data cache is kept on
+    // purpose: it isn't per-user (`/master-data` is unauthenticated), and
+    // keeping it is what saves the download on the next login.
     clearReferenceData();
     // Cached case coordinates are derived from candidate addresses, so they
     // don't outlive the session on a shared field device.

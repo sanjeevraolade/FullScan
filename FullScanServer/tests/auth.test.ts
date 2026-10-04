@@ -8,11 +8,16 @@ import { app, getCollection, removeTestDb, SEEDED_FIELD_EXECUTIVE } from './help
  * at login. The profile must be exactly what `/me` returns, and never carry the
  * password hash or the device binding.
  *
+ * It also carries `masterDataUpdatedAt`, the master-data version, so the app can skip
+ * `GET /master-data` when its cached copy is current (how the version changes is in
+ * `master-data-version.test.ts`).
+ *
  * Device-binding refusals (403) are covered in `device-change.test.ts`.
  */
 
 const LOGIN = '/api/v1/auth/login';
 const ME = '/api/v1/me';
+const MASTER_DATA = '/api/v1/master-data';
 
 const HANDSET = {
   deviceId: 'auth-test-handset-01',
@@ -48,7 +53,7 @@ describe(`POST ${LOGIN}`, () => {
 
     expect(response.status).toBe(200);
     expect(response.body.success).toBe(true);
-    expect(Object.keys(response.body.data).sort()).toEqual(['fieldExecutive', 'token']);
+    expect(Object.keys(response.body.data).sort()).toEqual(['fieldExecutive', 'masterDataUpdatedAt', 'token']);
     expect(response.body.data.token).toEqual(expect.any(String));
     expect(response.body.data.fieldExecutive.id).toBe(SEEDED_FIELD_EXECUTIVE.id);
 
@@ -56,6 +61,16 @@ describe(`POST ${LOGIN}`, () => {
 
     expect(me.status).toBe(200);
     expect(response.body.data.fieldExecutive).toEqual(me.body.data);
+  });
+
+  it('returns masterDataUpdatedAt as the same version GET /master-data serves', async () => {
+    const response = await login();
+    const masterData = await request(app).get(MASTER_DATA);
+
+    expect(response.status).toBe(200);
+    expect(response.body.data.masterDataUpdatedAt).toEqual(expect.any(String));
+    expect(masterData.status).toBe(200);
+    expect(response.body.data.masterDataUpdatedAt).toBe(masterData.body.data.updatedAt);
   });
 
   it('never exposes the password hash or the device binding in the profile', async () => {
@@ -84,6 +99,7 @@ describe(`POST ${LOGIN}`, () => {
     expect(response.body).not.toHaveProperty('data');
     expect(JSON.stringify(response.body)).not.toContain('token');
     expect(JSON.stringify(response.body)).not.toContain('fieldExecutive');
+    expect(JSON.stringify(response.body)).not.toContain('masterDataUpdatedAt');
   });
 
   it('gives an unknown username the same 401 as a wrong password', async () => {
@@ -105,6 +121,7 @@ describe(`POST ${LOGIN}`, () => {
     expect(response.status).toBe(400);
     expect(response.body.error).toBe('Validation failed');
     expect(response.body).not.toHaveProperty('data');
+    expect(JSON.stringify(response.body)).not.toContain('masterDataUpdatedAt');
   });
 
   it('rejects a blank device ID with 400 and no token', async () => {
@@ -112,5 +129,16 @@ describe(`POST ${LOGIN}`, () => {
 
     expect(response.status).toBe(400);
     expect(response.body).toEqual({ success: false, error: 'Device ID is required' });
+  });
+
+  it('refuses a handset bound to another account with 403 and no masterDataUpdatedAt', async () => {
+    // Bind HANDSET to fe001 (a no-op if already bound); a different account may then not use it.
+    expect((await login()).status).toBe(200);
+    const response = await login({ username: 'fe002', password: SEEDED_FIELD_EXECUTIVE.password });
+
+    expect(response.status).toBe(403);
+    expect(response.body.success).toBe(false);
+    expect(response.body).not.toHaveProperty('data');
+    expect(JSON.stringify(response.body)).not.toContain('masterDataUpdatedAt');
   });
 });

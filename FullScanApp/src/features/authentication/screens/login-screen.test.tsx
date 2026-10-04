@@ -8,6 +8,8 @@ import { BIOMETRY_TYPE, STORAGE_TYPE } from 'react-native-keychain';
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
+import { apiClient } from '@/infrastructure/networking';
+import { KeyValueStorageService } from '@/infrastructure/storage';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import * as authenticationRepository from '@/repositories/authentication-repository';
@@ -22,6 +24,14 @@ import { LoginScreen } from './login-screen';
 jest.mock('@/repositories/authentication-repository');
 jest.mock('@/repositories/reference-data-repository');
 
+const actualReferenceDataRepository = jest.requireActual<typeof referenceDataRepository>(
+  '@/repositories/reference-data-repository',
+);
+
+/** Fixed by the master-data-sync contract. */
+const MASTER_DATA_CACHE_KEY = 'master-data:v1';
+const MASTER_DATA_VERSION = '2026-10-04T09:15:02.481Z';
+
 const FIELD_EXECUTIVE: FieldExecutive = {
   id: 'fe-001',
   name: 'Amit Verma',
@@ -30,6 +40,7 @@ const FIELD_EXECUTIVE: FieldExecutive = {
 };
 
 const REFERENCE_DATA: ReferenceData = {
+  updatedAt: MASTER_DATA_VERSION,
   verificationTypeStatuses: [],
   utvOptions: [],
   insuffOptions: [],
@@ -87,9 +98,14 @@ async function renderLoginScreen(): Promise<void> {
 describe('LoginScreen', () => {
   beforeEach(async () => {
     await LocalizationEngine.initialize();
-    // `login()` carries the profile now — there is no separate profile request.
-    jest.mocked(authenticationRepository.login).mockResolvedValue(FIELD_EXECUTIVE);
-    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue(REFERENCE_DATA);
+    // `login()` carries the profile and the master-data version — there is no
+    // separate profile request.
+    jest.mocked(authenticationRepository.login).mockResolvedValue({
+      fieldExecutive: FIELD_EXECUTIVE,
+      masterDataUpdatedAt: MASTER_DATA_VERSION,
+    });
+    jest.mocked(referenceDataRepository.loadReferenceData).mockResolvedValue(REFERENCE_DATA);
+    KeyValueStorageService.remove(MASTER_DATA_CACHE_KEY);
     // Both stores are module singletons — start every test logged out so a
     // session asserted below can only have come from that test's own login.
     useSessionStore.getState().clearSession();
@@ -224,12 +240,28 @@ describe('LoginScreen', () => {
     await waitFor(() => expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE));
     expect(useReferenceDataStore.getState().referenceData).toEqual(REFERENCE_DATA);
     expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
-    expect(referenceDataRepository.fetchReferenceData).toHaveBeenCalledTimes(1);
+    expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledTimes(1);
+    expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledWith(MASTER_DATA_VERSION);
+  });
+
+  it('passes a null master-data version from an older server into loadReferenceData', async () => {
+    jest.mocked(authenticationRepository.login).mockResolvedValueOnce({
+      fieldExecutive: FIELD_EXECUTIVE,
+      masterDataUpdatedAt: null,
+    });
+    await renderLoginScreen();
+
+    await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+    await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+    await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+    await waitFor(() => expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE));
+    expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledWith(null);
   });
 
   it('shows the network error and starts no session when reference data cannot be loaded (offline)', async () => {
     jest
-      .mocked(referenceDataRepository.fetchReferenceData)
+      .mocked(referenceDataRepository.loadReferenceData)
       .mockRejectedValueOnce({ isAxiosError: true, response: undefined });
     await renderLoginScreen();
 
@@ -362,7 +394,8 @@ describe('LoginScreen', () => {
       );
       expect(useReferenceDataStore.getState().referenceData).toEqual(REFERENCE_DATA);
       expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
-      expect(referenceDataRepository.fetchReferenceData).toHaveBeenCalledTimes(1);
+      expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledTimes(1);
+      expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledWith(MASTER_DATA_VERSION);
     });
 
     it('keeps the vault and starts no session when reference data cannot be loaded after biometric login (offline)', async () => {
@@ -375,7 +408,7 @@ describe('LoginScreen', () => {
         storage: STORAGE_TYPE.AES_GCM,
       });
       jest
-        .mocked(referenceDataRepository.fetchReferenceData)
+        .mocked(referenceDataRepository.loadReferenceData)
         .mockRejectedValueOnce({ isAxiosError: true, response: undefined });
       await renderLoginScreen();
 
@@ -416,7 +449,7 @@ describe('LoginScreen', () => {
       expect(screen.getByTestId('biometric-login-error-alert')).toHaveTextContent(
         'Biometric verification failed. Please log in with your username and password.',
       );
-      expect(referenceDataRepository.fetchReferenceData).not.toHaveBeenCalled();
+      expect(referenceDataRepository.loadReferenceData).not.toHaveBeenCalled();
       expect(useSessionStore.getState().fieldExecutive).toBeNull();
     });
 
@@ -435,6 +468,94 @@ describe('LoginScreen', () => {
         ),
       );
       expect(Keychain.resetGenericPassword).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('master-data cache hit', () => {
+    /** Same content as `REFERENCE_DATA`, told apart by a label only the device copy has. */
+    const CACHED_REFERENCE_DATA: ReferenceData = {
+      ...REFERENCE_DATA,
+      photoTypes: [{ code: 'house_front', label: 'House front' }],
+    };
+    let masterDataRequestSpy: jest.SpyInstance;
+
+    beforeEach(() => {
+      // The real cache decision, so "no request on a hit" is proven end to end
+      // rather than asserted against a mock.
+      jest
+        .mocked(referenceDataRepository.loadReferenceData)
+        .mockImplementation(actualReferenceDataRepository.loadReferenceData);
+      KeyValueStorageService.setObject(MASTER_DATA_CACHE_KEY, CACHED_REFERENCE_DATA);
+      // Rejects rather than resolves: an unexpected request fails the login visibly.
+      masterDataRequestSpy = jest
+        .spyOn(apiClient, 'get')
+        .mockRejectedValue({ isAxiosError: true, response: undefined });
+    });
+
+    afterEach(() => {
+      masterDataRequestSpy.mockRestore();
+    });
+
+    it('logs in with the password using the cached payload and no /master-data request', async () => {
+      const ordering = watchSessionOrdering();
+      await renderLoginScreen();
+
+      await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+      await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+      await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+      await waitFor(() =>
+        expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE),
+      );
+      expect(useReferenceDataStore.getState().referenceData).toEqual(CACHED_REFERENCE_DATA);
+      expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
+      expect(masterDataRequestSpy).not.toHaveBeenCalled();
+    });
+
+    it('logs in with biometrics using the cached payload and no /master-data request', async () => {
+      jest.mocked(Keychain.getSupportedBiometryType).mockResolvedValue(BIOMETRY_TYPE.FINGERPRINT);
+      jest.mocked(Keychain.hasGenericPassword).mockResolvedValue(true);
+      jest.mocked(Keychain.getGenericPassword).mockResolvedValueOnce({
+        username: 'field.executive',
+        password: 'secret-value',
+        service: 'com.fullscan.auth.biometric',
+        storage: STORAGE_TYPE.AES_GCM,
+      });
+      const ordering = watchSessionOrdering();
+      await renderLoginScreen();
+
+      await waitFor(() => expect(screen.getByTestId('biometric-login-button')).toBeTruthy());
+      await fireEvent.press(screen.getByTestId('biometric-login-button'));
+
+      await waitFor(() =>
+        expect(useSessionStore.getState().fieldExecutive).toEqual(FIELD_EXECUTIVE),
+      );
+      expect(useReferenceDataStore.getState().referenceData).toEqual(CACHED_REFERENCE_DATA);
+      expect(ordering.wasReferenceDataStoredFirst()).toBe(true);
+      expect(masterDataRequestSpy).not.toHaveBeenCalled();
+    });
+
+    it('requests /master-data instead when the login reports a different version', async () => {
+      jest.mocked(authenticationRepository.login).mockResolvedValueOnce({
+        fieldExecutive: FIELD_EXECUTIVE,
+        masterDataUpdatedAt: '2026-10-04T09:15:02.482Z',
+      });
+      await renderLoginScreen();
+
+      await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
+      await fireEvent.changeText(screen.getByTestId('password-input'), 'secret-value');
+      await fireEvent.press(screen.getByTestId('login-submit-button'));
+
+      // The spy rejects like an offline request: login fails and the cached
+      // copy is not used as a fallback.
+      await waitFor(() =>
+        expect(screen.getByTestId('login-error-alert')).toHaveTextContent(
+          'Unable to connect. Check your internet connection and try again.',
+        ),
+      );
+      expect(masterDataRequestSpy).toHaveBeenCalledWith('/master-data');
+      expect(useSessionStore.getState().fieldExecutive).toBeNull();
+      expect(useReferenceDataStore.getState().referenceData).toBeNull();
     });
   });
 

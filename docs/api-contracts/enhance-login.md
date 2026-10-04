@@ -3,6 +3,10 @@
 Login goes from three sequential requests (`/auth/login`, `/me`, `/reference-data`) to two:
 `/auth/login` returns the token **and** the profile, and reference data moves to `/master-data`.
 
+> **Extended by [master-data-sync.md](master-data-sync.md):** the login 200 also carries
+> `masterDataUpdatedAt`, `/master-data` carries a top-level `updatedAt`, and the app skips
+> `/master-data` when the two match its cached copy.
+
 ## `POST /api/v1/auth/login`
 
 - **Auth:** none.

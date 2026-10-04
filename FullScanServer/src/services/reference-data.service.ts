@@ -1,3 +1,4 @@
+import * as appMetadataDao from '../db/app-metadata.dao.js';
 import * as referenceDataDao from '../db/reference-data.dao.js';
 import { getAllMobileAppSettings } from './mobile-app-setting.service.js';
 import type {
@@ -43,6 +44,15 @@ async function buildMobileAppSettings(): Promise<MobileAppSettings> {
 }
 
 /**
+ * The master-data version: changes whenever dropdown options or mobile app settings
+ * change, `null` if none is recorded. Login returns it so the app can skip
+ * `GET /master-data` when its cached copy carries the same value.
+ */
+export async function getMasterDataUpdatedAt(): Promise<string | null> {
+  return appMetadataDao.findMasterDataUpdatedAt();
+}
+
+/**
  * Bundles every dropdown/option list the verification workflow needs — plus the
  * admin-managed mobile app settings — into a single response. The app fetches
  * this once, right after login, rather than per-screen (see the product spec's
@@ -51,8 +61,18 @@ async function buildMobileAppSettings(): Promise<MobileAppSettings> {
  * Settings ride along here instead of on a dedicated endpoint so the app keeps
  * using the one post-login batch call it already makes, and so re-fetching
  * reference data also refreshes configuration.
+ *
+ * `updatedAt` is the master-data version the payload belongs to; the app caches the
+ * payload with it and skips this call while login reports the same value.
  */
 export async function getReferenceData(): Promise<ReferenceData> {
+  // Read the version first, on its own, before any of the data. If a change commits
+  // while this runs, the version can then only be older than the data — which costs
+  // the app one harmless extra fetch on its next login. Read after (or alongside) the
+  // data, it could be newer than what was read, and the app would cache stale data
+  // under the new version and keep it until master data next changes.
+  const updatedAt = await getMasterDataUpdatedAt();
+
   const [
     verificationTypeStatuses,
     utvOptions,
@@ -74,6 +94,7 @@ export async function getReferenceData(): Promise<ReferenceData> {
   ]);
 
   return {
+    updatedAt,
     verificationTypeStatuses,
     utvOptions,
     insuffOptions,

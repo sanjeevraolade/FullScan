@@ -55,6 +55,7 @@ const DEVICE_LOCATION: DeviceLocation = {
 };
 
 const REFERENCE_DATA: ReferenceData = {
+  updatedAt: null,
   verificationTypeStatuses: [
     { code: 'verified_clear', label: 'Verified Clear' },
     { code: 'utv', label: 'UTV' },

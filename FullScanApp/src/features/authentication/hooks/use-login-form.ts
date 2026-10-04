@@ -7,7 +7,7 @@ import axios from 'axios';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { login } from '@/repositories/authentication-repository';
-import { fetchReferenceData } from '@/repositories/reference-data-repository';
+import { loadReferenceData } from '@/repositories/reference-data-repository';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import { useSessionStore } from '@/store/session';
@@ -134,15 +134,17 @@ export function useLoginForm(): UseLoginFormResult {
         setLoginError(null);
         try {
           LoggerService.info(`${FILE_NAME}: useLoginForm.submitLogin: authenticating credentials`);
-          const fieldExecutive = await login({
+          const { fieldExecutive, masterDataUpdatedAt } = await login({
             username: values.username,
             password: values.password,
           });
           LoggerService.info(
             `${FILE_NAME}: useLoginForm.submitLogin: credentials accepted, loading reference data`,
-            { fieldExecutiveId: fieldExecutive.id },
+            { fieldExecutiveId: fieldExecutive.id, masterDataUpdatedAt },
           );
-          const referenceData = await fetchReferenceData();
+          // From the device cache when the server's master-data version is
+          // unchanged, otherwise from `GET /master-data`.
+          const referenceData = await loadReferenceData(masterDataUpdatedAt);
           // Configuration before session, deliberately: the profile is already
           // in hand from `login()`, but establishing the session is what starts
           // location validation (see `ApplicationShell`), and that validation

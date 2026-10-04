@@ -21,6 +21,11 @@ export interface LoginInput {
 export interface LoginResult {
   readonly token: string;
   readonly fieldExecutive: FieldExecutive;
+  /**
+   * The current master-data version — equal to `GET /master-data`'s `updatedAt` while
+   * master data is unchanged — or `null` when none is recorded. Opaque to the app.
+   */
+  readonly masterDataUpdatedAt: string | null;
 }
 
 export interface JwtPayload {

@@ -4,6 +4,7 @@ import * as fieldExecutiveDao from '../db/field-executive.dao.js';
 import { AppError } from '../utils/app-error.js';
 import { recordMobileDeviceLogin } from './device-change.service.js';
 import { toFieldExecutive } from './field-executive.service.js';
+import { getMasterDataUpdatedAt } from './reference-data.service.js';
 import type { LoginInput, LoginResult } from '../types/auth.types.js';
 
 const JWT_SECRET = process.env.JWT_SECRET || 'change-me-in-production';
@@ -11,7 +12,9 @@ const TOKEN_EXPIRY = '12h';
 
 /**
  * Validates credentials and issues a session token together with the field executive's profile
- * (the same `toFieldExecutive()` shape `GET /me` returns). Fails unless both username and password match.
+ * (the same `toFieldExecutive()` shape `GET /me` returns) and the current master-data version,
+ * which the app compares with its cached `GET /master-data` copy to decide whether to re-fetch.
+ * Fails unless both username and password match.
  */
 export async function login({ username, password, deviceId, deviceDetails }: LoginInput): Promise<LoginResult> {
   const row = await fieldExecutiveDao.findFieldExecutiveByUsername(username);
@@ -65,5 +68,8 @@ export async function login({ username, password, deviceId, deviceDetails }: Log
 
   const token = jwt.sign({ fieldExecutiveId: row.id }, JWT_SECRET, { expiresIn: TOKEN_EXPIRY });
 
-  return { token, fieldExecutive: toFieldExecutive(row) };
+  // Read only once every check above has passed — a refused login does not carry it.
+  const masterDataUpdatedAt = await getMasterDataUpdatedAt();
+
+  return { token, fieldExecutive: toFieldExecutive(row), masterDataUpdatedAt };
 }

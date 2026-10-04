@@ -3,15 +3,33 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react-nativ
 
 import { LocalizationEngine } from '@/localization';
 import { ThemeProvider } from '@/theme';
+import { KeyValueStorageService } from '@/infrastructure/storage';
 import * as authenticationRepository from '@/repositories/authentication-repository';
 import * as caseRepository from '@/repositories/case-repository';
 import * as referenceDataRepository from '@/repositories/reference-data-repository';
+import type { ReferenceData } from '@/domain/reference-data';
 
 import { RootNavigator } from './root-navigator';
 
 jest.mock('@/repositories/authentication-repository');
 jest.mock('@/repositories/case-repository');
 jest.mock('@/repositories/reference-data-repository');
+
+/** Fixed by the master-data-sync contract. */
+const MASTER_DATA_CACHE_KEY = 'master-data:v1';
+const MASTER_DATA_VERSION = '2026-10-04T09:15:02.481Z';
+
+const REFERENCE_DATA: ReferenceData = {
+  updatedAt: MASTER_DATA_VERSION,
+  verificationTypeStatuses: [],
+  utvOptions: [],
+  insuffOptions: [],
+  photoTypes: [],
+  componentStatuses: [],
+  actionStatuses: [],
+  profileStatuses: [],
+  mobileAppSettings: { values: {}, updatedAt: null },
+};
 
 async function loginAndOpenDrawer(): Promise<void> {
   await fireEvent.changeText(screen.getByTestId('username-input'), 'field.executive');
@@ -27,23 +45,18 @@ describe('RootNavigator', () => {
     await LocalizationEngine.initialize();
     // The profile the drawer shows comes from `login()` itself — no separate profile request.
     jest.mocked(authenticationRepository.login).mockResolvedValue({
-      id: 'fe-001',
-      name: 'Amit Verma',
-      email: 'amit.verma@fullscan.example',
-      role: 'Field Agent',
+      fieldExecutive: {
+        id: 'fe-001',
+        name: 'Amit Verma',
+        email: 'amit.verma@fullscan.example',
+        role: 'Field Agent',
+      },
+      masterDataUpdatedAt: MASTER_DATA_VERSION,
     });
     jest.mocked(authenticationRepository.logout).mockResolvedValue(undefined);
     jest.mocked(caseRepository.fetchCases).mockResolvedValue([]);
-    jest.mocked(referenceDataRepository.fetchReferenceData).mockResolvedValue({
-      verificationTypeStatuses: [],
-      utvOptions: [],
-      insuffOptions: [],
-      photoTypes: [],
-      componentStatuses: [],
-      actionStatuses: [],
-      profileStatuses: [],
-      mobileAppSettings: { values: {}, updatedAt: null },
-    });
+    jest.mocked(referenceDataRepository.loadReferenceData).mockResolvedValue(REFERENCE_DATA);
+    KeyValueStorageService.remove(MASTER_DATA_CACHE_KEY);
   });
 
   afterEach(() => {
@@ -73,6 +86,7 @@ describe('RootNavigator', () => {
     await waitFor(() => expect(screen.getByTestId('drawer-field-executive-name')).toBeTruthy());
     expect(screen.getByTestId('drawer-field-executive-name')).toHaveTextContent('Amit Verma');
     expect(screen.getByTestId('drawer-field-executive-email')).toHaveTextContent('amit.verma@fullscan.example');
+    expect(referenceDataRepository.loadReferenceData).toHaveBeenCalledWith(MASTER_DATA_VERSION);
   });
 
   it('logs out from the drawer back to the Login screen', async () => {
@@ -89,5 +103,22 @@ describe('RootNavigator', () => {
 
     await waitFor(() => expect(screen.getByText('Welcome to FullScan')).toBeTruthy());
     expect(screen.getByTestId('login-submit-button')).toBeTruthy();
+  });
+
+  it('keeps the persisted master-data cache on logout, so the next login can skip the fetch', async () => {
+    // Stands in for the copy the repository persisted at login (it's mocked here).
+    KeyValueStorageService.setObject(MASTER_DATA_CACHE_KEY, REFERENCE_DATA);
+    await render(
+      <ThemeProvider>
+        <RootNavigator />
+      </ThemeProvider>,
+    );
+
+    await loginAndOpenDrawer();
+    await waitFor(() => expect(screen.getByTestId('drawer-logout-button')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('drawer-logout-button'));
+
+    await waitFor(() => expect(screen.getByText('Welcome to FullScan')).toBeTruthy());
+    expect(KeyValueStorageService.getObject(MASTER_DATA_CACHE_KEY)).toEqual(REFERENCE_DATA);
   });
 });

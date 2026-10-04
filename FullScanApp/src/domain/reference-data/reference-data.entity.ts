@@ -24,11 +24,18 @@ export interface MobileAppSettings {
 
 /**
  * Every dropdown/option list the verification workflow needs, plus the
- * admin-managed mobile app settings, bundled into one payload fetched once
- * right after login (see the product spec's login-time data fetch decision)
- * rather than per-case or per-screen.
+ * admin-managed mobile app settings, bundled into one payload loaded once at
+ * login (see the product spec's login-time data fetch decision) rather than
+ * per-case or per-screen. The payload is kept on the device, so a login whose
+ * server version matches `updatedAt` reuses it instead of re-downloading.
  */
 export interface ReferenceData {
+  /**
+   * The server's master-data version this payload belongs to, or null when the
+   * server recorded none (or predates versioning). Opaque: only ever compared
+   * for equality with the version `login()` reports, never parsed or ordered.
+   */
+  readonly updatedAt: string | null;
   readonly verificationTypeStatuses: readonly DropdownOption[];
   readonly utvOptions: readonly DropdownOption[];
   readonly insuffOptions: readonly DropdownOption[];

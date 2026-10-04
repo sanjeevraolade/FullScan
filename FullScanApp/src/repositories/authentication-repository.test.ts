@@ -27,9 +27,14 @@ const FIELD_EXECUTIVE = {
   role: 'Field Agent',
 };
 
-function mockLoginResponse(fieldExecutive: Record<string, unknown> = FIELD_EXECUTIVE): void {
+const MASTER_DATA_UPDATED_AT = '2026-10-04T09:15:02.481Z';
+
+function mockLoginResponse(
+  fieldExecutive: Record<string, unknown> = FIELD_EXECUTIVE,
+  masterDataUpdatedAt: string | null = MASTER_DATA_UPDATED_AT,
+): void {
   jest.mocked(apiClient.post).mockResolvedValueOnce({
-    data: { success: true, data: { token: TOKEN, fieldExecutive } },
+    data: { success: true, data: { token: TOKEN, fieldExecutive, masterDataUpdatedAt } },
   });
 }
 
@@ -71,9 +76,38 @@ describe('authentication-repository', () => {
     it('resolves with the field executive profile carried by the login response', async () => {
       mockLoginResponse();
 
-      await expect(login(CREDENTIALS)).resolves.toEqual(FIELD_EXECUTIVE);
+      const { fieldExecutive } = await login(CREDENTIALS);
+
+      expect(fieldExecutive).toEqual(FIELD_EXECUTIVE);
       // The profile replaces the old follow-up `GET /me` — login is one request.
       expect(apiClient.post).toHaveBeenCalledTimes(1);
+    });
+
+    it('passes the master-data version through unchanged', async () => {
+      mockLoginResponse();
+
+      await expect(login(CREDENTIALS)).resolves.toStrictEqual({
+        fieldExecutive: FIELD_EXECUTIVE,
+        masterDataUpdatedAt: MASTER_DATA_UPDATED_AT,
+      });
+    });
+
+    it('keeps a null master-data version (server has none recorded) as null', async () => {
+      mockLoginResponse(FIELD_EXECUTIVE, null);
+
+      const { masterDataUpdatedAt } = await login(CREDENTIALS);
+
+      expect(masterDataUpdatedAt).toBeNull();
+    });
+
+    it('maps a master-data version missing from an older server to null', async () => {
+      jest.mocked(apiClient.post).mockResolvedValueOnce({
+        data: { success: true, data: { token: TOKEN, fieldExecutive: FIELD_EXECUTIVE } },
+      });
+
+      const { masterDataUpdatedAt } = await login(CREDENTIALS);
+
+      expect(masterDataUpdatedAt).toBeNull();
     });
 
     it('resolves only after the token has been stored', async () => {
@@ -91,7 +125,9 @@ describe('authentication-repository', () => {
     it('maps only the domain fields, dropping anything else the server sends', async () => {
       mockLoginResponse({ ...FIELD_EXECUTIVE, deviceId: 'device-123', passwordHash: 'hash' });
 
-      await expect(login(CREDENTIALS)).resolves.toStrictEqual(FIELD_EXECUTIVE);
+      const { fieldExecutive } = await login(CREDENTIALS);
+
+      expect(fieldExecutive).toStrictEqual(FIELD_EXECUTIVE);
     });
 
     it('rejects without a profile when the token cannot be persisted', async () => {

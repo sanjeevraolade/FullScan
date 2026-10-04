@@ -66,6 +66,7 @@ function seedSettings(values: Record<string, boolean | number | string> | null):
   }
   const referenceData: ReferenceData = {
     ...EMPTY_OPTION_LISTS,
+    updatedAt: null,
     mobileAppSettings: { values, updatedAt: null },
   };
   useReferenceDataStore.setState({ referenceData });
@@ -144,6 +145,7 @@ describe('useCaseGeoFence', () => {
     jest.mocked(referenceDataRepository.fetchReferenceData).mockImplementation(async () => {
       const referenceData: ReferenceData = {
         ...EMPTY_OPTION_LISTS,
+        updatedAt: null,
         mobileAppSettings: {
           values: { geo_fence_radius_meters: 200, locationRetryCount: 3 },
           updatedAt: null,

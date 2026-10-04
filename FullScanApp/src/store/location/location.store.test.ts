@@ -55,6 +55,7 @@ const EMPTY_OPTION_LISTS = {
 function seedSettings(values: Record<string, boolean | number | string>): void {
   const referenceData: ReferenceData = {
     ...EMPTY_OPTION_LISTS,
+    updatedAt: null,
     mobileAppSettings: { values, updatedAt: null },
   };
   useReferenceDataStore.setState({ referenceData });

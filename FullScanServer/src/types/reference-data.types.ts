@@ -32,6 +32,13 @@ export interface MobileAppSettings {
 }
 
 export interface ReferenceData {
+  /**
+   * The master-data version this payload belongs to (ISO 8601 UTC with milliseconds),
+   * or `null` when the server has none recorded. Login returns the current one as
+   * `masterDataUpdatedAt`; the app re-fetches this payload only when the two differ.
+   * Opaque: compare for equality, never parse or order it.
+   */
+  readonly updatedAt: string | null;
   readonly verificationTypeStatuses: DropdownOption[];
   readonly utvOptions: DropdownOption[];
   readonly insuffOptions: DropdownOption[];

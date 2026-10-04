@@ -3,6 +3,7 @@ import { logger } from '../../utils/logger.js';
 import { MIGRATIONS_COLLECTION } from '../schema.js';
 import { nowTimestamp } from '../timestamp.js';
 import { seedInitialData } from './001_seed_initial_data.js';
+import { initMasterDataVersion } from './002_init_master_data_version.js';
 
 /**
  * Data migrations, applied once each, in array order, and recorded in the
@@ -18,7 +19,16 @@ export interface Migration {
   up(db: Db, session: ClientSession): Promise<void>;
 }
 
-export const MIGRATIONS: readonly Migration[] = [seedInitialData];
+/**
+ * **Master-data rule.** A migration that inserts, updates or deletes `dropdown_options`
+ * or `mobile_app_settings` rows must also call `bumpMasterDataVersion(db, session)`
+ * (`master-data-version.ts`) in that migration. So must a server change to the
+ * `GET /master-data` payload shape: ship it with a new migration that bumps the version.
+ * The mobile app re-downloads master data only when the version it gets at login
+ * differs from its cached copy's, so a change without a bump never reaches devices
+ * that already have a copy.
+ */
+export const MIGRATIONS: readonly Migration[] = [seedInitialData, initMasterDataVersion];
 
 interface MigrationRecord {
   readonly _id: string;

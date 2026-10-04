@@ -1,4 +1,5 @@
 import type { Document } from 'mongodb';
+import { bumpMasterDataUpdatedAt } from './app-metadata.dao.js';
 import { getCollection, runInTransaction, sessionOption } from './connection.js';
 import { nowTimestamp } from './timestamp.js';
 import type { MobileAppSettingRow } from '../types/mobile-app-setting.types.js';
@@ -30,6 +31,9 @@ export async function findMobileAppSettingByKey(key: string): Promise<MobileAppS
 /**
  * Writes several settings in one transaction so a partially-valid batch can never
  * leave the mobile app reading a half-applied configuration.
+ *
+ * Settings are master data, so the same transaction bumps the master-data version:
+ * a saved batch and its new version commit together, and a failed one changes neither.
  */
 export async function updateMobileAppSettings(
   updates: ReadonlyArray<{ key: string; value: string }>,
@@ -51,5 +55,7 @@ export async function updateMobileAppSettings(
       })),
       sessionOption(),
     );
+
+    await bumpMasterDataUpdatedAt();
   });
 }

@@ -67,7 +67,8 @@ On startup the server connects to MongoDB, creates any missing collections, (re)
 validators and indexes (`src/db/schema.ts`), and runs pending data migrations
 (`src/db/migrations/`, tracked in a `migrations` collection) — no separate step is required.
 `npm run migrate` does the same and exits, for running it ahead of a deploy. An empty database is
-seeded with the test data below by the first migration.
+seeded with the test data below by the first migration, and the second
+(`002_init_master_data_version`) records its first [master-data version](#master-data-version).
 
 The server moved from SQLite to MongoDB — see
 [docs/sqlite-migration-mongodb.md](docs/sqlite-migration-mongodb.md), including how to copy an
@@ -208,11 +209,11 @@ All routes are mounted under `/api/v1`:
 
 | Route                              | Method | Purpose                                              |
 | ----------------------------------- | ------ | ----------------------------------------------------- |
-| `/auth/login`                       | POST   | Validate username + password, returns a session token + the field executive's profile (same shape as `/me`) |
+| `/auth/login`                       | POST   | Validate username + password, returns a session token + the field executive's profile (same shape as `/me`) + the master-data version `masterDataUpdatedAt` |
 | `/ui-config`                        | GET    | Download all screen configs                          |
 | `/ui-config/:screenId`              | GET    | Download a single screen config                       |
 | `/ui-config/:screenId`              | PUT    | Update a screen config (admin only)                    |
-| `/master-data`                      | GET    | Download dropdown/reference data **+ mobile app settings** (post-login). Replaces `/reference-data`, which now returns 404 |
+| `/master-data`                      | GET    | Download dropdown/reference data **+ mobile app settings** (post-login), with the master-data version `updatedAt` they belong to. Replaces `/reference-data`, which now returns 404 |
 | `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
@@ -248,8 +249,9 @@ All routes are mounted under `/api/v1`:
 | `/admin/field-executives`           | GET    | Field executive roster + assignment/detection counts (admin auth required) |
 | `/admin/field-executives/:id/history` | GET  | One executive's case-wise history, with mock-location detections (admin auth required) |
 
-`POST /auth/login` returns a JWT (`{ token, fieldExecutive }`) only when both the username and
-password match a seeded field executive. Send it as `Authorization: Bearer <token>` on `/cases`
+`POST /auth/login` returns a JWT (`{ token, fieldExecutive, masterDataUpdatedAt }`) only when both
+the username and password match a seeded field executive (`masterDataUpdatedAt` is explained under
+[Master data version](#master-data-version)). Send it as `Authorization: Bearer <token>` on `/cases`
 and `/me` — this is real credential validation, but device-binding auth (matching a specific
 physical device to an account) is still not implemented.
 
@@ -431,6 +433,7 @@ the one post-login batch fetch the app already makes — as an extra `mobileAppS
 
 ```jsonc
 {
+  "updatedAt": "2026-10-04T09:15:02.481Z",     // master-data version — see below
   "verificationTypeStatuses": [ /* … unchanged … */ ],
   "mobileAppSettings": {
     "values": { "geo_fence_radius_meters": 200, "locationRetryCount": 3, "watermark_enabled": true },
@@ -446,6 +449,46 @@ verbatim rather than normalised to snake_case like the keys around it. The admin
 `label`/`description` text is deliberately excluded — the app renders user-visible strings from its
 own en/hi/te localization keys. On the app side, read settings through
 `useMobileAppSettings()` / `getMobileAppSettings()` (see `FullScanApp/src/store/reference-data/`).
+
+`mobileAppSettings.updatedAt` is the latest settings change only. For "did any master data
+change?", use the master-data version below.
+
+### Master data version
+
+The server keeps one **master-data version** and changes it whenever master data — dropdown
+options or mobile app settings — changes. The mobile app keeps its last `/master-data` payload on
+the device and calls `/master-data` again only when the version login returns differs from the one
+stored with that payload. Contract: `docs/api-contracts/master-data-sync.md` at the monorepo root.
+
+| Where                         | Field                       | Type             |
+| ----------------------------- | --------------------------- | ---------------- |
+| `POST /auth/login` 200 `data` | `masterDataUpdatedAt`       | `string \| null` |
+| `GET /master-data` 200 `data` | `updatedAt` (top level)     | `string \| null` |
+
+```jsonc
+// POST /api/v1/auth/login → data
+{
+  "token": "<jwt>",
+  "fieldExecutive": { "id": "fe-001", "name": "…", "email": "…", "role": "…" },
+  "masterDataUpdatedAt": "2026-10-04T09:15:02.481Z"
+}
+```
+
+- **Format.** ISO 8601 UTC **with milliseconds** (`nowIsoTimestamp()`), not the stored
+  `YYYY-MM-DD HH:MM:SS` used elsewhere: at second resolution, two admin saves in the same second
+  would leave it unchanged. It is opaque to the app, which only compares it for equality. `null`
+  means no version is recorded, and the app then always fetches.
+- **Storage.** One document: `app_metadata` `{ _id: "master_data", updated_at }`
+  (`src/db/app-metadata.dao.ts`). Reads never write it; if it is missing both endpoints return `null`.
+- **When it changes.** A successful `PUT /admin/mobile-app-settings` sets it to now **in the same
+  transaction** as the settings — even a save that changes no value. A rejected batch (`400`),
+  `401` or `403` leaves it alone. Migration `002_init_master_data_version` records the first one.
+- **Rule for new migrations.** Any migration that inserts, updates or deletes `dropdown_options` or
+  `mobile_app_settings` rows — and any change to the `/master-data` payload shape — must also call
+  `bumpMasterDataVersion(db, session)` (`src/db/migrations/master-data-version.ts`) in that
+  migration. Otherwise devices that already have a copy never see the change.
+- **Read order.** `/master-data` reads the version *before* the data, so a change landing mid-read
+  can only leave the version older than the data (one extra fetch later), never newer.
 
 ### Admin test credentials
 

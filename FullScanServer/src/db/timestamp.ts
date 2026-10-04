@@ -19,3 +19,14 @@ export function timestampDaysAgo(days: number): string {
   date.setUTCDate(date.getUTCDate() - days);
   return formatTimestamp(date);
 }
+
+/**
+ * Now, as ISO 8601 UTC with milliseconds (`2026-10-04T09:15:02.481Z`). The one
+ * deliberate exception to the format above: the master-data version
+ * (`app_metadata.master_data.updated_at`) is compared for equality by the mobile app,
+ * and at second resolution two admin saves within the same second would leave it
+ * unchanged — see the monorepo's docs/api-contracts/master-data-sync.md.
+ */
+export function nowIsoTimestamp(): string {
+  return new Date().toISOString();
+}

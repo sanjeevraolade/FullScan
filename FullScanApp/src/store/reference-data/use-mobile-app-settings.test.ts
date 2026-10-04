@@ -20,7 +20,7 @@ function buildReferenceData(
   values: Record<string, boolean | number | string>,
   updatedAt: string | null = null,
 ): ReferenceData {
-  return { ...EMPTY_OPTION_LISTS, mobileAppSettings: { values, updatedAt } };
+  return { ...EMPTY_OPTION_LISTS, updatedAt: null, mobileAppSettings: { values, updatedAt } };
 }
 
 function seedSettings(

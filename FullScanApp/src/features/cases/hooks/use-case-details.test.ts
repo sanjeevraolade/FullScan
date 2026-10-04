@@ -16,6 +16,7 @@ jest.mock('@/repositories/case-repository');
 const NO_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
 
 const mockReferenceData: ReferenceData = {
+  updatedAt: null,
   verificationTypeStatuses: [
     { code: 'verified_clear', label: 'Verified Clear' },
     { code: 'utv', label: 'UTV' },

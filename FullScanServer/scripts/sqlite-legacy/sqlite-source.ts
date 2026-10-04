@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
-import { COLLECTION_NAMES, type CollectionName } from '../../src/db/schema.js';
+import { LEGACY_TABLE_NAMES, type LegacyTableName } from '../../src/db/schema.js';
 
 /**
  * Reads the pre-MongoDB SQLite database. Used only by the migration tooling:
@@ -45,9 +45,12 @@ export function applyLegacyMigrations(db: Database.Database): string[] {
   return pending;
 }
 
-/** Every business table, rows in insertion (`rowid`) order. */
-export function readAllTables(db: Database.Database): Record<CollectionName, SqliteRow[]> {
+/**
+ * Every business table, rows in insertion (`rowid`) order. Collections added after the
+ * move to MongoDB (e.g. `app_metadata`) have no table here and are not read.
+ */
+export function readAllTables(db: Database.Database): Record<LegacyTableName, SqliteRow[]> {
   return Object.fromEntries(
-    COLLECTION_NAMES.map((name) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all() as SqliteRow[]]),
-  ) as Record<CollectionName, SqliteRow[]>;
+    LEGACY_TABLE_NAMES.map((name) => [name, db.prepare(`SELECT * FROM ${name} ORDER BY rowid`).all() as SqliteRow[]]),
+  ) as Record<LegacyTableName, SqliteRow[]>;
 }

@@ -20,10 +20,12 @@ export interface UseReferenceDataLoaderResult {
  * Re-fetching the post-login reference-data payload (dropdowns +
  * `mobileAppSettings`) after a failure.
  *
- * Login already fetches it once; this exists so a screen that *cannot operate*
- * without server configuration — Case Details, which needs
- * `geo_fence_radius_meters` and `locationRetryCount` — can offer a retry
- * instead of silently falling back to a guessed radius.
+ * Login already loads it once (from the device cache or the network); this
+ * exists so a screen that *cannot operate* without server configuration —
+ * Case Details, which needs `geo_fence_radius_meters` and `locationRetryCount`
+ * — can offer a retry instead of silently falling back to a guessed radius.
+ * A reload always goes to the network, and persists what it gets like every
+ * fetch does.
  */
 export function useReferenceDataLoader(): UseReferenceDataLoaderResult {
   const isLoaded = useReferenceDataStore((state) => state.referenceData !== null);

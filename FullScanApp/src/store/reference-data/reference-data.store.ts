@@ -13,10 +13,15 @@ export interface ReferenceDataState {
 
 /**
  * App-wide dropdown/option data (verification statuses, UTV/Insufficient
- * reasons, photo types) plus the admin-managed mobile app settings — fetched
- * once right after login, alongside the field executive profile, and read by
- * any screen that needs an option list or a setting instead of re-fetching per
- * screen. Read settings through `useMobileAppSettings`.
+ * reasons, photo types) plus the admin-managed mobile app settings — loaded
+ * once right after login, alongside the field executive profile (from the
+ * device cache when the server's master-data version is unchanged, otherwise
+ * from the network), and read by any screen that needs an option list or a
+ * setting instead of re-fetching per screen. Read settings through
+ * `useMobileAppSettings`.
+ *
+ * In-memory only: the persisted copy belongs to the reference-data
+ * repository, and clearing this store on logout leaves it in place.
  */
 export const useReferenceDataStore = create<ReferenceDataState>((set) => ({
   referenceData: null,

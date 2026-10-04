@@ -2723,7 +2723,7 @@ EXTERNAL SOURCES:
 
 SPEC CHECKSUMS:
   FBLazyVector: b3e7ad108f0d882e30445c5527d774e3fd432f3d
-  hermes-engine: d6a8215b2fddb5e9df0a4ffbeee11ac84ec7f072
+  hermes-engine: cf21d9163301f4cc48cd5eab57b4d8688b1bd656
   MMKVCore: 3d16ce9f7d411e135020915fde98a056859a1efa
   NitroImage: 2f592086cbdecbbaa1c10dd97e0cdd43b1bb0817
   NitroMmkv: 85a251e15c39d7c95fe58cf40786fa126b8d143c

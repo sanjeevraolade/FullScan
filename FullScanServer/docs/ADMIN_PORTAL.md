@@ -667,6 +667,10 @@ single post-login batch fetch the app already makes
 }
 ```
 
+> Since the master-data-sync change, the payload also carries a top-level `updatedAt` (the
+> master-data version), and the app re-fetches it only when login's `masterDataUpdatedAt` differs
+> from its cached copy — see the README's *Master data version* section.
+
 **Why this endpoint and not a new one.** `/master-data` is already the login-time configuration
 batch, it needs no extra round trip, it is re-fetched on every login (including biometric), and one
 call means one failure mode. `reference-data.service.ts` reuses `getAllMobileAppSettings()` rather

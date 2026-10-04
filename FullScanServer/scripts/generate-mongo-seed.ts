@@ -13,7 +13,7 @@ import fs from 'fs';
 import path from 'path';
 import Database from 'better-sqlite3';
 import { SEED_NOW } from '../src/db/migrations/001_seed_initial_data.js';
-import { COLLECTION_NAMES } from '../src/db/schema.js';
+import { LEGACY_TABLE_NAMES } from '../src/db/schema.js';
 import { nowTimestamp } from '../src/db/timestamp.js';
 import { applyLegacyMigrations, readAllTables, type SqliteRow } from './sqlite-legacy/sqlite-source.js';
 
@@ -40,7 +40,8 @@ function generateSeed(): void {
 
   fs.mkdirSync(SEED_DIR, { recursive: true });
 
-  for (const name of COLLECTION_NAMES) {
+  // Only the SQLite-backed collections: MongoDB-only ones are populated by migrations.
+  for (const name of LEGACY_TABLE_NAMES) {
     const filePath = path.join(SEED_DIR, `${name}.json`);
     const rows = tables[name].map((row) => replaceBuildTimestamps(row, buildStartedAt, buildFinishedAt));
 

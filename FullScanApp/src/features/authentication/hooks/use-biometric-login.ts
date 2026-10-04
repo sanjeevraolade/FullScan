@@ -9,12 +9,12 @@ import { BiometricsService } from '@/infrastructure/biometrics';
 import type { BiometryType } from '@/infrastructure/biometrics';
 import { BiometricCredentialStorageService } from '@/infrastructure/storage';
 import { login } from '@/repositories/authentication-repository';
-import { fetchReferenceData } from '@/repositories/reference-data-repository';
+import type { LoginResult } from '@/repositories/authentication-repository';
+import { loadReferenceData } from '@/repositories/reference-data-repository';
 import { ROUTE_NAMES } from '@/navigation/routes';
 import type { RootStackParamList } from '@/navigation/routes';
 import { useSessionStore } from '@/store/session';
 import { useReferenceDataStore } from '@/store/reference-data';
-import type { FieldExecutive } from '@/domain/field-executive';
 
 const FILE_NAME = 'use-biometric-login.ts';
 
@@ -58,14 +58,18 @@ function resolveBiometricLoginErrorKey(error: unknown): BiometricLoginErrorKey {
 }
 
 /**
- * Fetches reference data, then populates the app-wide stores with it and the
- * profile `login()` already returned — mirrors the post-login step in `useLoginForm`.
+ * Loads reference data — from the device cache when the login's master-data
+ * version matches it, otherwise from the network — then populates the
+ * app-wide stores with it and the profile `login()` already returned. Mirrors
+ * the post-login step in `useLoginForm`.
  */
-async function restoreSession(fieldExecutive: FieldExecutive): Promise<void> {
+async function restoreSession(loginResult: LoginResult): Promise<void> {
+  const { fieldExecutive, masterDataUpdatedAt } = loginResult;
   LoggerService.info(`${FILE_NAME}: restoreSession: loading reference data`, {
     fieldExecutiveId: fieldExecutive.id,
+    masterDataUpdatedAt,
   });
-  const referenceData = await fetchReferenceData();
+  const referenceData = await loadReferenceData(masterDataUpdatedAt);
   // Configuration before session — see the same ordering note in
   // `useLoginForm`: the session is what triggers location validation, which
   // reads `mobileAppSettings`.
@@ -150,9 +154,9 @@ export function useBiometricLogin(): UseBiometricLoginResult {
           `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: vault unlocked, re-authenticating`,
         );
 
-        let fieldExecutive: FieldExecutive;
+        let loginResult: LoginResult;
         try {
-          fieldExecutive = await login({
+          loginResult = await login({
             username: credentials.username,
             password: credentials.password,
           });
@@ -176,7 +180,7 @@ export function useBiometricLogin(): UseBiometricLoginResult {
           throw loginError;
         }
 
-        await restoreSession(fieldExecutive);
+        await restoreSession(loginResult);
 
         LoggerService.info(
           `${FILE_NAME}: useBiometricLogin.loginWithBiometrics: biometric login succeeded`,

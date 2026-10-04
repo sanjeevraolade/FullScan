@@ -7,16 +7,20 @@ import type { DropdownCategory } from '../types/reference-data.types.js';
 
 /**
  * The MongoDB schema: one collection per former SQLite table, same names, same
- * snake_case fields. What SQLite enforced with NOT NULL / CHECK is a `$jsonSchema`
- * validator here, and every SQLite index — partial unique ones included — has a
- * MongoDB equivalent. `applySchema()` creates or updates all of it on startup and is
- * safe to run repeatedly.
+ * snake_case fields, plus the few collections added since the move. What SQLite
+ * enforced with NOT NULL / CHECK is a `$jsonSchema` validator here, and every SQLite
+ * index — partial unique ones included — has a MongoDB equivalent. `applySchema()`
+ * creates or updates all of it on startup and is safe to run repeatedly.
  *
  * Foreign keys have no MongoDB equivalent; the services check references before
  * writing (see docs/sqlite-migration-mongodb.md).
  */
 
-export const COLLECTION_NAMES = [
+/**
+ * The collections that were SQLite tables. The legacy tooling in `scripts/` (seed
+ * generator, SQLite → MongoDB copy) reads exactly these tables from SQLite.
+ */
+export const LEGACY_TABLE_NAMES = [
   'ui_configs',
   'field_executives',
   'cases',
@@ -29,6 +33,19 @@ export const COLLECTION_NAMES = [
   'field_executive_devices',
   'case_evidence',
 ] as const;
+
+export type LegacyTableName = (typeof LEGACY_TABLE_NAMES)[number];
+
+/**
+ * Collections added after the move to MongoDB. No SQLite table backs them, so the
+ * legacy tooling never reads, seeds or copies them; migrations create their data.
+ *
+ * - `app_metadata` — server-maintained values about the data, one document per value.
+ *   `_id: 'master_data'` holds the master-data version (see `app-metadata.dao.ts`).
+ */
+const MONGO_ONLY_COLLECTION_NAMES = ['app_metadata'] as const;
+
+export const COLLECTION_NAMES = [...LEGACY_TABLE_NAMES, ...MONGO_ONLY_COLLECTION_NAMES] as const;
 
 export type CollectionName = (typeof COLLECTION_NAMES)[number];
 
@@ -55,7 +72,10 @@ const RELEASE_REASONS = ['device_change_approved', 'binding_replaced'] as const 
 const EVIDENCE_MIME_TYPES = ['image/jpeg', 'image/png', 'image/webp'] as const satisfies readonly EvidenceMimeType[];
 
 interface CollectionSpec {
-  /** The SQLite primary key column, stored as `_id`. */
+  /**
+   * The SQLite primary key column, stored as `_id`. A MongoDB-only collection names
+   * the field a row-shaped seed would carry its key in.
+   */
   readonly primaryKey: string;
   /**
    * Adds an `insert_order` ObjectId to every document. SQLite broke timestamp ties
@@ -258,6 +278,15 @@ export const COLLECTIONS: Readonly<Record<CollectionName, CollectionSpec>> = {
       { key: { storage_path: 1 }, name: 'storage_path_unique', unique: true },
     ],
   },
+  app_metadata: {
+    // `_id` is the value's name, e.g. 'master_data'. Read by `_id` only, so no indexes.
+    primaryKey: 'key',
+    hasInsertOrder: false,
+    notNull: ['updated_at'],
+    // An ISO 8601 string, never a BSON date: the API returns it verbatim as `string | null`.
+    checks: { updated_at: { bsonType: 'string' } },
+    indexes: [],
+  },
 };
 
 /** NOT NULL → present and not null; CHECK → the per-field rule. */
@@ -291,7 +320,10 @@ export async function applySchema(db: Db): Promise<void> {
       await db.createCollection(name, { validator, validationLevel: 'strict', validationAction: 'error' });
     }
 
-    await db.collection(name).createIndexes([...spec.indexes]);
+    // `createIndexes` rejects an empty list.
+    if (spec.indexes.length > 0) {
+      await db.collection(name).createIndexes([...spec.indexes]);
+    }
   }
 }
 

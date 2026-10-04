@@ -274,6 +274,14 @@ on every start.
 | `case_evidence` | `id` | `source`, `mime_type` enums, `size_bytes ≥ 1` | `(component_id, uploaded_at)`, `storage_path` unique |
 | `migrations` | migration name | — | — |
 
+Collections added after the move have no SQLite table behind them. `schema.ts` lists them in
+`COLLECTION_NAMES` but not in `LEGACY_TABLE_NAMES`, so the seed generator and the SQLite copy
+script never read, seed or copy them; the server's migrations fill them on its next start.
+
+| Collection | `_id` | Validated beyond not-null | Indexes |
+| --- | --- | --- | --- |
+| `app_metadata` | value name (`master_data`) | `updated_at` is a string | — |
+
 Schema changes, such as a new index or a new allowed value, go in `schema.ts`, not in a migration.
 Every startup brings an existing database up to date with that file.
 

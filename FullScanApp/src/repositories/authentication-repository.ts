@@ -44,6 +44,18 @@ interface FieldExecutiveDto {
 interface LoginResponseDto {
   readonly token: string;
   readonly fieldExecutive: FieldExecutiveDto;
+  /** Absent from a server that predates master-data versioning. */
+  readonly masterDataUpdatedAt?: string | null;
+}
+
+export interface LoginResult {
+  readonly fieldExecutive: FieldExecutive;
+  /**
+   * The server's current master-data version, or null when it has none or
+   * predates versioning. Opaque — hand it to `loadReferenceData` as-is; it is
+   * only ever compared for equality, never parsed or ordered.
+   */
+  readonly masterDataUpdatedAt: string | null;
 }
 
 function mapFieldExecutive(dto: FieldExecutiveDto): FieldExecutive {
@@ -60,11 +72,13 @@ function mapFieldExecutive(dto: FieldExecutiveDto): FieldExecutive {
  * the issued bearer token to secure storage (Keychain/Keystore) — the api-client's
  * request interceptor reads it back from there and attaches it to every subsequent
  * authenticated request — and resolves with the logged-in field executive's
- * profile, which the login response carries so no separate `GET /me` is needed.
+ * profile, which the login response carries so no separate `GET /me` is needed,
+ * plus the server's master-data version, which decides whether the post-login
+ * `GET /master-data` can be skipped (see `loadReferenceData`).
  * Resolves only once the token is stored. Rejects with the underlying AxiosError
  * on failure; callers map that to a user-facing error key, never a raw message.
  */
-export async function login(credentials: LoginCredentials): Promise<FieldExecutive> {
+export async function login(credentials: LoginCredentials): Promise<LoginResult> {
   // Credentials are never logged — only non-identifying metadata.
   LoggerService.info(`${FILE_NAME}: login: submitting credentials with device binding`, {
     hasUsername: credentials.username.trim().length > 0,
@@ -98,14 +112,17 @@ export async function login(credentials: LoginCredentials): Promise<FieldExecuti
   // Mapped before the token is stored: if the profile can't be read, the login
   // rejects without leaving a token behind for a session that never starts.
   const fieldExecutive = mapFieldExecutive(response.data.data.fieldExecutive);
+  const masterDataUpdatedAt = response.data.data.masterDataUpdatedAt ?? null;
 
   await TokenStorageService.saveToken(token);
 
+  // The master-data version is a timestamp, not personal data — safe to log.
   LoggerService.info(`${FILE_NAME}: login: login succeeded, token stored, device bound`, {
     fieldExecutiveId: fieldExecutive.id,
     role: fieldExecutive.role,
+    masterDataUpdatedAt,
   });
-  return fieldExecutive;
+  return { fieldExecutive, masterDataUpdatedAt };
 }
 
 /** Clears the persisted session token — call on logout or session expiry. */
