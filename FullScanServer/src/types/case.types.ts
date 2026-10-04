@@ -1,13 +1,38 @@
 export type CaseBucket = 'new' | 'pending' | 'beyond_tat' | 'completed';
 
+/** The `type` values `GET /cases` accepts — one per tab, i.e. every bucket. */
+export const CASE_LIST_TYPES = ['new', 'pending', 'beyond_tat', 'completed'] as const satisfies readonly CaseBucket[];
+
 /**
  * A case (one Case Ref Number) routinely has several independent verification
  * components — present address, permanent address, employment... — each with
  * its own status/date trail. The component, not the case, is the field
  * executive's actual unit of work, so it's what the list/accept/detail
- * endpoints operate on; `caseId`/`caseRef` link back to the shared parent.
+ * endpoints operate on; `caseRef` links back to the shared parent.
+ *
+ * Returned by `GET /cases?type=…` and by the accept and verification-outcome
+ * responses (docs/api-contracts/cases-by-tab.md). There is no `bucket`: a list item
+ * belongs to the tab it was requested with.
  */
 export interface CaseSummary {
+  /** The component ("check") id. */
+  readonly id: string;
+  /** Same value as `id`. */
+  readonly checkId: string;
+  readonly caseRef: string;
+  readonly clientName: string;
+  readonly candidateName: string;
+  readonly verificationType: string;
+  readonly address: string;
+  readonly updatedAt: string;
+}
+
+/**
+ * @deprecated The item shape of the legacy all-buckets `GET /cases` (no `type`), kept
+ * byte-for-byte for app builds already installed in the field. Remove it together with
+ * that path once no supported build calls it.
+ */
+export interface LegacyCaseSummary {
   readonly id: string;
   readonly caseId: string;
   readonly caseRef: string;
@@ -17,6 +42,19 @@ export interface CaseSummary {
   readonly address: string;
   readonly bucket: CaseBucket;
   readonly updatedAt: string;
+}
+
+/** `GET /cases/counts` — one count per tab. All four keys are always present. */
+export type CaseCounts = Readonly<Record<CaseBucket, number>>;
+
+/** `GET /cases?type=…` — one page of one tab. */
+export interface CasePage {
+  readonly type: CaseBucket;
+  readonly items: readonly CaseSummary[];
+  /** Opaque; `null` is the only "no more items" signal. Always `null` for `new`. */
+  readonly nextCursor: string | null;
+  /** Informational — the configured `CASES_PAGE_SIZE` the server used. */
+  readonly pageSize: number;
 }
 
 /** Row shape of `case_components` joined with its parent `cases` row. */
@@ -100,7 +138,8 @@ export interface SiblingComponent {
 /** Full Case Details payload for the verification workflow screen — one component plus its case-wide siblings. */
 export interface CaseDetail {
   readonly id: string;
-  readonly caseId: string;
+  /** Same value as `id`, the component ("check") id. */
+  readonly checkId: string;
   readonly caseRef: string;
   readonly bucket: CaseBucket;
   readonly tatDueAt: string;

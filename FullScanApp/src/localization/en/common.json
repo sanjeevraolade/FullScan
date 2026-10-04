@@ -81,7 +81,8 @@
       "new": "New",
       "pending": "Pending",
       "beyondTat": "TAT",
-      "completed": "Completed"
+      "completed": "Completed",
+      "labelWithCount": "{{label}} ({{count}})"
     },
     "card": {
       "caseRef": "Case Ref: {{caseRef}}",
@@ -95,12 +96,17 @@
       "call": "Call",
       "callComingSoon": "Masked calling is coming soon.",
       "retry": "Retry",
-      "viewFormDetails": "View Form Details"
+      "viewCaseDetails": "View Case Details"
     },
     "loading": "Loading cases...",
     "empty": "No cases in this bucket.",
     "errors": {
-      "network": "Unable to load cases. Check your connection and try again."
+      "network": "Unable to load cases. Check your connection and try again.",
+      "refreshFailed": "Couldn't refresh. Showing the cases loaded earlier."
+    },
+    "loadMore": {
+      "loading": "Loading more cases...",
+      "error": "Couldn't load more cases."
     }
   },
   "caseDetails": {

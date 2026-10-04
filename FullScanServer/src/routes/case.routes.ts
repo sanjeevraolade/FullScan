@@ -1,12 +1,23 @@
 import { Router } from 'express';
 import * as controller from '../controllers/case.controller.js';
 import { validate } from '../middleware/validate.js';
-import { acceptCaseSchema, getCaseDetailSchema, submitVerificationOutcomeSchema } from './schemas/case.schema.js';
+import {
+  acceptCaseSchema,
+  getCaseCountsSchema,
+  getCaseDetailSchema,
+  listCasesSchema,
+  submitVerificationOutcomeSchema,
+} from './schemas/case.schema.js';
 
 export const caseRoutes = Router();
 
-// GET /api/v1/cases — all cases assigned to the current field executive
-caseRoutes.get('/', controller.getCases);
+// GET /api/v1/cases?type=<tab>[&cursor=…] — one page of one tab.
+// Without `type` it still returns the DEPRECATED all-buckets array, for app builds already in the field.
+caseRoutes.get('/', validate(listCasesSchema), controller.getCases);
+
+// GET /api/v1/cases/counts — the four tab counts.
+// Must stay above GET /:caseId, or 'counts' is matched as a case id.
+caseRoutes.get('/counts', validate(getCaseCountsSchema), controller.getCaseCounts);
 
 // PATCH /api/v1/cases/:caseId/accept — New -> Pending/In Progress
 caseRoutes.patch('/:caseId/accept', validate(acceptCaseSchema), controller.acceptCase);

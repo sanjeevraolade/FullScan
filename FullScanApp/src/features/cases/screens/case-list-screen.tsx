@@ -11,8 +11,6 @@ import {
   AlertIcon,
   AlertText,
   Box,
-  Button,
-  ButtonText,
   HStack,
   Icon,
   Image,
@@ -22,7 +20,6 @@ import {
   SearchIcon,
   Spinner,
   Text,
-  VStack,
 } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
@@ -35,10 +32,14 @@ import { DraftStorageService } from '../services/draft-storage';
 
 import { CaseBucketTabs } from '../components/case-bucket-tabs';
 import { CaseCard } from '../components/case-card';
+import { CaseListErrorNotice } from '../components/case-list-error-notice';
+import { CaseListFooter } from '../components/case-list-footer';
 import { CaseListHeader } from '../components/case-list-header';
 import { useCaseList } from '../hooks/use-case-list';
 
 const LOGO_SIZE = 28;
+/** How close to the end (in visible-list lengths) the next page starts loading. */
+const END_REACHED_THRESHOLD = 0.5;
 
 const FILE_NAME = 'case-list-screen.tsx';
 
@@ -71,8 +72,9 @@ function isCallableBucket(bucket: CaseBucket): boolean {
 /**
  * Landing page shown right after login: the field executive's assigned
  * cases, grouped into New / Pending / Beyond TAT / Completed. Presentation
- * only — data fetching, filtering and the Accept action all live in
- * `useCaseList`.
+ * only — per-tab loading, paging, filtering and the Accept action all live in
+ * `useCaseList`. The tabs always stay on screen: loading and errors render in
+ * the list area below them.
  */
 export function CaseListScreen(): ReactElement {
   const { t } = useTranslation();
@@ -80,14 +82,19 @@ export function CaseListScreen(): ReactElement {
   const {
     selectedBucket,
     selectBucket,
-    bucketCounts,
+    bucketBadgeCounts,
     visibleCases,
     searchQuery,
     setSearchQuery,
     isLoading,
     isRefreshing,
     loadError,
+    refreshError,
     refresh,
+    isLoadingMore,
+    loadMoreError,
+    loadMore,
+    retryLoadMore,
     acceptingCaseId,
     acceptCase,
   } = useCaseList();
@@ -140,22 +147,101 @@ export function CaseListScreen(): ReactElement {
   };
 
   const renderCase = ({ item }: { item: Case }): ReactElement => {
-    // Candidate/client names are PII — only the case id and bucket are logged.
+    // Candidate/client names are PII — only the case id and the tab are logged.
     const hasDraft = DraftStorageService.hasDraft(item.id);
     LoggerService.info(`${FILE_NAME}: renderCase: rendering case card`, {
       caseId: item.id,
-      bucket: item.bucket,
+      selectedBucket,
       isAccepting: acceptingCaseId === item.id,
       hasDraft,
     });
+    // A list item carries no bucket of its own — it belongs to the tab it was loaded for.
     return (
       <CaseCard
         caseItem={item}
         onPress={handleCasePress}
-        onAccept={isAcceptableBucket(item.bucket) ? acceptCase : undefined}
+        onAccept={isAcceptableBucket(selectedBucket) ? acceptCase : undefined}
         isAccepting={acceptingCaseId === item.id}
-        onCall={isCallableBucket(item.bucket) ? handleCallPress : undefined}
+        onCall={isCallableBucket(selectedBucket) ? handleCallPress : undefined}
         hasDraft={hasDraft}
+      />
+    );
+  };
+
+  const renderListArea = (): ReactElement => {
+    if (isLoading) {
+      LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering first-page loading state`, {
+        selectedBucket,
+      });
+      return (
+        <Box flex={1} justifyContent="center" alignItems="center">
+          <Spinner
+            size="large"
+            accessibilityLabel={t('caseList.loading')}
+            testID="case-list-loading-spinner"
+          />
+        </Box>
+      );
+    }
+
+    if (loadError) {
+      LoggerService.warn(`${FILE_NAME}: CaseListScreen: rendering first-page error state`, {
+        selectedBucket,
+        loadError,
+      });
+      return (
+        <CaseListErrorNotice
+          messageKey={`caseList.errors.${loadError}`}
+          onRetry={refresh}
+          variant="fullArea"
+          testIDPrefix="case-list-error"
+        />
+      );
+    }
+
+    LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering case list`, {
+      selectedBucket,
+      visibleCount: visibleCases.length,
+      isRefreshing,
+      isLoadingMore,
+      hasRefreshError: refreshError !== null,
+      hasLoadMoreError: loadMoreError !== null,
+      isEmpty: visibleCases.length === 0,
+    });
+    return (
+      <FlatList
+        data={visibleCases}
+        keyExtractor={(item) => item.id}
+        renderItem={renderCase}
+        contentContainerStyle={{ paddingTop: 16, gap: 12, flexGrow: 1 }}
+        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
+        onEndReached={loadMore}
+        onEndReachedThreshold={END_REACHED_THRESHOLD}
+        ListHeaderComponent={
+          refreshError ? (
+            <CaseListErrorNotice
+              messageKey="caseList.errors.refreshFailed"
+              onRetry={refresh}
+              variant="inline"
+              testIDPrefix="case-list-refresh-error"
+            />
+          ) : null
+        }
+        ListFooterComponent={
+          <CaseListFooter
+            isLoadingMore={isLoadingMore}
+            hasLoadMoreError={loadMoreError !== null}
+            onRetry={retryLoadMore}
+          />
+        }
+        ListEmptyComponent={
+          <Box flex={1} justifyContent="center" alignItems="center" py="$10">
+            <Text size="sm" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }}>
+              {t('caseList.empty')}
+            </Text>
+          </Box>
+        }
+        testID="case-list"
       />
     );
   };
@@ -210,47 +296,22 @@ export function CaseListScreen(): ReactElement {
     });
   }, [navigation, t]);
 
-  if (isLoading) {
-    LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering loading state`);
-    return (
-      <Box flex={1} justifyContent="center" alignItems="center">
-        <Spinner size="large" accessibilityLabel={t('caseList.loading')} testID="case-list-loading-spinner" />
-      </Box>
-    );
-  }
-
-  if (loadError) {
-    LoggerService.warn(`${FILE_NAME}: CaseListScreen: rendering load-error state`, { loadError });
-    return (
-      <Box flex={1} justifyContent="center" alignItems="center" p="$5">
-        <VStack space="md" alignItems="center">
-          <Alert action="error" testID="case-list-error-alert">
-            <AlertIcon as={AlertCircleIcon} mr="$2" />
-            <AlertText>{t(`caseList.errors.${loadError}`)}</AlertText>
-          </Alert>
-          <Button onPress={refresh} accessibilityLabel={t('caseList.actions.retry')} testID="case-list-retry-button">
-            <ButtonText>{t('caseList.actions.retry')}</ButtonText>
-          </Button>
-        </VStack>
-      </Box>
-    );
-  }
-
-  LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering case list`, {
+  LoggerService.info(`${FILE_NAME}: CaseListScreen: rendering screen chrome`, {
     selectedBucket,
-    visibleCount: visibleCases.length,
     isSearchVisible,
     searchQueryLength: searchQuery.trim().length,
-    isRefreshing,
     hasNotice: noticeKey !== null,
-    isEmpty: visibleCases.length === 0,
   });
 
   return (
     <Box flex={1}>
       <CaseListHeader isSearchVisible={isSearchVisible} searchQuery={searchQuery} onSearchQueryChange={setSearchQuery} />
 
-      <CaseBucketTabs selectedBucket={selectedBucket} bucketCounts={bucketCounts} onSelectBucket={selectBucket} />
+      <CaseBucketTabs
+        selectedBucket={selectedBucket}
+        badgeCounts={bucketBadgeCounts}
+        onSelectBucket={selectBucket}
+      />
 
       {noticeKey ? (
         <Box px="$4" pb="$2">
@@ -261,21 +322,7 @@ export function CaseListScreen(): ReactElement {
         </Box>
       ) : null}
 
-      <FlatList
-        data={visibleCases}
-        keyExtractor={(item) => item.id}
-        renderItem={renderCase}
-        contentContainerStyle={{ paddingTop: 16, gap: 12, flexGrow: 1 }}
-        refreshControl={<RefreshControl refreshing={isRefreshing} onRefresh={refresh} />}
-        ListEmptyComponent={
-          <Box flex={1} justifyContent="center" alignItems="center" py="$10">
-            <Text size="sm" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }}>
-              {t('caseList.empty')}
-            </Text>
-          </Box>
-        }
-        testID="case-list"
-      />
+      {renderListArea()}
     </Box>
   );
 }

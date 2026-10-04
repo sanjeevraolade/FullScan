@@ -6,6 +6,7 @@ import { LoggerService } from '@/infrastructure/logger';
 import type { CaseBucket } from '@/domain/case';
 
 import { CASE_LIST_BUCKETS } from '../hooks/use-case-list';
+import type { CaseBucketBadgeCounts } from '../hooks/use-case-list';
 import { Tabs, TabsTab, TabsTabList, TabsTabTitle } from '@gluestack-ui/themed';
 
 const FILE_NAME = 'case-bucket-tabs.tsx';
@@ -27,7 +28,8 @@ const BUCKET_COLOR_TOKENS: Record<CaseBucket, { selectedBg: string; unselectedBg
 
 export interface CaseBucketTabsProps {
   readonly selectedBucket: CaseBucket;
-  readonly bucketCounts: Record<CaseBucket, number>;
+  /** `null` for a tab with no trustworthy number yet — it shows its label alone. */
+  readonly badgeCounts: CaseBucketBadgeCounts;
   readonly onSelectBucket: (bucket: CaseBucket) => void;
 }
 
@@ -43,14 +45,14 @@ export interface CaseBucketTabsProps {
  */
 export function CaseBucketTabs({
   selectedBucket,
-  bucketCounts,
+  badgeCounts,
   onSelectBucket,
 }: CaseBucketTabsProps): ReactElement {
   const { t } = useTranslation();
 
   LoggerService.info(`${FILE_NAME}: CaseBucketTabs: rendering`, {
     selectedBucket,
-    bucketCounts,
+    badgeCounts,
   });
 
   return (
@@ -60,11 +62,16 @@ export function CaseBucketTabs({
           const isSelected = bucket === selectedBucket;
           const label = t(BUCKET_LABEL_KEYS[bucket]);
           const colors = BUCKET_COLOR_TOKENS[bucket];
+          const badgeCount = badgeCounts[bucket];
+          const title =
+            badgeCount === null
+              ? label
+              : t('caseList.tabs.labelWithCount', { label, count: badgeCount });
 
           LoggerService.info(`${FILE_NAME}: CaseBucketTabs: rendering bucket tab`, {
             bucket,
             isSelected,
-            count: bucketCounts[bucket],
+            badgeCount,
           });
 
           const handlePress = (): void => {
@@ -85,7 +92,7 @@ export function CaseBucketTabs({
               bg={isSelected ? colors.selectedBg : colors.unselectedBg}
               accessibilityRole="tab"
               accessibilityState={{ selected: isSelected }}
-              accessibilityLabel={label}
+              accessibilityLabel={title}
               testID={`case-bucket-tab-${bucket}`}
             >
               <TabsTabTitle
@@ -95,7 +102,7 @@ export function CaseBucketTabs({
                 adjustsFontSizeToFit
                 color={isSelected ? colors.selectedText : colors.unselectedText}
               >
-                {label} ({bucketCounts[bucket]})
+                {title}
               </TabsTabTitle>
             </TabsTab>
           );

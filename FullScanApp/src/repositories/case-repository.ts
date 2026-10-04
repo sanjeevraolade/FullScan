@@ -6,6 +6,7 @@ import type {
   AddressType,
   Case,
   CaseBucket,
+  CaseBucketCounts,
   CaseDetail,
   CostRequested,
   ResidenceType,
@@ -51,16 +52,42 @@ function mapResidenceType(value: string | null): ResidenceType | null {
 
 type CaseBucketDto = 'new' | 'pending' | 'beyond_tat' | 'completed';
 
+/**
+ * Case summary as the list, accept and verification-outcome endpoints return
+ * it. It carries no bucket — an item belongs to the tab (`type`) it was
+ * requested with — and `checkId` repeats `id`, the component id.
+ */
 interface CaseDto {
   readonly id: string;
-  readonly caseId: string;
+  readonly checkId: string;
   readonly caseRef: string;
   readonly clientName: string;
   readonly candidateName: string;
   readonly verificationType: string;
   readonly address: string;
-  readonly bucket: CaseBucketDto;
   readonly updatedAt: string;
+}
+
+/** `GET /cases?type=` — one page of one tab. `nextCursor: null` is the only end-of-list signal. */
+interface CasePageDto {
+  readonly type: CaseBucketDto;
+  readonly items: readonly CaseDto[];
+  readonly nextCursor: string | null;
+  readonly pageSize: number;
+}
+
+/**
+ * `GET /cases/counts`. Every key is contractually present and a non-negative
+ * integer, but it is still external input: each value is checked on its own
+ * so one bad key can't take the whole badge row down.
+ */
+type CaseCountsDto = Partial<Record<CaseBucketDto, unknown>>;
+
+/** One page of a case-list tab, mapped to domain models. */
+export interface CasePage {
+  readonly items: Case[];
+  /** Opaque; hand it back unchanged to fetch the next page of the same tab. `null` = no more pages. */
+  readonly nextCursor: string | null;
 }
 
 /**
@@ -99,7 +126,7 @@ interface SiblingComponentDto {
 
 interface CaseDetailDto {
   readonly id: string;
-  readonly caseId: string;
+  readonly checkId: string;
   readonly caseRef: string;
   readonly bucket: CaseBucketDto;
   readonly tatDueAt: string;
@@ -146,25 +173,73 @@ const BUCKET_DTO_TO_DOMAIN: Record<CaseBucketDto, CaseBucket> = {
   completed: 'completed',
 };
 
+/** The `type` query value (and counts key) each domain bucket is requested by. */
+const BUCKET_DOMAIN_TO_DTO: Record<CaseBucket, CaseBucketDto> = {
+  new: 'new',
+  pending: 'pending',
+  beyondTat: 'beyond_tat',
+  completed: 'completed',
+};
+
 function mapCase(dto: CaseDto): Case {
-  // Candidate/client names are PII — only the ids and the bucket are logged.
+  // Candidate/client names and the address are PII — only ids and lengths are logged.
   LoggerService.info(`${FILE_NAME}: mapCase: mapping case summary`, {
     caseId: dto.id,
-    bucket: BUCKET_DTO_TO_DOMAIN[dto.bucket],
+    checkId: dto.checkId,
     verificationType: dto.verificationType,
     addressLength: dto.address.length,
   });
   return {
     id: dto.id,
-    caseId: dto.caseId,
+    checkId: dto.checkId,
     caseRef: dto.caseRef,
     clientName: dto.clientName,
     candidateName: dto.candidateName,
     verificationType: dto.verificationType,
     address: dto.address,
-    bucket: BUCKET_DTO_TO_DOMAIN[dto.bucket],
     updatedAt: new Date(dto.updatedAt),
   };
+}
+
+function mapCount(dto: CaseCountsDto, key: CaseBucketDto): number {
+  const value = dto[key];
+  if (typeof value === 'number' && Number.isInteger(value) && value >= 0) {
+    LoggerService.info(`${FILE_NAME}: mapCount: mapped count`, { key, value });
+    return value;
+  }
+  LoggerService.warn(`${FILE_NAME}: mapCount: missing or invalid count — mapped to 0`, {
+    key,
+    receivedType: value === null ? 'null' : typeof value,
+  });
+  return 0;
+}
+
+function mapCaseCounts(dto: CaseCountsDto): CaseBucketCounts {
+  LoggerService.info(`${FILE_NAME}: mapCaseCounts: mapping tab counts`, {
+    keyCount: Object.keys(dto).length,
+  });
+  return {
+    new: mapCount(dto, 'new'),
+    pending: mapCount(dto, 'pending'),
+    beyondTat: mapCount(dto, 'beyond_tat'),
+    completed: mapCount(dto, 'completed'),
+  };
+}
+
+function mapNextCursor(value: string | null | undefined): string | null {
+  // The cursor is opaque — only its presence is logged, never its contents.
+  if (typeof value === 'string' && value.length > 0) {
+    LoggerService.info(`${FILE_NAME}: mapNextCursor: another page is available`);
+    return value;
+  }
+  if (value !== null) {
+    LoggerService.warn(`${FILE_NAME}: mapNextCursor: unusable cursor — treated as the last page`, {
+      receivedType: typeof value,
+    });
+    return null;
+  }
+  LoggerService.info(`${FILE_NAME}: mapNextCursor: last page reached`);
+  return null;
 }
 
 /**
@@ -270,7 +345,7 @@ function mapCaseDetail(dto: CaseDetailDto): CaseDetail {
   });
   return {
     id: dto.id,
-    caseId: dto.caseId,
+    checkId: dto.checkId,
     caseRef: dto.caseRef,
     bucket: BUCKET_DTO_TO_DOMAIN[dto.bucket],
     tatDueAt: new Date(dto.tatDueAt),
@@ -319,17 +394,62 @@ function mapCaseDetail(dto: CaseDetailDto): CaseDetail {
   };
 }
 
-/** All case components assigned to the current field executive, across every bucket. */
-export async function fetchCases(): Promise<Case[]> {
-  LoggerService.info(`${FILE_NAME}: fetchCases: requesting case list`);
-  const response = await apiClient.get<ApiEnvelope<CaseDto[]>>('/cases');
-  LoggerService.info(`${FILE_NAME}: fetchCases: response received`, {
+/**
+ * The four case-list tab counts. `new` is the server's random-draw size, not
+ * the size of the whole New pool — the case list reconciles it against what it
+ * has actually loaded.
+ */
+export async function fetchCaseCounts(): Promise<CaseBucketCounts> {
+  LoggerService.info(`${FILE_NAME}: fetchCaseCounts: requesting tab counts`);
+  const response = await apiClient.get<ApiEnvelope<CaseCountsDto | null>>('/cases/counts');
+  LoggerService.info(`${FILE_NAME}: fetchCaseCounts: response received`, {
     success: response.data.success,
-    dtoCount: response.data.data.length,
+    hasData: response.data.data != null,
   });
-  const cases = response.data.data.map(mapCase);
-  LoggerService.info(`${FILE_NAME}: fetchCases: received cases`, { count: cases.length });
-  return cases;
+  const counts = mapCaseCounts(response.data.data ?? {});
+  LoggerService.info(`${FILE_NAME}: fetchCaseCounts: counts ready`, {
+    new: counts.new,
+    pending: counts.pending,
+    beyondTat: counts.beyondTat,
+    completed: counts.completed,
+  });
+  return counts;
+}
+
+/**
+ * One page of one case-list tab. Pass `null` for the first page, then each
+ * response's `nextCursor` (for the same bucket) for the next one.
+ */
+export async function fetchCasesPage(bucket: CaseBucket, cursor: string | null): Promise<CasePage> {
+  const type = BUCKET_DOMAIN_TO_DTO[bucket];
+  LoggerService.info(`${FILE_NAME}: fetchCasesPage: requesting page`, {
+    bucket,
+    type,
+    hasCursor: cursor !== null,
+  });
+  // `cursor` is left off entirely for a first page: the route's query schema is strict.
+  const params = cursor === null ? { type } : { type, cursor };
+  const response = await apiClient.get<ApiEnvelope<CasePageDto>>('/cases', { params });
+  const dto = response.data.data;
+  LoggerService.info(`${FILE_NAME}: fetchCasesPage: response received`, {
+    bucket,
+    success: response.data.success,
+    dtoCount: dto.items.length,
+    pageSize: dto.pageSize,
+  });
+  if (dto.type !== type) {
+    LoggerService.warn(`${FILE_NAME}: fetchCasesPage: response type differs from the request`, {
+      requestedType: type,
+      receivedType: dto.type,
+    });
+  }
+  const page: CasePage = { items: dto.items.map(mapCase), nextCursor: mapNextCursor(dto.nextCursor) };
+  LoggerService.info(`${FILE_NAME}: fetchCasesPage: page ready`, {
+    bucket,
+    count: page.items.length,
+    hasNextPage: page.nextCursor !== null,
+  });
+  return page;
 }
 
 /** Moves a case component from the New bucket to Pending/In Progress. */
@@ -341,7 +461,7 @@ export async function acceptCase(caseId: string): Promise<Case> {
     success: response.data.success,
   });
   const updated = mapCase(response.data.data);
-  LoggerService.info(`${FILE_NAME}: acceptCase: case accepted`, { caseId, bucket: updated.bucket });
+  LoggerService.info(`${FILE_NAME}: acceptCase: case accepted`, { caseId, checkId: updated.checkId });
   return updated;
 }
 
@@ -391,6 +511,9 @@ export async function submitVerificationOutcome(
     success: response.data.success,
   });
   const updated = mapCase(response.data.data);
-  LoggerService.info(`${FILE_NAME}: submitVerificationOutcome: outcome submitted`, { caseId, bucket: updated.bucket });
+  LoggerService.info(`${FILE_NAME}: submitVerificationOutcome: outcome submitted`, {
+    caseId,
+    checkId: updated.checkId,
+  });
   return updated;
 }

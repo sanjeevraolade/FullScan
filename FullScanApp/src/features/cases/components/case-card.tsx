@@ -28,10 +28,10 @@ export interface CaseCardProps {
   readonly caseItem: Case;
   /** Tapping anywhere on the card outside the action buttons opens Case Details. */
   readonly onPress?: ((caseItem: Case) => void) | undefined;
-  /** Present only for New-bucket cases. */
+  /** Present only on the New tab. */
   readonly onAccept?: ((caseId: string) => void) | undefined;
   readonly isAccepting?: boolean;
-  /** Present only for Pending/Beyond TAT cases. */
+  /** Present only on the Pending/Beyond TAT tabs. */
   readonly onCall?: ((caseId: string) => void) | undefined;
   /** Whether this case has a saved draft. */
   readonly hasDraft?: boolean;
@@ -41,10 +41,9 @@ export interface CaseCardProps {
 export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onCall, hasDraft = false }: CaseCardProps): ReactElement {
   const { t } = useTranslation();
 
-  // Candidate name and address are PII — only ids, the bucket and flags are logged.
+  // Candidate name and address are PII — only ids and flags are logged.
   LoggerService.info(`${FILE_NAME}: CaseCard: rendering`, {
     caseId: caseItem.id,
-    bucket: caseItem.bucket,
     verificationType: caseItem.verificationType,
     isAccepting,
     hasDraft,
@@ -140,7 +139,7 @@ export function CaseCard({ caseItem, onPress, onAccept, isAccepting = false, onC
         <HStack justifyContent="space-between" alignItems="center">
           <HStack alignItems="center" testID={`case-card-view-details-${caseItem.id}`}>
             <Text size="sm" fontWeight="$medium" color="$primary600" mr="$1" sx={{ _dark: { color: '$primary300' } }}>
-              {t('caseList.actions.viewFormDetails')}
+              {t('caseList.actions.viewCaseDetails')}
             </Text>
             <Icon as={ArrowRightIcon} size="xs" color="$primary600" sx={{ _dark: { color: '$primary300' } }} />
           </HStack>

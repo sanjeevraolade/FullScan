@@ -31,7 +31,7 @@ export interface CostRequested {
 }
 
 /**
- * A sibling component of the same case (see `Case`/`CaseDetail.caseId`) —
+ * A sibling component of the same case (see `CaseDetail.caseRef`) —
  * just enough to show case-wide context (e.g. "Present Address ✓,
  * Permanent Address (this one)") without a second network round trip.
  */
@@ -52,8 +52,10 @@ export interface SiblingComponent {
  */
 export interface CaseDetail {
   readonly id: string;
-  readonly caseId: string;
+  /** The component ("check") id — the same value as `id`. */
+  readonly checkId: string;
   readonly caseRef: string;
+  /** Unlike the list summary, the detail keeps its bucket: Case Details opens from any tab and its access rules depend on it. */
   readonly bucket: CaseBucket;
   readonly tatDueAt: Date;
   readonly candidateName: string;

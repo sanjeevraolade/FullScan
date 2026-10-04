@@ -75,7 +75,7 @@ const REFERENCE_DATA: ReferenceData = {
 function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
   return {
     id: 'case-1',
-    caseId: 'case-parent-1',
+    checkId: 'case-1',
     caseRef: 'FS-2026-00001',
     bucket: 'pending',
     tatDueAt: new Date('2026-09-30T00:00:00.000Z'),
@@ -113,13 +113,12 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
 function buildCase(): Case {
   return {
     id: 'case-1',
-    caseId: 'case-parent-1',
+    checkId: 'case-1',
     caseRef: 'FS-2026-00001',
     clientName: 'ABC Pvt Ltd',
     candidateName: 'Rahul Sharma',
     verificationType: 'Address',
     address: 'Flat 204, Madhapur, Hyderabad',
-    bucket: 'pending',
     updatedAt: new Date('2026-09-04T09:00:00.000Z'),
   };
 }

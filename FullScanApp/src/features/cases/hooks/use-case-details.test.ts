@@ -6,6 +6,7 @@ import type { Case, CaseDetail } from '@/domain/case';
 import type { SerializedCapturedPhotoEvidence } from '@/navigation/routes';
 import type { ReferenceData } from '@/domain/reference-data';
 
+import { CaseListCache } from '../services/case-list-cache';
 import { DraftStorageService } from '../services/draft-storage';
 import type { CaseDraft } from '../services/draft-storage';
 import { useCaseDetails } from './use-case-details';
@@ -40,7 +41,7 @@ const mockReferenceData: ReferenceData = {
 function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
   return {
     id: 'case-1',
-    caseId: 'case-parent-1',
+    checkId: 'case-1',
     caseRef: 'FS-2026-00001',
     bucket: 'pending',
     tatDueAt: new Date('2026-08-30T00:00:00.000Z'),
@@ -78,13 +79,12 @@ function buildCaseDetail(overrides: Partial<CaseDetail> = {}): CaseDetail {
 function buildCase(overrides: Partial<Case> = {}): Case {
   return {
     id: 'case-1',
-    caseId: 'case-parent-1',
+    checkId: 'case-1',
     caseRef: 'FS-2026-00001',
     clientName: 'ABC Pvt Ltd',
     candidateName: 'Rahul Sharma',
     verificationType: 'Address',
     address: 'Flat 204, Madhapur, Hyderabad',
-    bucket: 'completed',
     updatedAt: new Date('2026-08-26T00:00:00.000Z'),
     ...overrides,
   };
@@ -430,6 +430,139 @@ describe('useCaseDetails', () => {
       expect(result.current.isSubmitting).toBe(false);
       expect(DraftStorageService.loadDraft('case-1')).toBeNull();
       expect(result.current.hasDraft).toBe(false);
+    });
+  });
+
+  describe('case-list cache updates', () => {
+    /** Puts a loaded tab and the counts into the case-list cache, as the list would have. */
+    function seedCaseListCache(): void {
+      const { tabGenerations } = CaseListCache.getSnapshot();
+      CaseListCache.storeFirstPage('new', tabGenerations.new, {
+        items: [buildCase({ id: 'case-1' }), buildCase({ id: 'case-2' })],
+        nextCursor: null,
+      });
+      CaseListCache.storeFirstPage('pending', tabGenerations.pending, {
+        items: [buildCase({ id: 'case-3' })],
+        nextCursor: 'pending-cursor',
+      });
+      CaseListCache.storeFirstPage('beyondTat', tabGenerations.beyondTat, {
+        items: [buildCase({ id: 'case-1' }), buildCase({ id: 'case-4' })],
+        nextCursor: 'tat-cursor',
+      });
+      CaseListCache.storeFirstPage('completed', tabGenerations.completed, {
+        items: [buildCase({ id: 'case-5' })],
+        nextCursor: null,
+      });
+      CaseListCache.storeCounts(CaseListCache.supersedeCountsRequests(), {
+        new: 2,
+        pending: 10,
+        beyondTat: 7,
+        completed: 4,
+      });
+    }
+
+    function readTabIds(bucket: 'new' | 'pending' | 'beyondTat' | 'completed'): string[] | null {
+      return CaseListCache.getSnapshot().tabs[bucket]?.items.map((item) => item.id) ?? null;
+    }
+
+    beforeEach(() => {
+      CaseListCache.clear();
+      seedCaseListCache();
+    });
+
+    afterEach(() => {
+      CaseListCache.clear();
+      DraftStorageService.deleteDraft('case-1');
+    });
+
+    it('moves an accepted case from New towards Pending in the list cache', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
+      jest.mocked(caseRepository.acceptCase).mockResolvedValue(buildCase());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const onAccepted = jest.fn();
+      await act(async () => {
+        result.current.acceptCase(onAccepted);
+      });
+      await waitFor(() => expect(onAccepted).toHaveBeenCalledTimes(1));
+
+      expect(readTabIds('new')).toEqual(['case-2']);
+      // Discarded: the accepted case now heads Pending's first page.
+      expect(readTabIds('pending')).toBeNull();
+      expect(readTabIds('beyondTat')).toEqual(['case-1', 'case-4']);
+      expect(CaseListCache.getSnapshot().counts).toEqual({
+        new: 1,
+        pending: 11,
+        beyondTat: 7,
+        completed: 4,
+      });
+    });
+
+    it('leaves the list cache alone when accepting fails', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'new' }));
+      jest.mocked(caseRepository.acceptCase).mockRejectedValue(new Error('offline'));
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const onAccepted = jest.fn();
+      await act(async () => {
+        result.current.acceptCase(onAccepted);
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('network'));
+
+      expect(onAccepted).not.toHaveBeenCalled();
+      expect(readTabIds('new')).toEqual(['case-1', 'case-2']);
+      expect(readTabIds('pending')).toEqual(['case-3']);
+      expect(CaseListCache.getSnapshot().counts?.new).toBe(2);
+    });
+
+    it('moves a submitted case out of its own tab and discards Completed', async () => {
+      jest
+        .mocked(caseRepository.fetchCaseDetail)
+        .mockResolvedValue(buildCaseDetail({ bucket: 'beyondTat' }));
+      jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(readTabIds('beyondTat')).toEqual(['case-4']);
+      // The rest of the tab's paging is untouched.
+      expect(CaseListCache.getSnapshot().tabs.beyondTat?.nextCursor).toBe('tat-cursor');
+      expect(readTabIds('completed')).toBeNull();
+      expect(readTabIds('new')).toEqual(['case-1', 'case-2']);
+      expect(readTabIds('pending')).toEqual(['case-3']);
+      expect(CaseListCache.getSnapshot().counts).toEqual({
+        new: 2,
+        pending: 10,
+        beyondTat: 6,
+        completed: 5,
+      });
+    });
+
+    it('leaves the list cache alone when submitting fails', async () => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'pending' }));
+      jest.mocked(caseRepository.submitVerificationOutcome).mockRejectedValue(new Error('offline'));
+
+      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      await waitFor(() => expect(result.current.isLoading).toBe(false));
+
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+      await waitFor(() => expect(result.current.submitError).toBe('network'));
+
+      expect(readTabIds('pending')).toEqual(['case-3']);
+      expect(readTabIds('completed')).toEqual(['case-5']);
+      expect(CaseListCache.getSnapshot().counts?.completed).toBe(4);
     });
   });
 });

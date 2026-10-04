@@ -1,4 +1,10 @@
-export type { Case, CaseBucket } from './case.entity';
+export type { Case, CaseBucket, CaseBucketCounts } from './case.entity';
+export { CASE_BUCKETS } from './case.entity';
+export type { CaseBucketTransition } from './case-bucket-transition';
+export {
+  resolveAcceptTransition,
+  resolveVerificationOutcomeTransition,
+} from './case-bucket-transition';
 export type { CapturedPhotoEvidence } from './case-photo-evidence.entity';
 export type {
   AddressType,

@@ -17,7 +17,8 @@ export function CaseInfoSection({ caseDetail }: CaseInfoSectionProps): ReactElem
   const { t } = useTranslation();
 
   LoggerService.info(`${FILE_NAME}: CaseInfoSection: rendering`, {
-    caseId: caseDetail.caseId,
+    caseId: caseDetail.id,
+    checkId: caseDetail.checkId,
     bucket: caseDetail.bucket,
     verificationType: caseDetail.verificationType,
   });

@@ -1,14 +1,49 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as caseService from '../services/case.service.js';
+import { caseListQuerySchema } from '../routes/schemas/case.schema.js';
+import { AppError } from '../utils/app-error.js';
+
+/** `authenticate` sets it on every request it lets through; this only guards the type. */
+function currentFieldExecutiveId(req: Request): string {
+  if (!req.fieldExecutiveId) {
+    throw new AppError(401, 'Missing authentication token');
+  }
+  return req.fieldExecutiveId;
+}
 
 /**
- * GET /api/v1/cases
- * All cases assigned to the current field executive (all buckets).
+ * GET /api/v1/cases?type=<new|pending|beyond_tat|completed>[&cursor=…]
+ * One page of one tab: `{ type, items, nextCursor, pageSize }`.
+ *
+ * Without `type`: the **deprecated** all-buckets array (items carry `caseId` and
+ * `bucket`), kept unchanged for app builds already in the field. Remove that branch
+ * once no supported build calls it — see docs/api-contracts/cases-by-tab.md.
  */
 export async function getCases(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const cases = await caseService.getCasesForCurrentFieldExecutive(req.fieldExecutiveId!);
-    res.json({ success: true, data: cases });
+    const fieldExecutiveId = currentFieldExecutiveId(req);
+    // `validate()` has already checked the query; parsing it again just types it.
+    const { type, cursor } = caseListQuerySchema.parse(req.query);
+
+    const data =
+      type === undefined
+        ? await caseService.getCasesForCurrentFieldExecutive(fieldExecutiveId)
+        : await caseService.getCasesPage(fieldExecutiveId, type, cursor);
+
+    res.json({ success: true, data });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * GET /api/v1/cases/counts
+ * The four tab counts: `{ new, pending, beyond_tat, completed }`.
+ */
+export async function getCaseCounts(req: Request, res: Response, next: NextFunction): Promise<void> {
+  try {
+    const counts = await caseService.getCaseCounts(currentFieldExecutiveId(req));
+    res.json({ success: true, data: counts });
   } catch (err) {
     next(err);
   }
@@ -21,7 +56,7 @@ export async function getCases(req: Request, res: Response, next: NextFunction):
 export async function acceptCase(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { caseId } = req.params;
-    const updated = await caseService.acceptCase(caseId, req.fieldExecutiveId!);
+    const updated = await caseService.acceptCase(caseId, currentFieldExecutiveId(req));
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);

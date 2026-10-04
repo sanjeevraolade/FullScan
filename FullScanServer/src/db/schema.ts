@@ -165,6 +165,11 @@ export const COLLECTIONS: Readonly<Record<CollectionName, CollectionSpec>> = {
     indexes: [
       { key: { case_id: 1 }, name: 'case_id' },
       { key: { assigned_field_executive_id: 1, updated_at: -1 }, name: 'assigned_field_executive_id' },
+      // The mobile per-tab list (keyset pages in COMPONENTS_NEWEST_FIRST order) and tab counts.
+      {
+        key: { assigned_field_executive_id: 1, bucket: 1, updated_at: -1, insert_order: 1 },
+        name: 'assigned_bucket_newest_first',
+      },
       { key: { bucket: 1 }, name: 'bucket' },
     ],
   },

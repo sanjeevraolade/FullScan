@@ -1,14 +1,35 @@
+import { z } from 'zod';
 import * as caseDao from '../db/case.dao.js';
 import { AppError } from '../utils/app-error.js';
+import { logger } from '../utils/logger.js';
 import type {
+  CaseBucket,
   CaseComponentRow,
+  CaseCounts,
   CaseDetail,
+  CasePage,
   CaseSummary,
   CostRequested,
+  LegacyCaseSummary,
   VerificationOutcomeInput,
 } from '../types/case.types.js';
 
+/** List items and the accept / verification-outcome responses. */
 function mapSummary(row: CaseComponentRow): CaseSummary {
+  return {
+    id: row.id,
+    checkId: row.id,
+    caseRef: row.case_ref,
+    clientName: row.client_name,
+    candidateName: row.candidate_name,
+    verificationType: row.verification_type,
+    address: row.address,
+    updatedAt: row.updated_at,
+  };
+}
+
+/** @deprecated Items of the legacy all-buckets `GET /cases` — see `getCasesForCurrentFieldExecutive`. */
+function mapLegacySummary(row: CaseComponentRow): LegacyCaseSummary {
   return {
     id: row.id,
     caseId: row.case_id,
@@ -39,7 +60,7 @@ async function mapDetail(row: CaseComponentRow): Promise<CaseDetail> {
 
   return {
     id: row.id,
-    caseId: row.case_id,
+    checkId: row.id,
     caseRef: row.case_ref,
     bucket: row.bucket,
     tatDueAt: row.tat_due_at,
@@ -84,25 +105,176 @@ async function mapDetail(row: CaseComponentRow): Promise<CaseDetail> {
 const MIN_RANDOM_NEW_COMPONENTS = 3;
 const MAX_RANDOM_NEW_COMPONENTS = 10;
 
+/** How many components one New-tab draw asks for: a random integer from 3 to 10. */
+function drawRandomNewCount(): number {
+  return (
+    MIN_RANDOM_NEW_COMPONENTS +
+    Math.floor(Math.random() * (MAX_RANDOM_NEW_COMPONENTS - MIN_RANDOM_NEW_COMPONENTS + 1))
+  );
+}
+
 /**
+ * @deprecated The legacy all-buckets `GET /cases` (no `type`), kept unchanged for app
+ * builds already installed in the field — the current app uses `getCaseCounts` and
+ * `getCasesPage`. Remove it, with `LegacyCaseSummary`, once no supported build calls it.
+ *
  * Returns the current field executive's actually-assigned components
  * (pending, beyond TAT, completed) plus a fresh random draw from the whole
  * 'new' bucket pool — the New tab simulates a live incoming-case feed, so it
  * is re-randomized on every request rather than reflecting a fixed
- * assignment. The app groups by bucket and computes tab counts client-side
- * (offline-first: fetch once, cache, filter locally).
+ * assignment. The app groups by bucket and computes tab counts client-side.
  */
-export async function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): Promise<CaseSummary[]> {
+export async function getCasesForCurrentFieldExecutive(fieldExecutiveId: string): Promise<LegacyCaseSummary[]> {
   const assignedRows = (await caseDao.findComponentsByFieldExecutive(fieldExecutiveId)).filter(
     (row) => row.bucket !== 'new',
   );
 
-  const randomNewCount =
-    MIN_RANDOM_NEW_COMPONENTS +
-    Math.floor(Math.random() * (MAX_RANDOM_NEW_COMPONENTS - MIN_RANDOM_NEW_COMPONENTS + 1));
-  const randomNewRows = await caseDao.findRandomNewComponents(randomNewCount);
+  const randomNewRows = await caseDao.findRandomNewComponents(drawRandomNewCount());
 
-  return [...randomNewRows, ...assignedRows].map(mapSummary);
+  return [...randomNewRows, ...assignedRows].map(mapLegacySummary);
+}
+
+/** The buckets whose tab lists what is actually assigned to the executive — every one but New. */
+const ASSIGNED_BUCKETS = ['pending', 'beyond_tat', 'completed'] as const satisfies readonly CaseBucket[];
+
+type AssignedBucket = (typeof ASSIGNED_BUCKETS)[number];
+
+/**
+ * `GET /cases/counts`. Pending / Beyond TAT / Completed count the executive's own
+ * components — the rows `getCasesPage` lists for that type. New is a random draw on
+ * every list call, so its count is one too: `min(random 3–10, size of the 'new' pool)`,
+ * independent of any list call (the app reconciles the two).
+ */
+export async function getCaseCounts(fieldExecutiveId: string): Promise<CaseCounts> {
+  const [assigned, newPoolSize] = await Promise.all([
+    caseDao.countComponentsByFieldExecutive(fieldExecutiveId, ASSIGNED_BUCKETS),
+    caseDao.countNewComponents(),
+  ]);
+
+  return {
+    new: Math.min(drawRandomNewCount(), newPoolSize),
+    pending: assigned.get('pending') ?? 0,
+    beyond_tat: assigned.get('beyond_tat') ?? 0,
+    completed: assigned.get('completed') ?? 0,
+  };
+}
+
+const DEFAULT_CASES_PAGE_SIZE = 100;
+const MAX_CASES_PAGE_SIZE = 500;
+
+/** The last `CASES_PAGE_SIZE` value read, so an invalid one is warned about once, not per request. */
+let pageSizeSetting: { readonly raw: string | undefined; readonly size: number } | undefined;
+
+/**
+ * `CASES_PAGE_SIZE`: an integer from 1 to 500, default 100; anything else logs a
+ * warning and uses 100. Unset or empty means the default, without a warning.
+ *
+ * Read on use rather than at import: `src/index.ts` runs `dotenv.config()` after its
+ * imports have loaded, so a module-level read would never see a value set in `.env`.
+ */
+function resolveCasesPageSize(): number {
+  const raw = process.env.CASES_PAGE_SIZE;
+
+  if (pageSizeSetting && pageSizeSetting.raw === raw) {
+    return pageSizeSetting.size;
+  }
+
+  const trimmed = raw?.trim() ?? '';
+  const parsed = /^[0-9]+$/.test(trimmed) ? Number(trimmed) : Number.NaN;
+  const isValid = parsed >= 1 && parsed <= MAX_CASES_PAGE_SIZE;
+
+  if (!isValid && trimmed !== '') {
+    logger.warn(
+      { value: raw },
+      `CASES_PAGE_SIZE must be an integer from 1 to ${MAX_CASES_PAGE_SIZE}; using ${DEFAULT_CASES_PAGE_SIZE}`,
+    );
+  }
+
+  const size = isValid ? parsed : DEFAULT_CASES_PAGE_SIZE;
+  pageSizeSetting = { raw, size };
+  return size;
+}
+
+const INVALID_CURSOR = 'Invalid cursor';
+
+/** Longer than any cursor `encodeCursor` produces; anything longer is rejected before decoding. */
+const MAX_CURSOR_LENGTH = 512;
+
+/**
+ * A cursor is base64url (unpadded) JSON `{ t, u, o }`: the tab it was issued for, and
+ * the last item's `updated_at` and `insert_order` (hex). Opaque to the app — it only
+ * hands back what it was given — so the encoding can change without a contract change.
+ */
+const cursorPayloadSchema = z
+  .object({
+    t: z.enum(ASSIGNED_BUCKETS),
+    u: z.string().min(1).max(64),
+    o: z.string().refine(caseDao.isInsertOrderKey),
+  })
+  .strict();
+
+function encodeCursor(type: AssignedBucket, key: caseDao.ComponentPageKey): string {
+  return Buffer.from(JSON.stringify({ t: type, u: key.updatedAt, o: key.insertOrder }), 'utf8').toString(
+    'base64url',
+  );
+}
+
+/** The page key a cursor encodes; `400 Invalid cursor` if it is malformed or was issued for another tab. */
+function decodeCursor(cursor: string, type: AssignedBucket): caseDao.ComponentPageKey {
+  if (cursor.length === 0 || cursor.length > MAX_CURSOR_LENGTH || !/^[A-Za-z0-9_-]+$/.test(cursor)) {
+    throw new AppError(400, INVALID_CURSOR);
+  }
+
+  let decoded: unknown;
+
+  try {
+    decoded = JSON.parse(Buffer.from(cursor, 'base64url').toString('utf8'));
+  } catch {
+    throw new AppError(400, INVALID_CURSOR);
+  }
+
+  const payload = cursorPayloadSchema.safeParse(decoded);
+
+  if (!payload.success || payload.data.t !== type) {
+    throw new AppError(400, INVALID_CURSOR);
+  }
+
+  return { updatedAt: payload.data.u, insertOrder: payload.data.o };
+}
+
+/**
+ * `GET /cases?type=…[&cursor=…]` — one page of one tab.
+ *
+ * Pending / Beyond TAT / Completed are keyset pages of the executive's own components,
+ * newest `updated_at` first, ties by `insert_order`. `pageSize + 1` rows are read so
+ * `nextCursor` is only issued when another row exists — `null` is the only end signal.
+ *
+ * New is the unchanged random draw (3–10 from the whole 'new' pool): always a single
+ * page with `nextCursor: null`, so any cursor sent with it is invalid.
+ */
+export async function getCasesPage(
+  fieldExecutiveId: string,
+  type: CaseBucket,
+  cursor: string | undefined,
+): Promise<CasePage> {
+  const pageSize = resolveCasesPageSize();
+
+  if (type === 'new') {
+    if (cursor !== undefined) {
+      throw new AppError(400, INVALID_CURSOR);
+    }
+
+    const rows = await caseDao.findRandomNewComponents(drawRandomNewCount());
+    return { type, items: rows.map(mapSummary), nextCursor: null, pageSize };
+  }
+
+  const after = cursor === undefined ? null : decodeCursor(cursor, type);
+  const entries = await caseDao.findComponentsPageByFieldExecutive(fieldExecutiveId, type, after, pageSize + 1);
+  const page = entries.slice(0, pageSize);
+  const last = page.at(-1);
+  const nextCursor = entries.length > pageSize && last ? encodeCursor(type, last.key) : null;
+
+  return { type, items: page.map((entry) => mapSummary(entry.row)), nextCursor, pageSize };
 }
 
 /**

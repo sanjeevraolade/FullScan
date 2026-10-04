@@ -3,6 +3,8 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { LoggerService } from '@/infrastructure/logger';
 import { acceptCase as acceptCaseApi, fetchCaseDetail, submitVerificationOutcome } from '@/repositories/case-repository';
 import {
+  resolveAcceptTransition,
+  resolveVerificationOutcomeTransition,
   VERIFICATION_STATUS_INSUFFICIENT,
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
@@ -19,6 +21,7 @@ import {
 } from '../utils/case-access-control';
 import { useCaseGeoFence } from './use-case-geo-fence';
 import type { UseCaseGeoFenceResult } from './use-case-geo-fence';
+import { CaseListCache } from '../services/case-list-cache';
 import { DraftStorageService } from '../services/draft-storage';
 
 const FILE_NAME = 'use-case-details.ts';
@@ -277,7 +280,10 @@ export function useCaseDetails(
           });
         }
         setCaseDetail(detail);
-        LoggerService.info(`${FILE_NAME}: case detail: case detail applied`, { detail });
+        LoggerService.info(`${FILE_NAME}: loadCaseDetail: case detail applied`, {
+          caseId,
+          checkId: detail.checkId,
+        });
         applyFormSnapshot({
           verificationStatus:
             detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '',
@@ -520,7 +526,11 @@ export function useCaseDetails(
 
       acceptCaseApi(caseId)
         .then(() => {
-          LoggerService.info(`${FILE_NAME}: acceptCase: case accepted`, { caseId });
+          LoggerService.info(`${FILE_NAME}: acceptCase: case accepted — updating the list cache`, {
+            caseId,
+          });
+          // So the case list shows the move as soon as the field executive goes back.
+          CaseListCache.applyCaseTransition(caseId, resolveAcceptTransition());
           onAccepted();
         })
         .catch((error: unknown) => {
@@ -567,6 +577,8 @@ export function useCaseDetails(
       LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, { caseId, verificationStatus });
       setIsSubmitting(true);
       setSubmitError(null);
+      // The tab the case is listed under — captured now, before anything reloads the detail.
+      const submittedFromBucket = caseDetail?.bucket ?? null;
 
       // Non-reactive read: the fix as of this tap. Normal app usage is only
       // permitted while location is `ready`, so one exists here.
@@ -632,6 +644,18 @@ export function useCaseDetails(
       })
         .then(() => {
           LoggerService.info(`${FILE_NAME}: submit: outcome submitted`, { caseId });
+          if (submittedFromBucket === null) {
+            LoggerService.warn(
+              `${FILE_NAME}: submit: case bucket unknown — discarding every case-list tab`,
+              { caseId },
+            );
+            CaseListCache.discardAllTabs();
+          } else {
+            CaseListCache.applyCaseTransition(
+              caseId,
+              resolveVerificationOutcomeTransition(submittedFromBucket),
+            );
+          }
           DraftStorageService.deleteDraft(caseId);
           setBaselineSnapshot(currentFormSnapshot);
           setBaselinePhotoKey(capturedPhotoKey);
@@ -655,6 +679,7 @@ export function useCaseDetails(
     [
       addressType,
       capturedPhotoKey,
+      caseDetail?.bucket,
       caseId,
       currentFormSnapshot,
       geoFence.bypassConsent,

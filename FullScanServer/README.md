@@ -44,6 +44,7 @@ cp .env.example .env
 | `MONGODB_DB`                | Database name                                 | `fullscan`                |
 | `UPLOAD_DIR`                | Directory for uploaded evidence files         | `./uploads`               |
 | `GEO_FENCE_RADIUS_METERS`   | Allowed radius for geo-fenced actions          | `200`                     |
+| `CASES_PAGE_SIZE`           | Items per page of `GET /cases?type=…` (integer 1–500; anything else logs a warning and uses the default) | `100` |
 
 Change the JWT secrets before deploying anywhere beyond your own machine.
 
@@ -214,8 +215,12 @@ All routes are mounted under `/api/v1`:
 | `/ui-config/:screenId`              | GET    | Download a single screen config                       |
 | `/ui-config/:screenId`              | PUT    | Update a screen config (admin only)                    |
 | `/master-data`                      | GET    | Download dropdown/reference data **+ mobile app settings** (post-login), with the master-data version `updatedAt` they belong to. Replaces `/reference-data`, which now returns 404 |
-| `/cases`                            | GET    | List cases assigned to the current field executive (auth required) |
+| `/cases/counts`                     | GET    | The four tab counts `{ new, pending, beyond_tat, completed }` (auth required) |
+| `/cases?type=<tab>[&cursor=…]`      | GET    | One keyset page of one tab (`new`, `pending`, `beyond_tat`, `completed`): `{ type, items, nextCursor, pageSize }` (auth required) |
+| `/cases`                            | GET    | **Deprecated** — no `type`: every bucket in one array, items with `caseId` + `bucket`, for app builds already in the field (auth required) |
+| `/cases/:caseId`                    | GET    | Case Details for one component, with `siblingComponents` (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
+| `/cases/:caseId/verification-outcome` | POST | Record the verification outcome (→ Completed) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
 | `/security/mock-location`           | POST   | Record a faked/mocked device location detected by the app (auth required) |
 | `/fe-web/auth/login`                | POST   | Field executive **web** sign-in (no device binding), sets `fs_fe_session` cookie |
@@ -255,10 +260,19 @@ the username and password match a seeded field executive (`masterDataUpdatedAt` 
 and `/me` — this is real credential validation, but device-binding auth (matching a specific
 physical device to an account) is still not implemented.
 
-On `GET /cases`, the field executive's actually-assigned components (pending/beyond-TAT/completed) are
-stable, but the **New** bucket is a random draw (3–10 components) from the whole 'new' pool on every
+On `GET /cases?type=…`, the field executive's actually-assigned components (pending/beyond-TAT/completed) are
+stable, but the **New** tab is a random draw (3–10 components) from the whole 'new' pool on every
 request, simulating a live incoming-case feed — accepting a case (`PATCH /cases/:caseId/accept`)
-is what actually assigns it to that field executive.
+is what actually assigns it to that field executive. `GET /cases/counts` counts the assigned tabs
+exactly and returns `min(random 3–10, size of the 'new' pool)` for New.
+
+The assigned tabs are paged by keyset (newest `updated_at` first, ties by `insert_order`), not
+offset, so an item leaving a tab mid-scroll never makes the next page skip one. `nextCursor` is
+opaque, bound to the `type` it was issued for, and `null` only when there is nothing more; New is
+always one page with `nextCursor: null`. A malformed cursor, one from another tab, or any cursor
+with `type=new` is `400 Invalid cursor`. List items, and the accept / verification-outcome
+responses, are `{ id, checkId, caseRef, clientName, candidateName, verificationType, address,
+updatedAt }` (`checkId` = `id`). Contract: `docs/api-contracts/cases-by-tab.md` at the monorepo root.
 
 ### Mock-location reports
 

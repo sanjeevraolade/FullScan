@@ -24,6 +24,7 @@ import {
 } from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
+import { CaseListCache } from '@/features/cases';
 import { LoggerService } from '@/infrastructure/logger';
 import { logout } from '@/repositories/authentication-repository';
 import { LogoutIcon } from '@/shared/components';
@@ -113,6 +114,8 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
     // Cached case coordinates are derived from candidate addresses, so they
     // don't outlive the session on a shared field device.
     GeocodingService.clearCache();
+    // Same for the in-memory case-list pages: candidate names and addresses.
+    CaseListCache.clear();
     // `.replace()` rather than `.reset()` — swaps "Main" for "Login" at the
     // same stack index so a subsequent back-button press can't return to an
     // authenticated screen post-logout, without needing a full state reset.
