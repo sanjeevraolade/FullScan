@@ -5,6 +5,7 @@ import { acceptCase as acceptCaseApi, fetchCaseDetail, submitVerificationOutcome
 import {
   resolveAcceptTransition,
   resolveVerificationOutcomeTransition,
+  validateVerificationOutcome,
   VERIFICATION_STATUS_INSUFFICIENT,
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
@@ -13,6 +14,8 @@ import type {
   AddressType,
   CaseDetail,
   ResidenceType,
+  VerificationOutcomeFieldErrorKeys,
+  VerificationOutcomeRequiredFields,
   VerificationOutcomeSubmission,
 } from '@/domain/case';
 import { isCaseEvidenceUploadError } from '@/repositories/case-evidence-repository.errors';
@@ -36,8 +39,11 @@ import { toCapturedPhotoEvidence } from '../utils/captured-photo-serialization';
 
 const FILE_NAME = 'use-case-details.ts';
 
-const DEFAULT_RESIDENCE_TYPE: ResidenceType = 'rented';
-const DEFAULT_ADDRESS_TYPE: AddressType = 'present';
+/** Shown above Submit when fields are missing but no form-wide rule explains why. */
+const INCOMPLETE_OUTCOME_MESSAGE_KEY = 'caseDetails.validation.incomplete';
+
+/** Stable "nothing flagged", so fields don't re-render before Submit is first pressed. */
+const NO_FIELD_ERRORS: VerificationOutcomeFieldErrorKeys = {};
 
 /**
  * The editable verification-outcome fields of a case, captured as one value so
@@ -51,8 +57,8 @@ interface CaseFormSnapshot {
   readonly utvRemarks: string;
   readonly insufficientReason: string;
   readonly insufficientRemarks: string;
-  readonly residenceType: ResidenceType;
-  readonly addressType: AddressType;
+  readonly residenceType: ResidenceType | null;
+  readonly addressType: AddressType | null;
   readonly respondentName: string;
   readonly respondentRelation: string;
   readonly isSignatureCaptured: boolean;
@@ -175,9 +181,9 @@ export interface UseCaseDetailsResult {
   readonly setInsufficientRemarks: (remarks: string) => void;
 
   readonly isVerifiedResidenceSectionVisible: boolean;
-  readonly residenceType: ResidenceType;
+  readonly residenceType: ResidenceType | null;
   readonly selectResidenceType: (type: ResidenceType) => void;
-  readonly addressType: AddressType;
+  readonly addressType: AddressType | null;
   readonly selectAddressType: (type: AddressType) => void;
   readonly respondentName: string;
   readonly setRespondentName: (name: string) => void;
@@ -189,6 +195,19 @@ export interface UseCaseDetailsResult {
   readonly selectedPhotoTag: string;
   readonly selectPhotoTag: (tag: string) => void;
 
+  /**
+   * Localization key of each outcome field's validation error. Empty until
+   * Submit is first pressed, then kept live so an error clears as it's fixed.
+   */
+  readonly fieldErrorKeys: VerificationOutcomeFieldErrorKeys;
+  /**
+   * The fields that are mandatory for the current answers (e.g. the residence
+   * fields once Verified Clear is chosen). Live from the start, unlike the errors.
+   */
+  readonly requiredFields: VerificationOutcomeRequiredFields;
+  /** Why Submit was refused for missing answers, or null when it wasn't (or hasn't been pressed). */
+  readonly validationSummaryKey: string | null;
+
   readonly isSubmitting: boolean;
   /**
    * How far Submit has got uploading the captured photos, or null when no
@@ -197,8 +216,9 @@ export interface UseCaseDetailsResult {
   readonly evidenceUploadProgress: EvidenceUploadProgress | null;
   readonly submitError: CaseDetailsSubmitErrorKey | null;
   /**
-   * Uploads every captured photo the server doesn't hold yet, then — only if
-   * all of them made it — submits the verification outcome.
+   * Validates the outcome, and only if it is complete uploads every captured
+   * photo the server doesn't hold yet, then — only if all of them made it —
+   * submits the verification outcome.
    */
   readonly submit: (onSubmitted: () => void) => void;
 }
@@ -228,13 +248,14 @@ export function useCaseDetails(
   const [utvRemarks, setUtvRemarks] = useState('');
   const [insufficientReason, setInsufficientReason] = useState('');
   const [insufficientRemarks, setInsufficientRemarks] = useState('');
-  const [residenceType, setResidenceType] = useState<ResidenceType>(DEFAULT_RESIDENCE_TYPE);
-  const [addressType, setAddressType] = useState<AddressType>(DEFAULT_ADDRESS_TYPE);
+  const [residenceType, setResidenceType] = useState<ResidenceType | null>(null);
+  const [addressType, setAddressType] = useState<AddressType | null>(null);
   const [respondentName, setRespondentName] = useState('');
   const [respondentRelation, setRespondentRelation] = useState('');
   const [isSignatureCaptured, setIsSignatureCaptured] = useState(false);
   const [selectedPhotoTag, setSelectedPhotoTag] = useState('');
 
+  const [hasAttemptedSubmit, setHasAttemptedSubmit] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [evidenceUploadProgress, setEvidenceUploadProgress] = useState<EvidenceUploadProgress | null>(
     null,
@@ -284,6 +305,8 @@ export function useCaseDetails(
       setRespondentRelation(snapshot.respondentRelation);
       setIsSignatureCaptured(snapshot.isSignatureCaptured);
       setSelectedPhotoTag(snapshot.selectedPhotoTag);
+      // Fresh answers: nothing is flagged until Submit is pressed against them.
+      setHasAttemptedSubmit(false);
       setBaselineSnapshot(snapshot);
       setBaselinePhotoKey(photoKey);
     },
@@ -329,14 +352,19 @@ export function useCaseDetails(
           checkId: detail.checkId,
         });
         applyFormSnapshot({
-          verificationStatus:
-            detail.selectedVerificationStatus ?? referenceData?.verificationTypeStatuses[0]?.code ?? '',
+          /*
+           * No status, residence type or address type is preselected: a
+           * preselected answer is one the field executive can submit without
+           * ever choosing, which the mandatory-field rules could not tell apart
+           * from a real answer.
+           */
+          verificationStatus: detail.selectedVerificationStatus ?? '',
           utvReason: '',
           utvRemarks: '',
           insufficientReason: '',
           insufficientRemarks: '',
-          residenceType: DEFAULT_RESIDENCE_TYPE,
-          addressType: DEFAULT_ADDRESS_TYPE,
+          residenceType: null,
+          addressType: null,
           respondentName: detail.respondent?.name ?? '',
           respondentRelation: detail.respondent?.relation ?? '',
           isSignatureCaptured: false,
@@ -428,8 +456,8 @@ export function useCaseDetails(
         utvRemarks: draft.utvRemarks || '',
         insufficientReason: draft.insufficientReason || '',
         insufficientRemarks: draft.insufficientRemarks || '',
-        residenceType: draft.residenceType || DEFAULT_RESIDENCE_TYPE,
-        addressType: draft.addressType || DEFAULT_ADDRESS_TYPE,
+        residenceType: draft.residenceType ?? null,
+        addressType: draft.addressType ?? null,
         respondentName: draft.respondentName || '',
         respondentRelation: draft.respondentRelation || '',
         isSignatureCaptured: draft.isSignatureCaptured || false,
@@ -602,6 +630,20 @@ export function useCaseDetails(
   const isVerifiedResidenceSectionVisible =
     verificationStatus === VERIFICATION_STATUS_VERIFIED_CLEAR && geoFence.isCaseContentUnlocked;
 
+  const outcomeValidation = useMemo(
+    () =>
+      validateVerificationOutcome({
+        ...currentFormSnapshot,
+        capturedPhotoCount: capturedPhotos.length,
+      }),
+    [capturedPhotos.length, currentFormSnapshot],
+  );
+  const fieldErrorKeys = hasAttemptedSubmit ? outcomeValidation.fieldErrorKeys : NO_FIELD_ERRORS;
+  const validationSummaryKey =
+    hasAttemptedSubmit && !outcomeValidation.isValid
+      ? outcomeValidation.formErrorKeys[0] ?? INCOMPLETE_OUTCOME_MESSAGE_KEY
+      : null;
+
   LoggerService.info(`${FILE_NAME}: useCaseDetails: outcome section visibility resolved`, {
     caseId,
     verificationStatus,
@@ -616,6 +658,21 @@ export function useCaseDetails(
     (onSubmitted: () => void): void => {
       if (isReadOnly) {
         LoggerService.warn(`${FILE_NAME}: submit: refused — case is read-only`, { caseId });
+        return;
+      }
+      setHasAttemptedSubmit(true);
+      /*
+       * Checked before anything is uploaded: evidence sent for an outcome that
+       * then can't be submitted is evidence on a case the executive still has
+       * to come back to.
+       */
+      if (!outcomeValidation.isValid) {
+        LoggerService.warn(`${FILE_NAME}: submit: refused — outcome is incomplete`, {
+          caseId,
+          failedRules: outcomeValidation.issues.map((issue) => `${issue.field ?? 'form'}.${issue.ruleId}`),
+        });
+        // An earlier network failure is no longer the reason this submission didn't go through.
+        setSubmitError(null);
         return;
       }
       LoggerService.info(`${FILE_NAME}: submit: submitting verification outcome`, {
@@ -775,6 +832,7 @@ export function useCaseDetails(
       isSignatureCaptured,
       isUtvSectionVisible,
       isVerifiedResidenceSectionVisible,
+      outcomeValidation,
       respondentName,
       respondentRelation,
       residenceType,
@@ -852,6 +910,8 @@ export function useCaseDetails(
     respondentRelationLength: respondentRelation.length,
     isSignatureCaptured,
     selectedPhotoTag,
+    hasAttemptedSubmit,
+    isOutcomeValid: outcomeValidation.isValid,
     isSubmitting,
     evidenceUploadedCount: evidenceUploadProgress?.uploadedCount ?? null,
     evidenceTotalCount: evidenceUploadProgress?.totalCount ?? null,
@@ -899,6 +959,10 @@ export function useCaseDetails(
 
     selectedPhotoTag,
     selectPhotoTag,
+
+    fieldErrorKeys,
+    requiredFields: outcomeValidation.requiredFields,
+    validationSummaryKey,
 
     isSubmitting,
     evidenceUploadProgress,

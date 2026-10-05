@@ -6,8 +6,6 @@ import {
   FormControl,
   FormControlError,
   FormControlErrorText,
-  FormControlLabel,
-  FormControlLabelText,
   Input,
   InputField,
   InputIcon,
@@ -17,6 +15,8 @@ import { useTranslation } from 'react-i18next';
 import type { ReturnKeyTypeOptions } from 'react-native';
 
 import { LoggerService } from '@/infrastructure/logger';
+
+import { FormFieldLabel } from './form-field-label';
 
 const FILE_NAME = 'form-text-field.tsx';
 
@@ -79,6 +79,8 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
   ): ReactElement {
     const { t } = useTranslation();
     const label = t(labelKey);
+    // The red "*" is hidden from screen readers (see FormFieldLabel), so say "required" here instead.
+    const accessibilityLabel = isRequired ? t('validation.requiredFieldLabel', { label }) : label;
     const [isPasswordVisible, setIsPasswordVisible] = useState(false);
     const inputRef = useRef<React.ElementRef<typeof InputField>>(null);
 
@@ -148,10 +150,8 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
     }
 
     return (
-      <FormControl isInvalid={Boolean(errorKey)} isRequired={isRequired} isDisabled={isDisabled}>
-        <FormControlLabel>
-          <FormControlLabelText>{label}</FormControlLabelText>
-        </FormControlLabel>
+      <FormControl isInvalid={Boolean(errorKey)} isDisabled={isDisabled}>
+        <FormFieldLabel label={label} isRequired={isRequired} />
         <Input opacity={isDisabled ? 0.6 : 1}>
           <InputField
             ref={inputRef}
@@ -164,7 +164,9 @@ export const FormTextField = React.forwardRef<FormTextFieldHandle, FormTextField
             autoCorrect={false}
             returnKeyType={returnKeyType}
             onSubmitEditing={onSubmitEditing}
-            accessibilityLabel={label}
+            accessibilityLabel={accessibilityLabel}
+            // Gluestack's InputField sets aria-label="Input Field", which outranks accessibilityLabel.
+            aria-label={accessibilityLabel}
             testID={`${fieldId}-input`}
             editable={!isDisabled}
           />

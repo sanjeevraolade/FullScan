@@ -1,3 +1,5 @@
+import { AxiosError } from 'axios';
+
 import { apiClient } from '@/infrastructure/networking';
 import { TokenStorageService } from '@/infrastructure/storage';
 import { getDeviceId, getDeviceInfo } from '@/infrastructure/device';
@@ -181,10 +183,184 @@ describe('authentication-repository', () => {
   });
 
   describe('logout', () => {
+    const LOGOUT_RESPONSE = { status: 200, data: { success: true, data: { signedOut: true } } };
+    const EXPECTED_LOGOUT_CONFIG = { headers: { Authorization: `Bearer ${TOKEN}` } };
+
+    beforeEach(() => {
+      // Persistent defaults rather than *Once values — `clearAllMocks` keeps
+      // implementations, so each test overrides only what it needs.
+      jest.mocked(TokenStorageService.getToken).mockResolvedValue(TOKEN);
+      jest.mocked(TokenStorageService.clearToken).mockResolvedValue(undefined);
+      jest.mocked(apiClient.post).mockResolvedValue(LOGOUT_RESPONSE);
+    });
+
     it('clears the persisted session token', async () => {
       await logout();
 
-      expect(TokenStorageService.clearToken).toHaveBeenCalled();
+      expect(TokenStorageService.clearToken).toHaveBeenCalledTimes(1);
+    });
+
+    it('posts /auth/logout with the stored token as an explicit bearer header', async () => {
+      await logout();
+
+      expect(apiClient.post).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/logout',
+        undefined,
+        EXPECTED_LOGOUT_CONFIG,
+      );
+    });
+
+    it('has cleared the stored token before the logout request is sent', async () => {
+      const steps: string[] = [];
+      jest.mocked(TokenStorageService.getToken).mockImplementation(async () => {
+        steps.push('token read');
+        return TOKEN;
+      });
+      jest.mocked(TokenStorageService.clearToken).mockImplementation(async () => {
+        // Completes a tick later: the request must wait for the clear, not just follow its call.
+        await Promise.resolve();
+        steps.push('token cleared');
+      });
+      jest.mocked(apiClient.post).mockImplementation(async () => {
+        steps.push('logout requested');
+        return LOGOUT_RESPONSE;
+      });
+
+      await logout();
+
+      expect(steps).toEqual(['token read', 'token cleared', 'logout requested']);
+    });
+
+    it('leaves a token saved by a re-login while the logout request is in flight', async () => {
+      let storedToken: string | null = TOKEN;
+      jest.mocked(TokenStorageService.getToken).mockImplementation(async () => storedToken);
+      jest.mocked(TokenStorageService.clearToken).mockImplementation(async () => {
+        storedToken = null;
+      });
+      jest.mocked(apiClient.post).mockImplementation(() => {
+        // The user logs in again on the Login screen before this slow request times out.
+        storedToken = 'new-session-token';
+        return Promise.reject(new AxiosError('timeout of 15000ms exceeded', 'ECONNABORTED'));
+      });
+
+      await logout();
+
+      expect(storedToken).toBe('new-session-token');
+    });
+
+    it.each([
+      {
+        scenario: 'offline',
+        requestError: { isAxiosError: true, response: undefined, code: 'ERR_NETWORK' },
+        isAxiosError: true,
+        status: undefined,
+      },
+      {
+        scenario: 'timed out',
+        requestError: { isAxiosError: true, response: undefined, code: 'ECONNABORTED' },
+        isAxiosError: true,
+        status: undefined,
+      },
+      {
+        scenario: 'rejected with 401 (already revoked or expired)',
+        requestError: { isAxiosError: true, response: { status: 401 } },
+        isAxiosError: true,
+        status: 401,
+      },
+      {
+        scenario: 'rejected with 500',
+        requestError: { isAxiosError: true, response: { status: 500 } },
+        isAxiosError: true,
+        status: 500,
+      },
+      {
+        scenario: 'failing outside the transport',
+        requestError: new Error('Unexpected failure'),
+        isAxiosError: false,
+        status: undefined,
+      },
+    ])(
+      'resolves when the request is $scenario, logging only the failure kind and status',
+      async ({ requestError, isAxiosError, status }) => {
+        const warnSpy = jest.spyOn(LoggerService, 'warn');
+        jest.mocked(apiClient.post).mockRejectedValueOnce(requestError);
+
+        await expect(logout()).resolves.toBeUndefined();
+
+        expect(TokenStorageService.clearToken).toHaveBeenCalledTimes(1);
+        expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('revokeServerSession'), {
+          isAxiosError,
+          status,
+        });
+        warnSpy.mockRestore();
+      },
+    );
+
+    it('makes no request and only clears storage when no token is stored', async () => {
+      jest.mocked(TokenStorageService.getToken).mockResolvedValue(null);
+
+      await expect(logout()).resolves.toBeUndefined();
+
+      expect(TokenStorageService.clearToken).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).not.toHaveBeenCalled();
+    });
+
+    it('still clears storage, without a request, when the stored token cannot be read', async () => {
+      jest
+        .mocked(TokenStorageService.getToken)
+        .mockRejectedValue(new Error('Keychain unavailable'));
+
+      await expect(logout()).resolves.toBeUndefined();
+
+      expect(TokenStorageService.clearToken).toHaveBeenCalledTimes(1);
+      expect(apiClient.post).not.toHaveBeenCalled();
+    });
+
+    it('still revokes the server session when the stored token cannot be cleared', async () => {
+      jest
+        .mocked(TokenStorageService.clearToken)
+        .mockRejectedValue(new Error('Keychain unavailable'));
+
+      await expect(logout()).resolves.toBeUndefined();
+
+      expect(apiClient.post).toHaveBeenCalledWith(
+        '/auth/logout',
+        undefined,
+        EXPECTED_LOGOUT_CONFIG,
+      );
+    });
+
+    it('never logs the token or the server response body', async () => {
+      const SERVER_ERROR_MESSAGE = 'Invalid or expired authentication token';
+      const infoSpy = jest.spyOn(LoggerService, 'info');
+      const warnSpy = jest.spyOn(LoggerService, 'warn');
+      const errorSpy = jest.spyOn(LoggerService, 'error');
+      jest.mocked(apiClient.post).mockRejectedValueOnce({
+        isAxiosError: true,
+        message: SERVER_ERROR_MESSAGE,
+        config: { headers: { Authorization: `Bearer ${TOKEN}` } },
+        response: {
+          status: 401,
+          data: { success: false, error: { message: SERVER_ERROR_MESSAGE } },
+        },
+      });
+
+      await logout(); // the queued 401
+      await logout(); // the default 200
+
+      const logged = JSON.stringify([
+        ...infoSpy.mock.calls,
+        ...warnSpy.mock.calls,
+        ...errorSpy.mock.calls,
+      ]);
+      expect(logged).toContain('401');
+      expect(logged).not.toContain(TOKEN);
+      expect(logged).not.toContain('signedOut');
+      expect(logged).not.toContain(SERVER_ERROR_MESSAGE);
+      infoSpy.mockRestore();
+      warnSpy.mockRestore();
+      errorSpy.mockRestore();
     });
   });
 });

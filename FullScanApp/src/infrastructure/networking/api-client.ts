@@ -37,8 +37,15 @@ apiClient.interceptors.request.use(async (request) => {
     url: request.url,
   });
 
-  const token = await TokenStorageService.getToken();
-  if (token) {
+  // A caller-supplied Authorization header wins over storage: logout sends the
+  // token it has just cleared, and by then storage may hold a newer login's token.
+  const hasCallerAuthorization = request.headers.has('Authorization');
+  const token = hasCallerAuthorization ? null : await TokenStorageService.getToken();
+  if (hasCallerAuthorization) {
+    LoggerService.info(`${FILE_NAME}: apiClient: keeping caller-supplied authorization header`, {
+      url: request.url,
+    });
+  } else if (token) {
     LoggerService.info(`${FILE_NAME}: apiClient: attaching authorization header`, {
       url: request.url,
     });
@@ -52,7 +59,7 @@ apiClient.interceptors.request.use(async (request) => {
   LoggerService.info(`${FILE_NAME}: apiClient: request`, {
     method: request.method,
     url: request.url,
-    isAuthenticated: Boolean(token),
+    isAuthenticated: hasCallerAuthorization || Boolean(token),
   });
   return request;
 });

@@ -3,8 +3,8 @@ import type { ReactElement } from 'react';
 import {
   ChevronDownIcon,
   FormControl,
-  FormControlLabel,
-  FormControlLabelText,
+  FormControlError,
+  FormControlErrorText,
   Select,
   SelectBackdrop,
   SelectContent,
@@ -16,8 +16,11 @@ import {
   SelectPortal,
   SelectTrigger,
 } from '@gluestack-ui/themed';
+import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
+
+import { FormFieldLabel } from './form-field-label';
 
 const FILE_NAME = 'form-select-field.tsx';
 
@@ -34,6 +37,10 @@ export interface FormSelectFieldProps {
   readonly onValueChange: (value: string) => void;
   readonly placeholder?: string;
   readonly isDisabled?: boolean;
+  /** Localization key of the current validation error, if any. */
+  readonly errorKey?: string | undefined;
+  /** Marks the label with a red "*" and announces the field as required. */
+  readonly isRequired?: boolean;
 }
 
 function findOptionLabel(options: readonly FormSelectOption[], value: string): string | undefined {
@@ -55,13 +62,20 @@ export function FormSelectField({
   onValueChange,
   placeholder,
   isDisabled = false,
+  errorKey,
+  isRequired = false,
 }: FormSelectFieldProps): ReactElement {
+  const { t } = useTranslation();
+  const accessibilityLabel = isRequired ? t('validation.requiredFieldLabel', { label }) : label;
+
   // Never log the selected value itself — only field identity and coarse state.
   LoggerService.info(`${FILE_NAME}: FormSelectField: rendering`, {
     fieldId,
     hasValue: value.length > 0,
     optionCount: options.length,
     isDisabled,
+    isValid: !errorKey,
+    isRequired,
   });
 
   if (options.length === 0) {
@@ -96,10 +110,8 @@ export function FormSelectField({
   };
 
   return (
-    <FormControl isDisabled={isDisabled}>
-      <FormControlLabel>
-        <FormControlLabelText>{label}</FormControlLabelText>
-      </FormControlLabel>
+    <FormControl isDisabled={isDisabled} isInvalid={Boolean(errorKey)}>
+      <FormFieldLabel label={label} isRequired={isRequired} />
       <Select
         key={displayedLabel.revision}
         selectedValue={value}
@@ -107,13 +119,18 @@ export function FormSelectField({
         onValueChange={handleValueChange}
         isDisabled={isDisabled}
       >
-        <SelectTrigger variant="outline" size="sm" testID={`${fieldId}-select`} opacity={isDisabled ? 0.6 : 1}>
-          <SelectInput
-            placeholder={placeholder}
-            accessibilityLabel={label}
-            flex={1}
-            testID={`${fieldId}-select-input`}
-          />
+        {/*
+          The trigger is the element screen readers focus — Gluestack hides the
+          SelectInput inside it from accessibility — so the label lives here.
+        */}
+        <SelectTrigger
+          variant="outline"
+          size="sm"
+          testID={`${fieldId}-select`}
+          opacity={isDisabled ? 0.6 : 1}
+          accessibilityLabel={accessibilityLabel}
+        >
+          <SelectInput placeholder={placeholder} flex={1} testID={`${fieldId}-select-input`} />
           <SelectIcon as={ChevronDownIcon} mr="$3" />
         </SelectTrigger>
         <SelectPortal>
@@ -133,6 +150,11 @@ export function FormSelectField({
           </SelectContent>
         </SelectPortal>
       </Select>
+      {errorKey ? (
+        <FormControlError>
+          <FormControlErrorText testID={`${fieldId}-error`}>{t(errorKey)}</FormControlErrorText>
+        </FormControlError>
+      ) : null}
     </FormControl>
   );
 }

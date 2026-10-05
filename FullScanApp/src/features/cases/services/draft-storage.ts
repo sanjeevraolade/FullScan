@@ -14,8 +14,9 @@ export interface CaseDraft {
   readonly utvRemarks: string;
   readonly insufficientReason: string;
   readonly insufficientRemarks: string;
-  readonly residenceType: ResidenceType;
-  readonly addressType: AddressType;
+  /** Null while unanswered. Drafts saved before these could be blank always hold a value. */
+  readonly residenceType: ResidenceType | null;
+  readonly addressType: AddressType | null;
   readonly respondentName: string;
   readonly respondentRelation: string;
   readonly isSignatureCaptured: boolean;

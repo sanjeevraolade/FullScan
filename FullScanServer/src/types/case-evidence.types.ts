@@ -91,8 +91,8 @@ export interface EvidenceUploadFile {
   readonly buffer: Buffer;
 }
 
-/** The text parts of a mobile capture upload, parsed (see `mobileEvidenceBodySchema`). */
-export interface MobileCaptureMetadata {
+/** The JSON body of a mobile capture upload, validated (see `mobileEvidenceBodySchema`). */
+export interface MobileCaptureUpload {
   readonly documentTypeCode: string;
   readonly latitude: number;
   readonly longitude: number;
@@ -100,6 +100,10 @@ export interface MobileCaptureMetadata {
   /** ISO 8601 with an offset or `Z`, as the app sent it. */
   readonly capturedAt: string;
   readonly isMockLocation: boolean;
+  /** Display name only; sanitized before it is stored. */
+  readonly fileName: string;
+  /** The photo, strict standard base64 (already checked, not yet decoded). */
+  readonly contentBase64: string;
 }
 
 /** The mobile upload's outcome: `isNew` is false when the same bytes were already recorded (a replay). */

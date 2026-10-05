@@ -5,6 +5,10 @@ import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
 import { FormSelectField, FormTextareaField } from '@/shared/components';
+import type {
+  VerificationOutcomeFieldErrorKeys,
+  VerificationOutcomeRequiredFields,
+} from '@/domain/case';
 import type { DropdownOption } from '@/domain/reference-data';
 
 const FILE_NAME = 'case-verification-outcome-section.tsx';
@@ -28,8 +32,15 @@ export interface CaseVerificationOutcomeSectionProps {
   readonly insufficientRemarks: string;
   readonly onInsufficientRemarksChange: (remarks: string) => void;
 
+  /** Validation errors to show under each field — empty until Submit is pressed. */
+  readonly fieldErrorKeys?: VerificationOutcomeFieldErrorKeys;
+  /** Which of this section's fields get the red "*". */
+  readonly requiredFields?: VerificationOutcomeRequiredFields;
   readonly isReadOnly?: boolean;
 }
+
+const NO_FIELD_ERRORS: VerificationOutcomeFieldErrorKeys = {};
+const NO_REQUIRED_FIELDS: VerificationOutcomeRequiredFields = {};
 
 /** Section 5 — verification status outcome, with UTV / Insufficient follow-up fields. */
 export function CaseVerificationOutcomeSection({
@@ -48,6 +59,8 @@ export function CaseVerificationOutcomeSection({
   onSelectInsufficientReason,
   insufficientRemarks,
   onInsufficientRemarksChange,
+  fieldErrorKeys = NO_FIELD_ERRORS,
+  requiredFields = NO_REQUIRED_FIELDS,
   isReadOnly = false,
 }: CaseVerificationOutcomeSectionProps): ReactElement {
   const { t } = useTranslation();
@@ -59,6 +72,8 @@ export function CaseVerificationOutcomeSection({
     isInsufficientSectionVisible,
     isReadOnly,
     statusOptionCount: statusOptions.length,
+    invalidFields: Object.keys(fieldErrorKeys),
+    requiredFields: Object.keys(requiredFields),
   });
 
   const handleSelectStatus = (status: string): void => {
@@ -136,6 +151,9 @@ export function CaseVerificationOutcomeSection({
           label={t('caseDetails.outcome.statusLabel')}
           value={verificationStatus}
           onValueChange={handleSelectStatus}
+          placeholder={t('caseDetails.outcome.statusPlaceholder')}
+          errorKey={fieldErrorKeys.verificationStatus}
+          isRequired={requiredFields.verificationStatus === true}
           options={statusOptions.map((status) => {
             LoggerService.info(
               `${FILE_NAME}: CaseVerificationOutcomeSection: mapping status option`,
@@ -164,6 +182,8 @@ export function CaseVerificationOutcomeSection({
               label={t('caseDetails.outcome.utvReasonLabel')}
               value={utvReason}
               onValueChange={handleSelectUtvReason}
+              errorKey={fieldErrorKeys.utvReason}
+              isRequired={requiredFields.utvReason === true}
               options={utvReasonOptions.map((reason) => {
                 LoggerService.info(
                   `${FILE_NAME}: CaseVerificationOutcomeSection: mapping utv reason option`,
@@ -179,6 +199,8 @@ export function CaseVerificationOutcomeSection({
               value={utvRemarks}
               onChangeText={handleUtvRemarksChange}
               placeholder={t('caseDetails.outcome.utvRemarksPlaceholder')}
+              errorKey={fieldErrorKeys.utvRemarks}
+              isRequired={requiredFields.utvRemarks === true}
               isDisabled={isReadOnly}
             />
           </VStack>
@@ -202,6 +224,8 @@ export function CaseVerificationOutcomeSection({
               label={t('caseDetails.outcome.insufficientReasonLabel')}
               value={insufficientReason}
               onValueChange={handleSelectInsufficientReason}
+              errorKey={fieldErrorKeys.insufficientReason}
+              isRequired={requiredFields.insufficientReason === true}
               options={insufficientReasonOptions.map((reason) => {
                 LoggerService.info(
                   `${FILE_NAME}: CaseVerificationOutcomeSection: mapping insufficient reason option`,
@@ -217,6 +241,8 @@ export function CaseVerificationOutcomeSection({
               value={insufficientRemarks}
               onChangeText={handleInsufficientRemarksChange}
               placeholder={t('caseDetails.outcome.insufficientRemarksPlaceholder')}
+              errorKey={fieldErrorKeys.insufficientRemarks}
+              isRequired={requiredFields.insufficientRemarks === true}
               isDisabled={isReadOnly}
             />
           </VStack>

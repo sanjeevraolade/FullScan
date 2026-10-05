@@ -10,12 +10,12 @@ const FILE_NAME = 'case-evidence-repository.errors.ts';
  *   evidence. Retrying cannot help.
  * - `rejected` — any other HTTP error status (`400`, `401`, `404`, `413`, `415`, `5xx`).
  * - `timeout` — no response within the upload timeout.
- * - `network` — no response at all: offline, connection reset, or the local
- *   file could not be read by the native networking layer (a purged temp file
- *   surfaces this way — without a file-system module it can't be told apart).
+ * - `network` — no response at all: offline or connection reset.
  * - `invalidResponse` — a success status whose body carries no evidence id.
  * - `invalidPhoto` — the local capture metadata can't be sent (non-finite
  *   coordinates or an invalid capture time); nothing was sent.
+ * - `fileUnreadable` — the photo's local file is missing (e.g. purged from the
+ *   OS temp directory), empty or can't be read; nothing was sent.
  * - `unexpected` — the request failed outside HTTP (e.g. reading the auth token).
  */
 export type CaseEvidenceUploadFailureReason =
@@ -25,6 +25,7 @@ export type CaseEvidenceUploadFailureReason =
   | 'network'
   | 'invalidResponse'
   | 'invalidPhoto'
+  | 'fileUnreadable'
   | 'unexpected';
 
 /**

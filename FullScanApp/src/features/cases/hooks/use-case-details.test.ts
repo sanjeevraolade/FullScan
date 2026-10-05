@@ -21,6 +21,38 @@ jest.mock('@/repositories/case-evidence-repository');
 /** A case with no evidence captured this session — a stable reference so the hook does not re-render on it. */
 const NO_PHOTOS: readonly SerializedCapturedPhotoEvidence[] = [];
 
+/** At least one photo is mandatory, so every submission that should go through carries this one. */
+const ONE_CAPTURED_PHOTO: readonly SerializedCapturedPhotoEvidence[] = [
+  {
+    filePath: '/data/user/0/com.fullscan/cache/visit-photo.jpg',
+    latitude: 17.4461,
+    longitude: 78.3821,
+    accuracyMeters: 6,
+    isMockLocation: false,
+    capturedAtIso: '2026-10-04T09:15:02.123Z',
+    documentTypeCode: 'house_photo_1',
+  },
+];
+
+function buildUploadedEvidenceFor(photo: { readonly documentTypeCode: string }): UploadedCaseEvidence {
+  return {
+    id: `evidence-${photo.documentTypeCode}`,
+    caseId: 'case-1',
+    fileName: `${photo.documentTypeCode}-1791105302123.jpg`,
+    mimeType: 'image/jpeg',
+    sizeBytes: 482113,
+    sha256: `sha-${photo.documentTypeCode}`,
+    documentTypeCode: photo.documentTypeCode,
+    latitude: 17.4461,
+    longitude: 78.3821,
+    accuracyMeters: 6,
+    isMockLocation: false,
+    capturedAt: new Date('2026-10-04T09:15:02.000Z'),
+    uploadedAt: new Date('2026-10-04T09:20:11.000Z'),
+    wasAlreadyUploaded: false,
+  };
+}
+
 const mockReferenceData: ReferenceData = {
   updatedAt: null,
   verificationTypeStatuses: [
@@ -99,10 +131,15 @@ describe('useCaseDetails', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     useReferenceDataStore.setState({ referenceData: mockReferenceData });
+    jest
+      .mocked(caseEvidenceRepository.uploadCaseEvidence)
+      .mockImplementation(async (_caseId, photo) => buildUploadedEvidenceFor(photo));
   });
 
   afterEach(() => {
     useReferenceDataStore.setState({ referenceData: null });
+    // A failed outcome keeps its upload receipts; none may leak into the next test.
+    EvidenceReceiptStorageService.clearReceipts('case-1');
   });
 
   it('loads the case detail and seeds the outcome form from server defaults', async () => {
@@ -119,13 +156,15 @@ describe('useCaseDetails', () => {
     expect(result.current.respondentName).toBe('Anita');
   });
 
-  it('defaults the status and photo tag to the first reference-data option when none is set', async () => {
+  it('preselects no outcome answer, but defaults the photo tag to the first reference-data option', async () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
 
     const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
-    expect(result.current.verificationStatus).toBe('verified_clear');
+    expect(result.current.verificationStatus).toBe('');
+    expect(result.current.residenceType).toBeNull();
+    expect(result.current.addressType).toBeNull();
     expect(result.current.selectedPhotoTag).toBe('house_photo_1');
   });
 
@@ -174,7 +213,7 @@ describe('useCaseDetails', () => {
     jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
     jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
 
-    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+    const { result } = await renderHook(() => useCaseDetails('case-1', ONE_CAPTURED_PHOTO));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     await act(async () => {
@@ -196,10 +235,12 @@ describe('useCaseDetails', () => {
   });
 
   it('surfaces a network error key when submitting fails', async () => {
-    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'utv' }));
     jest.mocked(caseRepository.submitVerificationOutcome).mockRejectedValue(new Error('boom'));
 
-    const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+    const { result } = await renderHook(() => useCaseDetails('case-1', ONE_CAPTURED_PHOTO));
     await waitFor(() => expect(result.current.isLoading).toBe(false));
 
     const onSubmitted = jest.fn();
@@ -438,6 +479,189 @@ describe('useCaseDetails', () => {
     });
   });
 
+  describe('submission validation', () => {
+    const HOUSE_PHOTO: SerializedCapturedPhotoEvidence = {
+      filePath: '/data/user/0/com.fullscan/cache/house-photo.jpg',
+      latitude: 17.4461,
+      longitude: 78.3821,
+      accuracyMeters: 6,
+      isMockLocation: false,
+      capturedAtIso: '2026-10-04T09:15:02.123Z',
+      documentTypeCode: 'house_photo_1',
+    };
+    /** A stable reference so the hook does not re-render on it. */
+    const ONE_PHOTO: readonly SerializedCapturedPhotoEvidence[] = [HOUSE_PHOTO];
+
+    async function renderLoadedCase(photos: readonly SerializedCapturedPhotoEvidence[] = NO_PHOTOS) {
+      const rendered = await renderHook(() => useCaseDetails('case-1', photos));
+      await waitFor(() => expect(rendered.result.current.isLoading).toBe(false));
+      return rendered;
+    }
+
+    beforeEach(() => {
+      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+      jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    });
+
+    afterEach(() => {
+      EvidenceReceiptStorageService.clearReceipts('case-1');
+    });
+
+    it('flags nothing before Submit is pressed', async () => {
+      const { result } = await renderLoadedCase();
+
+      expect(result.current.fieldErrorKeys).toEqual({});
+      expect(result.current.validationSummaryKey).toBeNull();
+    });
+
+    it('refuses to submit when nothing has been entered', async () => {
+      const { result } = await renderLoadedCase();
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+
+      expect(result.current.validationSummaryKey).toBe('caseDetails.validation.nothingEntered');
+      expect(result.current.fieldErrorKeys).toEqual({
+        verificationStatus: 'validation.required',
+        capturedPhotoCount: 'caseDetails.validation.photoRequired',
+      });
+      expect(result.current.isSubmitting).toBe(false);
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+      expect(onSubmitted).not.toHaveBeenCalled();
+    });
+
+    it('refuses to submit photos alone, without uploading them', async () => {
+      const { result } = await renderLoadedCase(ONE_PHOTO);
+
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+
+      expect(result.current.validationSummaryKey).toBe('caseDetails.validation.photosOnly');
+      expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    });
+
+    it('requires every Verified Residence & Respondent field for Verified Clear, before any upload', async () => {
+      const { result } = await renderLoadedCase(ONE_PHOTO);
+
+      await act(async () => {
+        result.current.selectVerificationStatus('verified_clear');
+      });
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+
+      expect(result.current.validationSummaryKey).toBe('caseDetails.validation.incomplete');
+      expect(result.current.fieldErrorKeys).toEqual({
+        residenceType: 'validation.required',
+        addressType: 'validation.required',
+        respondentName: 'validation.required',
+        respondentRelation: 'validation.required',
+        isSignatureCaptured: 'validation.required',
+      });
+      expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    });
+
+    it('clears each error as it is fixed, once Submit has been pressed', async () => {
+      const { result } = await renderLoadedCase();
+
+      await act(async () => {
+        result.current.selectVerificationStatus('verified_clear');
+      });
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+      await act(async () => {
+        result.current.selectResidenceType('owned');
+        result.current.setRespondentName('Anita');
+      });
+
+      expect(result.current.fieldErrorKeys).toEqual({
+        capturedPhotoCount: 'caseDetails.validation.photoRequired',
+        addressType: 'validation.required',
+        respondentRelation: 'validation.required',
+        isSignatureCaptured: 'validation.required',
+      });
+    });
+
+    it('refuses an otherwise complete outcome with no photo', async () => {
+      const { result } = await renderLoadedCase();
+
+      await act(async () => {
+        result.current.selectVerificationStatus('utv');
+      });
+      await act(async () => {
+        result.current.submit(jest.fn());
+      });
+
+      expect(result.current.validationSummaryKey).toBe('caseDetails.validation.incomplete');
+      expect(result.current.fieldErrorKeys).toEqual({
+        capturedPhotoCount: 'caseDetails.validation.photoRequired',
+      });
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    });
+
+    it('marks the photo as required from the start', async () => {
+      const { result } = await renderLoadedCase();
+
+      expect(result.current.requiredFields).toEqual({
+        verificationStatus: true,
+        capturedPhotoCount: true,
+      });
+    });
+
+    it('submits a fully completed Verified Clear outcome', async () => {
+      const { result } = await renderLoadedCase(ONE_PHOTO);
+
+      await act(async () => {
+        result.current.selectVerificationStatus('verified_clear');
+      });
+      await act(async () => {
+        result.current.selectResidenceType('owned');
+        result.current.selectAddressType('permanent');
+        result.current.setRespondentName('Anita');
+        result.current.setRespondentRelation('Mother');
+        result.current.markSignatureCaptured();
+      });
+
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(result.current.validationSummaryKey).toBeNull();
+      expect(caseEvidenceRepository.uploadCaseEvidence).toHaveBeenCalledTimes(1);
+      // The residence payload itself is geo-fence gated — the screen test covers it end to end.
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ verificationStatus: 'verified_clear', isSignatureCaptured: true }),
+      );
+    });
+
+    it('does not require the Verified Residence fields for another status', async () => {
+      const { result } = await renderLoadedCase(ONE_PHOTO);
+
+      await act(async () => {
+        result.current.selectVerificationStatus('insufficient');
+      });
+      const onSubmitted = jest.fn();
+      await act(async () => {
+        result.current.submit(onSubmitted);
+      });
+      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
+
+      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+        'case-1',
+        expect.objectContaining({ verificationStatus: 'insufficient', respondent: null }),
+      );
+    });
+  });
+
   describe('case-list cache updates', () => {
     /** Puts a loaded tab and the counts into the case-list cache, as the list would have. */
     function seedCaseListCache(): void {
@@ -527,10 +751,10 @@ describe('useCaseDetails', () => {
     it('moves a submitted case out of its own tab and discards Completed', async () => {
       jest
         .mocked(caseRepository.fetchCaseDetail)
-        .mockResolvedValue(buildCaseDetail({ bucket: 'beyondTat' }));
+        .mockResolvedValue(buildCaseDetail({ bucket: 'beyondTat', selectedVerificationStatus: 'utv' }));
       jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
 
-      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      const { result } = await renderHook(() => useCaseDetails('case-1', ONE_CAPTURED_PHOTO));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       const onSubmitted = jest.fn();
@@ -554,10 +778,12 @@ describe('useCaseDetails', () => {
     });
 
     it('leaves the list cache alone when submitting fails', async () => {
-      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail({ bucket: 'pending' }));
+      jest
+        .mocked(caseRepository.fetchCaseDetail)
+        .mockResolvedValue(buildCaseDetail({ bucket: 'pending', selectedVerificationStatus: 'utv' }));
       jest.mocked(caseRepository.submitVerificationOutcome).mockRejectedValue(new Error('offline'));
 
-      const { result } = await renderHook(() => useCaseDetails('case-1', NO_PHOTOS));
+      const { result } = await renderHook(() => useCaseDetails('case-1', ONE_CAPTURED_PHOTO));
       await waitFor(() => expect(result.current.isLoading).toBe(false));
 
       await act(async () => {
@@ -636,7 +862,10 @@ describe('useCaseDetails', () => {
     }
 
     beforeEach(() => {
-      jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+      // A complete outcome, so these tests exercise the upload rather than validation.
+      jest
+        .mocked(caseRepository.fetchCaseDetail)
+        .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'utv' }));
       jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
       jest
         .mocked(caseEvidenceRepository.uploadCaseEvidence)
@@ -691,17 +920,19 @@ describe('useCaseDetails', () => {
       expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1);
     });
 
-    it('goes straight to the outcome when no photos were captured', async () => {
+    it('neither uploads nor sends the outcome when no photo was captured', async () => {
       const { result } = await renderLoadedCase(NO_PHOTOS);
 
       const onSubmitted = jest.fn();
       await act(async () => {
         result.current.submit(onSubmitted);
       });
-      await waitFor(() => expect(onSubmitted).toHaveBeenCalledTimes(1));
 
+      expect(result.current.fieldErrorKeys.capturedPhotoCount).toBe(
+        'caseDetails.validation.photoRequired',
+      );
       expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
-      expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1);
+      expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
       expect(result.current.evidenceUploadProgress).toBeNull();
     });
 

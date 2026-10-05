@@ -14,19 +14,41 @@ import {
   writeEvidenceFiles,
 } from './case-evidence.service.js';
 import { AppError } from '../utils/app-error.js';
+import { base64DecodedLength } from '../utils/base64.js';
 import { logger } from '../utils/logger.js';
 import type { CaseComponentRow } from '../types/case.types.js';
 import type {
-  EvidenceUploadFile,
   MobileCaptureEvidenceRow,
-  MobileCaptureMetadata,
+  MobileCaptureUpload,
   MobileEvidenceUploadResult,
 } from '../types/case-evidence.types.js';
 
 /**
- * `POST /cases/:caseId/evidence` — one camera photo from the app, with its capture
- * metadata. See docs/api-contracts/mobile-evidence-upload.md.
+ * `POST /cases/:caseId/evidence` — one camera photo from the app, base64 in a JSON body,
+ * with its capture metadata. See docs/api-contracts/mobile-evidence-upload.md.
  */
+
+/** Largest decoded photo — the same 10 MB as each web upload (`MAX_EVIDENCE_FILE_BYTES`). */
+export const MAX_MOBILE_PHOTO_BYTES = 10 * 1024 * 1024;
+
+/**
+ * The photo's bytes. `contentBase64` has already been checked as strict base64, so the
+ * lenient `Buffer.from` decodes exactly what was sent. The size is checked from the
+ * encoded length first, so an oversized photo is never decoded.
+ */
+function decodePhoto(contentBase64: string): Buffer {
+  if (base64DecodedLength(contentBase64) > MAX_MOBILE_PHOTO_BYTES) {
+    throw new AppError(413, `The photo must be ${MAX_MOBILE_PHOTO_BYTES / (1024 * 1024)} MB or smaller`);
+  }
+
+  const photo = Buffer.from(contentBase64, 'base64');
+
+  if (detectEvidenceMimeType(photo) !== 'image/jpeg') {
+    throw new AppError(415, 'The photo must be a JPEG image');
+  }
+
+  return photo;
+}
 
 /**
  * The component, if it is assigned to this executive. Anything else — unknown id,
@@ -93,30 +115,22 @@ function replayed(
  * write wins, the replay's metadata is ignored. A concurrent duplicate that loses the
  * insert race on the partial unique index gets the winner's record the same way.
  *
- * All-or-nothing: the file is written only after every check, and removed again if
- * recording it fails.
+ * All-or-nothing: the file (the decoded bytes) is written only after every check, and
+ * removed again if recording it fails. The base64 text is never logged.
  */
 export async function uploadMobileCaptureEvidence(
   fieldExecutiveId: string,
   componentId: string,
-  metadata: MobileCaptureMetadata,
-  file: EvidenceUploadFile | undefined,
+  upload: MobileCaptureUpload,
 ): Promise<MobileEvidenceUploadResult> {
-  if (!file) {
-    throw new AppError(400, 'Attach the photo in the "file" part');
-  }
-
-  if (detectEvidenceMimeType(file.buffer) !== 'image/jpeg') {
-    throw new AppError(415, 'The photo must be a JPEG image');
-  }
-
-  const capturedAt = toCapturedAt(metadata.capturedAt);
-  await assertKnownPhotoType(metadata.documentTypeCode);
+  const photo = decodePhoto(upload.contentBase64);
+  const capturedAt = toCapturedAt(upload.capturedAt);
+  await assertKnownPhotoType(upload.documentTypeCode);
 
   const component = await findAssignedComponent(fieldExecutiveId, componentId);
   assertOpenForEvidence(component);
 
-  const sha256 = sha256Hex(file.buffer);
+  const sha256 = sha256Hex(photo);
   const existing = await caseEvidenceDao.findMobileCaptureBySha256(component.id, sha256);
 
   if (existing) {
@@ -128,23 +142,23 @@ export async function uploadMobileCaptureEvidence(
     id,
     component_id: component.id,
     field_executive_id: fieldExecutiveId,
-    original_name: toDisplayName(file.originalName),
+    original_name: toDisplayName(upload.fileName),
     storage_path: toStoragePath(component.id, id, 'image/jpeg'),
     mime_type: 'image/jpeg',
-    size_bytes: file.buffer.length,
+    size_bytes: photo.length,
     sha256,
-    document_type_code: metadata.documentTypeCode,
-    latitude: metadata.latitude,
-    longitude: metadata.longitude,
-    accuracy_meters: metadata.accuracyMeters,
-    is_mock_location: metadata.isMockLocation,
+    document_type_code: upload.documentTypeCode,
+    latitude: upload.latitude,
+    longitude: upload.longitude,
+    accuracy_meters: upload.accuracyMeters,
+    is_mock_location: upload.isMockLocation,
     captured_at: capturedAt,
   };
 
   let stored: MobileCaptureEvidenceRow;
 
   try {
-    stored = await writeEvidenceFiles([{ storagePath: row.storage_path, buffer: file.buffer }], () =>
+    stored = await writeEvidenceFiles([{ storagePath: row.storage_path, buffer: photo }], () =>
       caseEvidenceDao.insertMobileCaptureRow(row),
     );
   } catch (err) {

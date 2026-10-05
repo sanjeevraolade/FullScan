@@ -1,3 +1,4 @@
+import { FileReadError, FileSystemService } from '@/infrastructure/filesystem';
 import { LoggerService } from '@/infrastructure/logger';
 import { apiClient } from '@/infrastructure/networking';
 import type { CapturedPhotoEvidence } from '@/domain/case';
@@ -11,13 +12,13 @@ jest.mock('@/infrastructure/networking', () => ({
 }));
 
 /*
- * Jest runs on Node, whose global `FormData` is the WHATWG one: it stringifies
- * a `{ uri, name, type }` file part. React Native's own implementation is
- * what the app actually sends with, so it stands in for these tests.
+ * The reader itself (fetch + FileReader on device) is covered by
+ * file-system.service.test.ts; here it only hands back a photo's base64.
  */
-const ReactNativeFormData = jest.requireActual<{ default: typeof FormData }>(
-  'react-native/Libraries/Network/FormData',
-).default;
+jest.mock('@/infrastructure/filesystem', () => ({
+  ...jest.requireActual<object>('@/infrastructure/filesystem'),
+  FileSystemService: { readFileAsBase64: jest.fn() },
+}));
 
 const PHOTO: CapturedPhotoEvidence = {
   filePath: '/data/user/0/com.fullscan/cache/ReactNative-snapshot-image123.jpg',
@@ -28,6 +29,9 @@ const PHOTO: CapturedPhotoEvidence = {
   capturedAt: new Date('2026-10-04T09:15:02.123Z'),
   documentTypeCode: 'house_photo_1',
 };
+
+/** Standard, padded base64 of a tiny JPEG-looking payload. */
+const PHOTO_BASE64 = '/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4n/9k=';
 
 /** The contract's example response record. */
 function buildEvidenceDto(overrides: Record<string, unknown> = {}): Record<string, unknown> {
@@ -56,7 +60,7 @@ function mockUploadResponse(status: number, data: unknown = buildEvidenceDto()):
 
 interface SentUploadRequest {
   readonly url: string;
-  readonly formData: FormData;
+  readonly body: unknown;
   readonly config: unknown;
 }
 
@@ -66,10 +70,7 @@ function readSentRequest(): SentUploadRequest {
     throw new Error('apiClient.post was not called');
   }
   const [url, body, config] = call;
-  if (!(body instanceof ReactNativeFormData)) {
-    throw new Error('the request body is not a React Native FormData');
-  }
-  return { url, formData: body, config };
+  return { url, body, config };
 }
 
 async function captureUploadFailure(photo: CapturedPhotoEvidence = PHOTO): Promise<unknown> {
@@ -82,23 +83,8 @@ async function captureUploadFailure(photo: CapturedPhotoEvidence = PHOTO): Promi
 }
 
 describe('uploadCaseEvidence', () => {
-  let originalFormDataDescriptor: PropertyDescriptor | undefined;
-
-  beforeAll(() => {
-    originalFormDataDescriptor = Object.getOwnPropertyDescriptor(globalThis, 'FormData');
-    Object.defineProperty(globalThis, 'FormData', {
-      value: ReactNativeFormData,
-      configurable: true,
-      writable: true,
-    });
-  });
-
-  afterAll(() => {
-    if (originalFormDataDescriptor) {
-      Object.defineProperty(globalThis, 'FormData', originalFormDataDescriptor);
-    } else {
-      Reflect.deleteProperty(globalThis, 'FormData');
-    }
+  beforeEach(() => {
+    jest.mocked(FileSystemService.readFileAsBase64).mockResolvedValue(PHOTO_BASE64);
   });
 
   afterEach(() => {
@@ -107,7 +93,7 @@ describe('uploadCaseEvidence', () => {
   });
 
   describe('request', () => {
-    it('posts multipart form data to the case evidence route with a long upload timeout', async () => {
+    it('posts JSON to the case evidence route with a long upload timeout', async () => {
       mockUploadResponse(201);
 
       await uploadCaseEvidence('case-0123-comp-1', PHOTO);
@@ -115,79 +101,59 @@ describe('uploadCaseEvidence', () => {
       const { url, config } = readSentRequest();
       expect(url).toBe('/cases/case-0123-comp-1/evidence');
       expect(EVIDENCE_UPLOAD_TIMEOUT_MS).toBe(60000);
-      // No hand-written boundary: React Native's networking layer adds it.
       expect(config).toEqual({
-        headers: { 'Content-Type': 'multipart/form-data' },
+        headers: { 'Content-Type': 'application/json' },
         timeout: EVIDENCE_UPLOAD_TIMEOUT_MS,
       });
     });
 
-    it('sends exactly the contract parts — six text parts, then the file', async () => {
+    it('sends exactly the contract fields, numbers and booleans as JSON types', async () => {
       mockUploadResponse(201);
 
       await uploadCaseEvidence('case-0123-comp-1', PHOTO);
 
-      const { formData } = readSentRequest();
-      const fieldNames = formData
-        .getParts()
-        .map((part) => part.headers['content-disposition']?.match(/name="([^"]+)"/)?.[1]);
-      expect(fieldNames).toEqual([
-        'documentTypeCode',
-        'latitude',
-        'longitude',
-        'accuracyMeters',
-        'capturedAt',
-        'isMockLocation',
-        'file',
-      ]);
+      // Strict: the server schema rejects any extra field, even an undefined one.
+      expect(readSentRequest().body).toStrictEqual({
+        documentTypeCode: 'house_photo_1',
+        latitude: 17.4935,
+        longitude: 78.3129,
+        accuracyMeters: 8.5,
+        capturedAt: '2026-10-04T09:15:02.123Z',
+        isMockLocation: false,
+        fileName: 'house_photo_1-1791105302123.jpg',
+        contentBase64: PHOTO_BASE64,
+      });
     });
 
-    it('serializes the capture metadata as strings', async () => {
-      mockUploadResponse(201);
-
-      await uploadCaseEvidence('case-0123-comp-1', PHOTO);
-
-      const { formData } = readSentRequest();
-      expect(formData.getAll('documentTypeCode')).toEqual(['house_photo_1']);
-      expect(formData.getAll('latitude')).toEqual(['17.4935']);
-      expect(formData.getAll('longitude')).toEqual(['78.3129']);
-      expect(formData.getAll('accuracyMeters')).toEqual(['8.5']);
-      expect(formData.getAll('capturedAt')).toEqual(['2026-10-04T09:15:02.123Z']);
-      expect(formData.getAll('isMockLocation')).toEqual(['false']);
-    });
-
-    it('sends a mocked location as the string "true"', async () => {
+    it('sends a mocked location as JSON true', async () => {
       mockUploadResponse(201);
 
       await uploadCaseEvidence('case-0123-comp-1', { ...PHOTO, isMockLocation: true });
 
-      expect(readSentRequest().formData.getAll('isMockLocation')).toEqual(['true']);
+      expect(readSentRequest().body).toEqual(expect.objectContaining({ isMockLocation: true }));
     });
 
-    it('attaches the photo as a file:// JPEG named after its tag and capture time', async () => {
+    it('reads the content from the photo’s own local file', async () => {
       mockUploadResponse(201);
 
       await uploadCaseEvidence('case-0123-comp-1', PHOTO);
 
-      expect(readSentRequest().formData.getAll('file')).toEqual([
-        {
-          uri: 'file:///data/user/0/com.fullscan/cache/ReactNative-snapshot-image123.jpg',
-          name: 'house_photo_1-1791105302123.jpg',
-          type: 'image/jpeg',
-        },
-      ]);
+      expect(FileSystemService.readFileAsBase64).toHaveBeenCalledTimes(1);
+      expect(FileSystemService.readFileAsBase64).toHaveBeenCalledWith(PHOTO.filePath);
     });
 
     it.each([
-      ['file://', 'file:///data/user/0/com.fullscan/cache/photo.jpg'],
-      ['content://', 'content://com.fullscan.provider/cache/photo.jpg'],
-    ])('leaves a path that is already a %s URI untouched', async (_scheme, filePath) => {
-      mockUploadResponse(201);
+      ['a missing file', new FileReadError('unreadable')],
+      ['an empty file', new FileReadError('emptyFile')],
+      ['an unexpected reader failure', new Error('native module unavailable')],
+    ])('fails with fileUnreadable and sends nothing for %s', async (_label, readError) => {
+      jest.mocked(FileSystemService.readFileAsBase64).mockRejectedValue(readError);
 
-      await uploadCaseEvidence('case-0123-comp-1', { ...PHOTO, filePath });
+      const error = await captureUploadFailure();
 
-      const [filePart] = readSentRequest().formData.getAll('file');
-      expect(filePart).toEqual(expect.objectContaining({ uri: filePath }));
+      expect(error).toBeInstanceOf(CaseEvidenceUploadError);
+      expect(error).toMatchObject({ reason: 'fileUnreadable', status: null });
+      expect(apiClient.post).not.toHaveBeenCalled();
     });
 
     it.each([
@@ -195,11 +161,12 @@ describe('uploadCaseEvidence', () => {
       ['a non-finite accuracy', { accuracyMeters: Number.POSITIVE_INFINITY }],
       ['an invalid capture time', { capturedAt: new Date('not a date') }],
       ['an empty file path', { filePath: '' }],
-    ])('refuses to send a photo with %s', async (_label, overrides) => {
+    ])('refuses a photo with %s before reading or sending it', async (_label, overrides) => {
       const error = await captureUploadFailure({ ...PHOTO, ...overrides });
 
       expect(error).toBeInstanceOf(CaseEvidenceUploadError);
       expect(error).toMatchObject({ reason: 'invalidPhoto', status: null });
+      expect(FileSystemService.readFileAsBase64).not.toHaveBeenCalled();
       expect(apiClient.post).not.toHaveBeenCalled();
     });
   });
@@ -305,7 +272,7 @@ describe('uploadCaseEvidence', () => {
     it.each<[string, string | undefined, CaseEvidenceUploadFailureReason]>([
       ['the axios timeout', 'ECONNABORTED', 'timeout'],
       ['a socket timeout', 'ETIMEDOUT', 'timeout'],
-      ['being offline (or an unreadable local file)', 'ERR_NETWORK', 'network'],
+      ['being offline', 'ERR_NETWORK', 'network'],
       ['no error code at all', undefined, 'network'],
     ])('maps no response because of %s', async (_label, code, reason) => {
       jest
@@ -336,25 +303,34 @@ describe('uploadCaseEvidence', () => {
       return JSON.stringify(calls);
     }
 
+    function expectNoEvidenceContentLogged(loggedText: string): void {
+      expect(loggedText).not.toContain('ReactNative-snapshot-image123');
+      expect(loggedText).not.toContain('17.4935');
+      expect(loggedText).not.toContain('78.3129');
+      // Not the base64, nor any recognisable slice of it.
+      expect(loggedText).not.toContain(PHOTO_BASE64);
+      expect(loggedText).not.toContain(PHOTO_BASE64.slice(0, 12));
+      expect(loggedText).not.toContain(PHOTO_BASE64.slice(-12));
+    }
+
     beforeEach(() => {
       jest.spyOn(LoggerService, 'info');
       jest.spyOn(LoggerService, 'warn');
       jest.spyOn(LoggerService, 'error');
     });
 
-    it('never logs the file path or coordinates on success', async () => {
+    it('never logs the file path, coordinates or content on success, only the base64 length', async () => {
       mockUploadResponse(201, buildEvidenceDto({ isMockLocation: true }));
 
       await uploadCaseEvidence('case-0123-comp-1', PHOTO);
 
       const loggedText = collectLoggedText();
       expect(loggedText).toContain('3f1c9a52-6a0e-4a8e-9d55-0c3a3a5f2b11');
-      expect(loggedText).not.toContain('ReactNative-snapshot-image123');
-      expect(loggedText).not.toContain('17.4935');
-      expect(loggedText).not.toContain('78.3129');
+      expect(loggedText).toContain(`"base64Length":${PHOTO_BASE64.length}`);
+      expectNoEvidenceContentLogged(loggedText);
     });
 
-    it('never logs the file path or coordinates on failure', async () => {
+    it('never logs the file path, coordinates or content when the server fails', async () => {
       jest
         .mocked(apiClient.post)
         .mockRejectedValue({ isAxiosError: true, response: { status: 500 } });
@@ -363,9 +339,19 @@ describe('uploadCaseEvidence', () => {
 
       const loggedText = collectLoggedText();
       expect(loggedText).toContain('500');
-      expect(loggedText).not.toContain('ReactNative-snapshot-image123');
-      expect(loggedText).not.toContain('17.4935');
-      expect(loggedText).not.toContain('78.3129');
+      expectNoEvidenceContentLogged(loggedText);
+    });
+
+    it('never logs the file path when the local file is unreadable', async () => {
+      jest
+        .mocked(FileSystemService.readFileAsBase64)
+        .mockRejectedValue(new FileReadError('unreadable'));
+
+      await captureUploadFailure();
+
+      const loggedText = collectLoggedText();
+      expect(loggedText).toContain('unreadable');
+      expectNoEvidenceContentLogged(loggedText);
     });
   });
 });

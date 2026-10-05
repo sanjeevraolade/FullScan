@@ -53,7 +53,8 @@
     }
   },
   "validation": {
-    "required": "This field is required"
+    "required": "This field is required",
+    "requiredFieldLabel": "{{label}}, required"
   },
   "drawer": {
     "items": {
@@ -120,6 +121,12 @@
       "evidenceCaseClosed": "This case is closed to new evidence, so your photos could not be uploaded. The verification report was not submitted.",
       "evidenceUploadFailed": "Your photos could not be uploaded, so the verification report was not submitted. Check your connection and try again."
     },
+    "validation": {
+      "nothingEntered": "Nothing has been entered yet. Select a verification status and complete its details before submitting.",
+      "photosOnly": "Photos alone can't be submitted. Select a verification status and complete its details.",
+      "incomplete": "Some required details are missing. Complete the highlighted fields before submitting.",
+      "photoRequired": "At least one photo is required"
+    },
     "readOnly": {
       "message": "This case is read-only and cannot be edited.",
       "newCase": "New cases are view-only until they are accepted.",
@@ -173,6 +180,7 @@
     "outcome": {
       "title": "Select Verification Status Outcome",
       "statusLabel": "Verification Status",
+      "statusPlaceholder": "Select verification status",
       "utvTitle": "UTV Options (Unable To Verify)",
       "utvReasonLabel": "Reason",
       "utvRemarksLabel": "Remarks",
@@ -185,12 +193,14 @@
     "residence": {
       "title": "Verified Residence & Respondent Details",
       "residenceTypeLabel": "Type of Residence",
+      "residenceTypePlaceholder": "Select type",
       "residenceTypeOptions": {
         "owned": "Owned",
         "rented": "Rented",
         "hostel": "Hostel"
       },
       "addressTypeLabel": "Type of Address",
+      "addressTypePlaceholder": "Select type",
       "addressTypeOptions": {
         "present": "Present",
         "permanent": "Permanent"

@@ -31,7 +31,7 @@ enforces roles with `requireAdminRole`.
 | `src/routes/fe-web-app.routes.ts` | Now a thin call to the factory; behaviour and tests unchanged |
 | `src/routes/admin-app.routes.ts` | Mounts `web-admin/dist` at `/admin-app` (`ADMIN_APP_DIR` overrides it) |
 | `src/middleware/authenticate-admin.ts` | `createAdminPageGuard(loginPath)`. `authenticateAdminPage` is built from it; `/admin` is unchanged |
-| `GET /api/v1/admin/cases/:caseId/evidence` | Web-uploaded evidence for every component of a case, newest first, with the uploader's id, name and username. Both roles. 404 for an unknown case. The storage path is never exposed |
+| `GET /api/v1/admin/cases/:caseId/evidence` | Evidence for every component of a case — web uploads and mobile app captures (with document type, coordinates, accuracy, mock-location flag and capture time; null on web uploads) — newest first, with the uploader's id, name and username. Both roles. 404 for an unknown case. The storage path is never exposed |
 | `src/app.ts` | Mounts `/admin-app` |
 
 ## 3. Evidence in the admin app

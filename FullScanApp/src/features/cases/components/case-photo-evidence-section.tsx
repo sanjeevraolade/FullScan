@@ -1,10 +1,22 @@
 import React from 'react';
 import type { ReactElement } from 'react';
-import { Box, Button, ButtonIcon, ButtonText, HStack, Icon, Text, VStack } from '@gluestack-ui/themed';
+import {
+  Box,
+  Button,
+  ButtonIcon,
+  ButtonText,
+  FormControl,
+  FormControlError,
+  FormControlErrorText,
+  HStack,
+  Icon,
+  Text,
+  VStack,
+} from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { CameraIcon, FormSelectField } from '@/shared/components';
+import { CameraIcon, FormSelectField, RequiredIndicator } from '@/shared/components';
 import type { DropdownOption } from '@/domain/reference-data';
 import type { CapturedPhotoEvidence } from '@/domain/case';
 
@@ -19,6 +31,10 @@ export interface CasePhotoEvidenceSectionProps {
   readonly onOpenCamera: () => void;
   readonly capturedPhotos: readonly CapturedPhotoEvidence[];
   readonly onDeletePhoto: (filePath: string) => void;
+  /** Marks the section title with a red "*" — at least one photo has to be captured. */
+  readonly isRequired?: boolean;
+  /** Localization key of the "no photo yet" error, shown once Submit has been pressed. */
+  readonly errorKey?: string | undefined;
   readonly isReadOnly?: boolean;
 }
 
@@ -30,6 +46,8 @@ export function CasePhotoEvidenceSection({
   onOpenCamera,
   capturedPhotos,
   onDeletePhoto,
+  isRequired = false,
+  errorKey,
   isReadOnly = false,
 }: CasePhotoEvidenceSectionProps): ReactElement {
   const { t } = useTranslation();
@@ -39,6 +57,8 @@ export function CasePhotoEvidenceSection({
     selectedPhotoTag,
     capturedPhotoCount: capturedPhotos.length,
     photoTagOptionCount: photoTagOptions.length,
+    isRequired,
+    isValid: !errorKey,
     isReadOnly,
   });
 
@@ -79,6 +99,14 @@ export function CasePhotoEvidenceSection({
     onOpenCamera();
   };
 
+  const cameraButtonLabel = t(
+    photosForSelectedTag.length > 0 ? 'caseDetails.photo.addAnother' : 'caseDetails.photo.openCamera',
+  );
+  // The title's red "*" is hidden from screen readers, so the camera button says "required".
+  const cameraButtonAccessibilityLabel = isRequired
+    ? t('validation.requiredFieldLabel', { label: cameraButtonLabel })
+    : cameraButtonLabel;
+
   if (photosForSelectedTag.length > 0) {
     LoggerService.info(`${FILE_NAME}: CasePhotoEvidenceSection: rendering gallery branch`, {
       matchingPhotoCount: photosForSelectedTag.length,
@@ -101,9 +129,13 @@ export function CasePhotoEvidenceSection({
       <VStack space="sm">
         <HStack space="xs" alignItems="center">
           <Icon as={CameraIcon} size="sm" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }} />
-          <Text size="xs" fontWeight="$bold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
-            {t('caseDetails.photo.title')}
-          </Text>
+          {/* A sibling, not nested: nested Text merges into one screen-reader string. */}
+          <HStack alignItems="center">
+            <Text size="xs" fontWeight="$bold" color="$textLight900" sx={{ _dark: { color: '$textDark0' } }}>
+              {t('caseDetails.photo.title')}
+            </Text>
+            {isRequired ? <RequiredIndicator size="xs" /> : null}
+          </HStack>
         </HStack>
 
         <FormSelectField
@@ -129,21 +161,24 @@ export function CasePhotoEvidenceSection({
           />
         ) : null}
 
-        <Button
-          size="lg"
-          borderRadius="$xl"
-          onPress={handleOpenCamera}
-          isDisabled={isReadOnly}
-          accessibilityLabel={t(
-            photosForSelectedTag.length > 0 ? 'caseDetails.photo.addAnother' : 'caseDetails.photo.openCamera',
-          )}
-          testID="case-details-open-camera-button"
-        >
-          <ButtonIcon as={CameraIcon} mr="$2" />
-          <ButtonText>
-            {t(photosForSelectedTag.length > 0 ? 'caseDetails.photo.addAnother' : 'caseDetails.photo.openCamera')}
-          </ButtonText>
-        </Button>
+        <FormControl isInvalid={Boolean(errorKey)} isDisabled={isReadOnly}>
+          <Button
+            size="lg"
+            borderRadius="$xl"
+            onPress={handleOpenCamera}
+            isDisabled={isReadOnly}
+            accessibilityLabel={cameraButtonAccessibilityLabel}
+            testID="case-details-open-camera-button"
+          >
+            <ButtonIcon as={CameraIcon} mr="$2" />
+            <ButtonText>{cameraButtonLabel}</ButtonText>
+          </Button>
+          {errorKey ? (
+            <FormControlError>
+              <FormControlErrorText testID="case-details-photo-error">{t(errorKey)}</FormControlErrorText>
+            </FormControlError>
+          ) : null}
+        </FormControl>
       </VStack>
     </Box>
   );

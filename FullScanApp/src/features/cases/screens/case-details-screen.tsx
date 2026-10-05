@@ -137,6 +137,9 @@ export function CaseDetailsScreen(): ReactElement {
     markSignatureCaptured,
     selectedPhotoTag,
     selectPhotoTag,
+    fieldErrorKeys,
+    requiredFields,
+    validationSummaryKey,
     isSubmitting,
     evidenceUploadProgress,
     submitError,
@@ -451,6 +454,7 @@ export function CaseDetailsScreen(): ReactElement {
     hasNotice: noticeKey !== null,
     hasSubmitError: submitError !== null,
     submitError,
+    validationSummaryKey,
     isUploadingEvidence: evidenceUploadProgress !== null,
     capturedPhotoCount: capturedPhotos.length,
   });
@@ -546,6 +550,8 @@ export function CaseDetailsScreen(): ReactElement {
                   onSelectInsufficientReason={selectInsufficientReason}
                   insufficientRemarks={insufficientRemarks}
                   onInsufficientRemarksChange={setInsufficientRemarks}
+                  fieldErrorKeys={fieldErrorKeys}
+                  requiredFields={requiredFields}
                   isReadOnly={isReadOnly}
                 />
 
@@ -561,6 +567,8 @@ export function CaseDetailsScreen(): ReactElement {
                     onRespondentRelationChange={setRespondentRelation}
                     isSignatureCaptured={isSignatureCaptured}
                     onCaptureSignature={handleCaptureSignature}
+                    fieldErrorKeys={fieldErrorKeys}
+                    requiredFields={requiredFields}
                     isReadOnly={isReadOnly}
                   />
                 ) : null}
@@ -572,11 +580,20 @@ export function CaseDetailsScreen(): ReactElement {
                   onOpenCamera={handleOpenCamera}
                   capturedPhotos={capturedPhotos}
                   onDeletePhoto={handleDeletePhoto}
+                  isRequired={requiredFields.capturedPhotoCount === true}
+                  errorKey={fieldErrorKeys.capturedPhotoCount}
                   isReadOnly={isReadOnly}
                 />
               </>
             ) : null}
           </>
+        ) : null}
+
+        {validationSummaryKey ? (
+          <Alert action="error" testID="case-details-validation-summary">
+            <AlertIcon as={AlertCircleIcon} mr="$2" />
+            <AlertText>{t(validationSummaryKey)}</AlertText>
+          </Alert>
         ) : null}
 
         {submitError ? (

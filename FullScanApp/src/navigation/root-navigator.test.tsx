@@ -128,6 +128,25 @@ describe('RootNavigator', () => {
     expect(screen.getByTestId('login-submit-button')).toBeTruthy();
   });
 
+  it('returns to the Login screen without waiting for the server sign-out', async () => {
+    // Stands in for a sign-out request that is slow or never answers (offline).
+    const pendingServerSignOut = new Promise<void>(() => undefined);
+    jest.mocked(authenticationRepository.logout).mockClear();
+    jest.mocked(authenticationRepository.logout).mockReturnValueOnce(pendingServerSignOut);
+    await render(
+      <ThemeProvider>
+        <RootNavigator />
+      </ThemeProvider>,
+    );
+
+    await loginAndOpenDrawer();
+    await waitFor(() => expect(screen.getByTestId('drawer-logout-button')).toBeTruthy());
+    await fireEvent.press(screen.getByTestId('drawer-logout-button'));
+
+    await waitFor(() => expect(screen.getByText('Welcome to FullScan')).toBeTruthy());
+    expect(authenticationRepository.logout).toHaveBeenCalledTimes(1);
+  });
+
   it('drops the in-memory case-list cache on logout — it holds candidate PII', async () => {
     await render(
       <ThemeProvider>

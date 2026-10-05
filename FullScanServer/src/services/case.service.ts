@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import * as caseDao from '../db/case.dao.js';
+import * as referenceDataDao from '../db/reference-data.dao.js';
 import { AppError } from '../utils/app-error.js';
 import { logger } from '../utils/logger.js';
 import type {
@@ -309,17 +310,43 @@ export async function getCaseDetail(componentId: string): Promise<CaseDetail> {
   return mapDetail(existing);
 }
 
-/** Records the field executive's verification outcome and moves the component to Completed. */
+async function assertKnownVerificationStatus(verificationStatus: string): Promise<void> {
+  const statuses = await referenceDataDao.findDropdownOptionsByCategory('verification_type_status');
+
+  if (!statuses.some((option) => option.code === verificationStatus)) {
+    throw new AppError(400, 'Unknown verificationStatus');
+  }
+}
+
+/**
+ * Records the field executive's verification outcome — every field, plus the server time
+ * — and moves the component to Completed. The body's shape and the `verified_clear` rules
+ * were checked by the route schema; the status code is checked here, after the component
+ * lookup. A later submission overwrites an earlier one, so a retried request is safe.
+ * Only the executive the component is assigned to may submit it; anyone else gets the same
+ * 404 as for an unknown id, so the route cannot be used to probe which ids exist.
+ * docs/api-contracts/verification-outcome-submission.md.
+ */
 export async function submitVerificationOutcome(
   componentId: string,
+  fieldExecutiveId: string,
   outcome: VerificationOutcomeInput,
 ): Promise<CaseSummary> {
   const existing = await caseDao.findComponentById(componentId);
 
-  if (!existing) {
+  if (!existing || existing.assigned_field_executive_id !== fieldExecutiveId) {
     throw new AppError(404, `Case component not found: ${componentId}`);
   }
 
+  await assertKnownVerificationStatus(outcome.verificationStatus);
+
   const updated = await caseDao.updateComponentVerificationOutcome(componentId, outcome);
+
+  // No respondent details or coordinates: those are PII / location of the visit.
+  logger.info(
+    { componentId, verificationStatus: outcome.verificationStatus, forceProceed: outcome.forceProceed },
+    'Verification outcome recorded',
+  );
+
   return mapSummary(updated);
 }

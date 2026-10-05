@@ -2,6 +2,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from 'vitest
 import request from 'supertest';
 import jwt from 'jsonwebtoken';
 import { app, getCollection, removeTestDb, SEEDED_FIELD_EXECUTIVE } from './helpers/test-app.js';
+import { VERIFIED_CLEAR_OUTCOME } from './helpers/verification-outcome.js';
 
 /**
  * Mobile case list by tab — docs/api-contracts/cases-by-tab.md.
@@ -44,17 +45,8 @@ const LEGACY_SUMMARY_KEYS = [
 const ASSIGNED_TYPES = ['pending', 'beyond_tat', 'completed'] as const;
 const INVALID_CURSOR = { success: false, error: 'Invalid cursor' };
 
-const OUTCOME = {
-  verificationStatus: 'verified',
-  utvReason: null,
-  utvRemarks: null,
-  insufficientReason: null,
-  insufficientRemarks: null,
-  residenceType: 'owned',
-  addressType: 'present',
-  respondent: { name: 'Test Respondent', relation: 'Self' },
-  isSignatureCaptured: true,
-};
+/** A valid outcome body; its own rules are covered in verification-outcome.test.ts. */
+const OUTCOME = VERIFIED_CLEAR_OUTCOME;
 
 interface CaseItem {
   readonly id: string;

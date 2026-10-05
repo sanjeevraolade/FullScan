@@ -134,6 +134,10 @@ export const COLLECTIONS: Readonly<Record<CollectionName, CollectionSpec>> = {
     primaryKey: 'id',
     hasInsertOrder: false,
     notNull: ['name', 'role', 'email', 'password_hash'],
+    // Mobile session revocation (docs/api-contracts/mobile-logout.md). Optional — absent
+    // reads as 0, so existing accounts need no migration — but when present a whole
+    // number ≥ 0: `$inc` fails on null, and no token's integer claim matches a fraction.
+    checks: { mobile_session_version: { bsonType: ['int', 'long'], minimum: 0 } },
     indexes: [
       // SQLite's UNIQUE ignored NULLs; MongoDB's does not, hence the partial filter.
       {
@@ -188,6 +192,10 @@ export const COLLECTIONS: Readonly<Record<CollectionName, CollectionSpec>> = {
       bucket: oneOf(CASE_BUCKETS),
       address_type: nullOrOneOf(ADDRESS_TYPES),
       residence_type: nullOrOneOf(RESIDENCE_TYPES),
+      // The executive's observed values from the verification outcome. Absent on components
+      // with no outcome yet — a property rule only applies to a field that is present.
+      observed_address_type: nullOrOneOf(ADDRESS_TYPES),
+      observed_residence_type: nullOrOneOf(RESIDENCE_TYPES),
     },
     indexes: [
       { key: { case_id: 1 }, name: 'case_id' },

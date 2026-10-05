@@ -1,3 +1,5 @@
+import axios from 'axios';
+
 import { apiClient } from '@/infrastructure/networking';
 import { LoggerService } from '@/infrastructure/logger';
 import { TokenStorageService } from '@/infrastructure/storage';
@@ -125,9 +127,84 @@ export async function login(credentials: LoginCredentials): Promise<LoginResult>
   return { fieldExecutive, masterDataUpdatedAt };
 }
 
-/** Clears the persisted session token — call on logout or session expiry. */
+/** Reads the token to revoke. A storage failure reads as "no token": logout must still proceed. */
+async function readStoredToken(): Promise<string | null> {
+  LoggerService.info(`${FILE_NAME}: readStoredToken: reading session token to revoke`);
+  try {
+    const token = await TokenStorageService.getToken();
+    LoggerService.info(`${FILE_NAME}: readStoredToken: session token read`, {
+      hasToken: Boolean(token),
+    });
+    return token;
+  } catch (error: unknown) {
+    LoggerService.error(`${FILE_NAME}: readStoredToken: secure storage read failed`, {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+    return null;
+  }
+}
+
+async function clearStoredToken(): Promise<void> {
+  LoggerService.info(`${FILE_NAME}: clearStoredToken: clearing stored session token`);
+  try {
+    await TokenStorageService.clearToken();
+    LoggerService.info(`${FILE_NAME}: clearStoredToken: stored session token cleared`);
+  } catch (error: unknown) {
+    LoggerService.error(`${FILE_NAME}: clearStoredToken: secure storage clear failed`, {
+      errorName: error instanceof Error ? error.name : typeof error,
+    });
+  }
+}
+
+/**
+ * Best-effort `POST /auth/logout`. The token goes in an explicit header because
+ * storage no longer holds it — the api-client interceptor keeps a caller-supplied
+ * Authorization header rather than replacing it with whatever storage holds now.
+ * Failures are only logged: the device is already signed out locally.
+ */
+async function revokeServerSession(token: string): Promise<void> {
+  LoggerService.info(`${FILE_NAME}: revokeServerSession: requesting server-side sign-out`);
+  try {
+    // The body (`{ signedOut: true }`) isn't read: a 2xx is the confirmation.
+    const response = await apiClient.post<unknown>('/auth/logout', undefined, {
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    LoggerService.info(`${FILE_NAME}: revokeServerSession: server session revoked`, {
+      status: response.status,
+    });
+  } catch (error: unknown) {
+    // Status and error kind only — never the token, the error message or the response body.
+    // A 401 (already revoked/expired) or a network failure/timeout leaves nothing to undo.
+    const isAxiosError = axios.isAxiosError(error);
+    LoggerService.warn(`${FILE_NAME}: revokeServerSession: server sign-out failed, ignoring`, {
+      isAxiosError,
+      status: isAxiosError ? error.response?.status : undefined,
+    });
+  }
+}
+
+/**
+ * Signs this device out — call on logout or session expiry. Never rejects, so
+ * callers can fire and forget it without blocking the user on the network.
+ *
+ * 1. Reads the stored token; with none there is nothing to revoke, so storage is
+ *    only cleared and no request is made.
+ * 2. Clears the stored token *before* any network call: if a re-login saves a new
+ *    token while the request below is still in flight, nothing here wipes it.
+ * 3. Sends `POST /auth/logout` with the captured token, best-effort. Network
+ *    errors, timeouts and 401s are logged (status only) and swallowed; the server
+ *    only revokes the presented token's session, never a newer login's.
+ */
 export async function logout(): Promise<void> {
-  LoggerService.info(`${FILE_NAME}: logout: clearing stored session token`);
-  await TokenStorageService.clearToken();
-  LoggerService.info(`${FILE_NAME}: logout: stored session token cleared`);
+  LoggerService.info(`${FILE_NAME}: logout: signing out`);
+  const token = await readStoredToken();
+  await clearStoredToken();
+
+  if (!token) {
+    LoggerService.info(`${FILE_NAME}: logout: no stored session token, skipping server sign-out`);
+    return;
+  }
+
+  await revokeServerSession(token);
+  LoggerService.info(`${FILE_NAME}: logout: signed out`);
 }

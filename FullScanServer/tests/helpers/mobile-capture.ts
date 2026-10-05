@@ -6,18 +6,28 @@ import { app, SEEDED_FIELD_EXECUTIVE } from './test-app.js';
 
 const JPEG_HEADER = Buffer.from([0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46]);
 
-export const MOBILE_CAPTURE_FIELDS: Readonly<Record<string, string>> = {
+/** The upload body minus the photo: real JSON numbers and booleans. */
+export const MOBILE_CAPTURE_METADATA = {
   documentTypeCode: 'house_photo_1',
-  latitude: '17.4935',
-  longitude: '78.3129',
-  accuracyMeters: '8.5',
+  latitude: 17.4935,
+  longitude: 78.3129,
+  accuracyMeters: 8.5,
   capturedAt: '2026-10-04T09:15:02.123Z',
-  isMockLocation: 'false',
-};
+  isMockLocation: false,
+  fileName: 'house_photo_1-1791105302123.jpg',
+} as const;
 
 /** A JPEG whose bytes — and so whose SHA-256 — no other call returns. */
 export function uniqueJpeg(): Buffer {
   return Buffer.concat([JPEG_HEADER, crypto.randomBytes(32)]);
+}
+
+/** A complete upload body for `photo` (a fresh JPEG by default), with `overrides` applied. */
+export function mobileCaptureBody(
+  photo: Buffer = uniqueJpeg(),
+  overrides: Readonly<Record<string, unknown>> = {},
+): Record<string, unknown> {
+  return { ...MOBILE_CAPTURE_METADATA, contentBase64: photo.toString('base64'), ...overrides };
 }
 
 /** Signs the seeded field executive in on the mobile API and returns the bearer token. */
@@ -43,17 +53,14 @@ export async function signInMobile(deviceId = 'mobile-capture-test-device'): Pro
   return response.body.data.token as string;
 }
 
-/** `POST /cases/:componentId/evidence` with one fresh JPEG. */
+/** `POST /cases/:componentId/evidence` with one fresh JPEG and the default metadata, with `overrides` applied. */
 export function uploadMobileCapture(
   token: string,
   componentId: string,
-  fields: Readonly<Record<string, string>> = MOBILE_CAPTURE_FIELDS,
-  fileName = 'house_photo_1-1791105302123.jpg',
+  overrides: Readonly<Record<string, unknown>> = {},
 ) {
-  let pending = request(app).post(`/api/v1/cases/${componentId}/evidence`).set('Authorization', `Bearer ${token}`);
-
-  for (const [name, value] of Object.entries(fields)) {
-    pending = pending.field(name, value);
-  }
-  return pending.attach('file', uniqueJpeg(), fileName);
+  return request(app)
+    .post(`/api/v1/cases/${componentId}/evidence`)
+    .set('Authorization', `Bearer ${token}`)
+    .send(mobileCaptureBody(uniqueJpeg(), overrides));
 }

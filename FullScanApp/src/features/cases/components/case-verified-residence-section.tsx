@@ -1,21 +1,44 @@
 import React from 'react';
 import type { ReactElement } from 'react';
-import { Box, Button, ButtonIcon, ButtonText, EditIcon, HStack, Icon, Text, VStack } from '@gluestack-ui/themed';
+import {
+  Box,
+  Button,
+  ButtonIcon,
+  ButtonText,
+  EditIcon,
+  FormControl,
+  FormControlError,
+  FormControlErrorText,
+  HStack,
+  Icon,
+  Text,
+  VStack,
+} from '@gluestack-ui/themed';
 import { useTranslation } from 'react-i18next';
 
 import { LoggerService } from '@/infrastructure/logger';
-import { FormSelectField, FormTextField, PersonIcon } from '@/shared/components';
-import type { AddressType, ResidenceType } from '@/domain/case';
+import { FormFieldLabel, FormSelectField, FormTextField, PersonIcon } from '@/shared/components';
+import type {
+  AddressType,
+  ResidenceType,
+  VerificationOutcomeFieldErrorKeys,
+  VerificationOutcomeRequiredFields,
+} from '@/domain/case';
 
 const FILE_NAME = 'case-verified-residence-section.tsx';
 
 const RESIDENCE_TYPES: readonly ResidenceType[] = ['owned', 'rented', 'hostel'];
 const ADDRESS_TYPES: readonly AddressType[] = ['present', 'permanent'];
 
+const NO_FIELD_ERRORS: VerificationOutcomeFieldErrorKeys = {};
+const NO_REQUIRED_FIELDS: VerificationOutcomeRequiredFields = {};
+
 export interface CaseVerifiedResidenceSectionProps {
-  readonly residenceType: ResidenceType;
+  /** Null until the field executive picks one. */
+  readonly residenceType: ResidenceType | null;
   readonly onSelectResidenceType: (type: ResidenceType) => void;
-  readonly addressType: AddressType;
+  /** Null until the field executive picks one. */
+  readonly addressType: AddressType | null;
   readonly onSelectAddressType: (type: AddressType) => void;
   readonly respondentName: string;
   readonly onRespondentNameChange: (name: string) => void;
@@ -23,6 +46,10 @@ export interface CaseVerifiedResidenceSectionProps {
   readonly onRespondentRelationChange: (relation: string) => void;
   readonly isSignatureCaptured: boolean;
   readonly onCaptureSignature: () => void;
+  /** Validation errors to show under each field — empty until Submit is pressed. */
+  readonly fieldErrorKeys?: VerificationOutcomeFieldErrorKeys;
+  /** Which of this section's fields get the red "*". */
+  readonly requiredFields?: VerificationOutcomeRequiredFields;
   readonly isReadOnly?: boolean;
 }
 
@@ -38,6 +65,8 @@ export function CaseVerifiedResidenceSection({
   onRespondentRelationChange,
   isSignatureCaptured,
   onCaptureSignature,
+  fieldErrorKeys = NO_FIELD_ERRORS,
+  requiredFields = NO_REQUIRED_FIELDS,
   isReadOnly = false,
 }: CaseVerifiedResidenceSectionProps): ReactElement {
   const { t } = useTranslation();
@@ -50,6 +79,8 @@ export function CaseVerifiedResidenceSection({
     respondentRelationLength: respondentRelation.length,
     isSignatureCaptured,
     isReadOnly,
+    invalidFields: Object.keys(fieldErrorKeys),
+    requiredFields: Object.keys(requiredFields),
   });
 
   const handleSelectResidenceType = (value: string): void => {
@@ -85,9 +116,22 @@ export function CaseVerifiedResidenceSection({
   };
 
   const handleCaptureSignature = (): void => {
-    LoggerService.info(`${FILE_NAME}: CaseVerifiedResidenceSection.handleCaptureSignature: signature button pressed`);
+    LoggerService.info(
+      `${FILE_NAME}: CaseVerifiedResidenceSection.handleCaptureSignature: signature button pressed`,
+    );
     onCaptureSignature();
   };
+
+  const isSignatureRequired = requiredFields.isSignatureCaptured === true;
+  const signatureButtonLabel = t(
+    isSignatureCaptured
+      ? 'caseDetails.residence.signatureCaptured'
+      : 'caseDetails.residence.signatureCapture',
+  );
+  // The label's red "*" is hidden from screen readers, so the button itself says "required".
+  const signatureButtonAccessibilityLabel = isSignatureRequired
+    ? t('validation.requiredFieldLabel', { label: signatureButtonLabel })
+    : signatureButtonLabel;
 
   if (isSignatureCaptured) {
     LoggerService.info(
@@ -111,7 +155,12 @@ export function CaseVerifiedResidenceSection({
     >
       <VStack space="sm">
         <HStack space="xs" alignItems="center">
-          <Icon as={PersonIcon} size="sm" color="$primary600" sx={{ _dark: { color: '$primary300' } }} />
+          <Icon
+            as={PersonIcon}
+            size="sm"
+            color="$primary600"
+            sx={{ _dark: { color: '$primary300' } }}
+          />
           <Text
             size="xs"
             fontWeight="$bold"
@@ -128,8 +177,11 @@ export function CaseVerifiedResidenceSection({
             <FormSelectField
               fieldId="case-details-residence-type"
               label={t('caseDetails.residence.residenceTypeLabel')}
-              value={residenceType}
+              value={residenceType ?? ''}
               onValueChange={handleSelectResidenceType}
+              placeholder={t('caseDetails.residence.residenceTypePlaceholder')}
+              errorKey={fieldErrorKeys.residenceType}
+              isRequired={requiredFields.residenceType === true}
               options={RESIDENCE_TYPES.map((type) => {
                 LoggerService.info(
                   `${FILE_NAME}: CaseVerifiedResidenceSection: mapping residence type option`,
@@ -147,8 +199,11 @@ export function CaseVerifiedResidenceSection({
             <FormSelectField
               fieldId="case-details-address-type"
               label={t('caseDetails.residence.addressTypeLabel')}
-              value={addressType}
+              value={addressType ?? ''}
               onValueChange={handleSelectAddressType}
+              placeholder={t('caseDetails.residence.addressTypePlaceholder')}
+              errorKey={fieldErrorKeys.addressType}
+              isRequired={requiredFields.addressType === true}
               options={ADDRESS_TYPES.map((type) => {
                 LoggerService.info(
                   `${FILE_NAME}: CaseVerifiedResidenceSection: mapping address type option`,
@@ -169,6 +224,8 @@ export function CaseVerifiedResidenceSection({
           labelKey="caseDetails.residence.respondentNameLabel"
           value={respondentName}
           onChangeText={handleRespondentNameChange}
+          errorKey={fieldErrorKeys.respondentName}
+          isRequired={requiredFields.respondentName === true}
           isDisabled={isReadOnly}
         />
 
@@ -177,29 +234,46 @@ export function CaseVerifiedResidenceSection({
           labelKey="caseDetails.residence.respondentRelationLabel"
           value={respondentRelation}
           onChangeText={handleRespondentRelationChange}
+          errorKey={fieldErrorKeys.respondentRelation}
+          isRequired={requiredFields.respondentRelation === true}
           isDisabled={isReadOnly}
         />
 
-        <VStack space="xs">
-          <Text size="2xs" fontWeight="$bold" color="$textLight500" sx={{ _dark: { color: '$textDark400' } }}>
-            {t('caseDetails.residence.signatureLabel')}
-          </Text>
-          <Button
-            bg="$backgroundDark900"
-            borderRadius="$xl"
-            onPress={handleCaptureSignature}
-            isDisabled={isReadOnly}
-            accessibilityLabel={t(
-              isSignatureCaptured ? 'caseDetails.residence.signatureCaptured' : 'caseDetails.residence.signatureCapture',
-            )}
-            testID="case-details-signature-button"
-          >
-            <ButtonIcon as={EditIcon} mr="$2" />
-            <ButtonText>
-              {t(isSignatureCaptured ? 'caseDetails.residence.signatureCaptured' : 'caseDetails.residence.signatureCapture')}
-            </ButtonText>
-          </Button>
-        </VStack>
+        <FormControl
+          isInvalid={Boolean(fieldErrorKeys.isSignatureCaptured)}
+          isDisabled={isReadOnly}
+        >
+          <VStack space="xs">
+            <FormFieldLabel
+              label={t('caseDetails.residence.signatureLabel')}
+              isRequired={isSignatureRequired}
+            />
+            <Button
+              bg="$backgroundDark900"
+              borderRadius="$xl"
+              onPress={handleCaptureSignature}
+              isDisabled={isReadOnly}
+              accessibilityLabel={signatureButtonAccessibilityLabel}
+              testID="case-details-signature-button"
+            >
+              <ButtonIcon as={EditIcon} mr="$2" />
+              <ButtonText>
+                {t(
+                  isSignatureCaptured
+                    ? 'caseDetails.residence.signatureCaptured'
+                    : 'caseDetails.residence.signatureCapture',
+                )}
+              </ButtonText>
+            </Button>
+          </VStack>
+          {fieldErrorKeys.isSignatureCaptured ? (
+            <FormControlError>
+              <FormControlErrorText testID="case-details-signature-error">
+                {t(fieldErrorKeys.isSignatureCaptured)}
+              </FormControlErrorText>
+            </FormControlError>
+          ) : null}
+        </FormControl>
       </VStack>
     </Box>
   );

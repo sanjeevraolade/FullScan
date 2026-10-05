@@ -3,6 +3,8 @@ export type { FormTextFieldHandle, FormTextFieldKeyboard, FormTextFieldProps } f
 export { FormSelectField } from './form-select-field';
 export type { FormSelectFieldProps, FormSelectOption } from './form-select-field';
 export { FormTextareaField } from './form-textarea-field';
+export { FormFieldLabel, RequiredIndicator } from './form-field-label';
+export type { FormFieldLabelProps, RequiredIndicatorProps } from './form-field-label';
 export type { FormTextareaFieldProps } from './form-textarea-field';
 export { BottomBlockingBanner } from './bottom-blocking-banner';
 export type {

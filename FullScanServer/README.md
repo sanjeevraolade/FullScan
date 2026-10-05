@@ -211,6 +211,7 @@ All routes are mounted under `/api/v1`:
 | Route                              | Method | Purpose                                              |
 | ----------------------------------- | ------ | ----------------------------------------------------- |
 | `/auth/login`                       | POST   | Validate username + password, returns a session token + the field executive's profile (same shape as `/me`) + the master-data version `masterDataUpdatedAt` |
+| `/auth/logout`                      | POST   | Revoke the bearer's mobile session on the server (no body) → `{ signedOut: true }`; the token is then refused everywhere. Device binding unchanged (auth required) |
 | `/ui-config`                        | GET    | Download all screen configs                          |
 | `/ui-config/:screenId`              | GET    | Download a single screen config                       |
 | `/ui-config/:screenId`              | PUT    | Update a screen config (admin only)                    |
@@ -220,8 +221,8 @@ All routes are mounted under `/api/v1`:
 | `/cases`                            | GET    | **Deprecated** — no `type`: every bucket in one array, items with `caseId` + `bucket`, for app builds already in the field (auth required) |
 | `/cases/:caseId`                    | GET    | Case Details for one component, with `siblingComponents` (auth required) |
 | `/cases/:caseId/accept`             | PATCH  | Accept a case (New → Pending/In Progress) (auth required) |
-| `/cases/:caseId/verification-outcome` | POST | Record the verification outcome (→ Completed) (auth required) |
-| `/cases/:caseId/evidence`          | POST   | Upload **one** camera photo (multipart `file`, JPEG, ≤10 MB) with its capture metadata (`documentTypeCode`, `latitude`, `longitude`, `accuracyMeters`, `capturedAt`, `isMockLocation`); own Pending/Beyond TAT components only; `201` new / `200` same bytes already recorded (idempotent by SHA-256) (auth required) |
+| `/cases/:caseId/verification-outcome` | POST | Record the verification outcome (→ Completed). Every key required: `verificationStatus` (a `verification_type_status` code, else `400 Unknown verificationStatus`), `utvReason`, `utvRemarks`, `insufficientReason`, `insufficientRemarks`, `residenceType`, `addressType`, `respondent` (trimmed), `isSignatureCaptured`, the submit-time `currentLatitude` / `currentLongitude` (both or neither) and `distanceToCaseMeters`, and `forceProceed`; `verified_clear` needs residence, address, respondent and a captured signature. Every field is stored; the back-office `addressType` / `residenceType` are not changed. Only the executive the component is assigned to may submit; anyone else gets the unknown-id `404`. Response unchanged (auth required) |
+| `/cases/:caseId/evidence`          | POST   | Upload **one** camera photo as base64 in a JSON body (`application/json`, body ≤14 MB — this route only; the app-wide JSON limit stays 100 kb): `contentBase64` (strict base64, decoded JPEG ≤10 MB), `fileName`, `documentTypeCode`, `latitude`, `longitude`, `accuracyMeters`, `capturedAt`, `isMockLocation`; own Pending/Beyond TAT components only; `201` new / `200` same bytes already recorded (idempotent by SHA-256 of the decoded photo) (auth required) |
 | `/me`                                | GET    | Current field executive's profile (auth required)        |
 | `/security/mock-location`           | POST   | Record a faked/mocked device location detected by the app (auth required) |
 | `/fe-web/auth/login`                | POST   | Field executive **web** sign-in (no device binding), sets `fs_fe_session` cookie |
@@ -260,6 +261,14 @@ the username and password match a seeded field executive (`masterDataUpdatedAt` 
 [Master data version](#master-data-version)). Send it as `Authorization: Bearer <token>` on `/cases`
 and `/me` — this is real credential validation, but device-binding auth (matching a specific
 physical device to an account) is still not implemented.
+
+A mobile account has one live session. The token carries a `sessionVersion` claim that must equal the
+account's `field_executives.mobile_session_version` (absent on either side reads as `0`), checked on
+every mobile request. Each successful login increments the version, so it revokes every earlier
+mobile token for that account; `POST /auth/logout` increments it only if it still equals the
+presented token's version, so a late logout never revokes a newer login. A token for a deleted
+account is refused too. Neither touches the device binding; FE web and admin sessions are unaffected.
+Contract: `docs/api-contracts/mobile-logout.md` at the monorepo root.
 
 On `GET /cases?type=…`, the field executive's actually-assigned components (pending/beyond-TAT/completed) are
 stable, but the **New** tab is a random draw (3–10 components) from the whole 'new' pool on every

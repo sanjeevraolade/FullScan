@@ -27,7 +27,7 @@ Seeded accounts:
 
 | API group        | Mounted at              | How to authenticate                                           | Lifetime |
 | ---------------- | ----------------------- | ------------------------------------------------------------- | -------- |
-| Mobile app       | `/api/v1/*`             | `Authorization: Bearer <token>` from `POST /auth/login`       | 12 h     |
+| Mobile app       | `/api/v1/*`             | `Authorization: Bearer <token>` from `POST /auth/login`       | 12 h, or until `POST /auth/logout` or the account's next login |
 | Admin            | `/api/v1/admin/*`       | `Authorization: Bearer <token>` **or** `fs_admin_session` cookie | 8 h   |
 | FE web portal    | `/api/v1/fe-web/*`      | `fs_fe_session` cookie **only** (token is never in the body)  | 8 h      |
 
@@ -57,6 +57,10 @@ Validation failure (`src/middleware/validate.ts`) — always `400`:
   "details": [{ "path": "body.password", "message": "Required" }]
 }
 ```
+
+Unreadable JSON bodies, on every route (`src/middleware/error-handler.ts`): `400 Malformed JSON body`,
+`413 Request body is too large` (JSON bodies are capped at 100 kb, except 14 MB on the mobile evidence
+upload, 1.14). The body is never echoed.
 
 Auth failures common to every protected route:
 
@@ -128,6 +132,9 @@ TOKEN=$(curl -s -X POST "$BASE/auth/login" -H 'Content-Type: application/json' -
 Errors: `401 Invalid username or password` · `400 Device ID is required` ·
 `403 This device is already bound to <name>. Please contact admin to change device binding.` ·
 `403 This account is already logged in from <device>. Request a device change from the FullScan web portal, or contact admin to change device binding.`
+
+A successful login revokes every earlier mobile token for the account (one live mobile session —
+see 1.15). A refused login changes nothing.
 
 ### 1.2 `GET /ui-config` — all screen configs
 
@@ -417,7 +424,9 @@ curl -s "$BASE/cases/case-0123-comp-1" -H "Authorization: Bearer $TOKEN"
 
 ### 1.11 `POST /cases/:caseId/verification-outcome` — submit outcome, move to Completed
 
-Bearer. `:caseId` is a **component** id. Every body key is required (use `null` when not applicable).
+Bearer. `:caseId` is a **component** id. Every body key is required (use `null` only where the table
+allows it); other keys are ignored. Contract: `docs/api-contracts/verification-outcome-submission.md`
+(monorepo root).
 
 ```bash
 curl -s -X POST "$BASE/cases/case-0123-comp-1/verification-outcome" \
@@ -432,22 +441,40 @@ curl -s -X POST "$BASE/cases/case-0123-comp-1/verification-outcome" \
     "residenceType": "rented",
     "addressType": "present",
     "respondent": { "name": "Suresh Sharma", "relation": "Father" },
-    "isSignatureCaptured": true
+    "isSignatureCaptured": true,
+    "currentLatitude": 17.4461,
+    "currentLongitude": 78.3821,
+    "distanceToCaseMeters": 98.4,
+    "forceProceed": false
   }'
 ```
 
 | Field                                   | Rules                                                                 |
 | --------------------------------------- | --------------------------------------------------------------------- |
-| `verificationStatus`                    | string 1–100 (`verified_clear` \| `utv` \| `insufficient`)            |
+| `verificationStatus`                    | string 1–100; must be a `verification_type_status` code (`verified_clear` \| `utv` \| `insufficient`) |
 | `utvReason` / `insufficientReason`      | string ≤200 or `null` (codes from `utvOptions` / `insuffOptions`)     |
 | `utvRemarks` / `insufficientRemarks`    | string ≤2000 or `null`                                                |
 | `residenceType`                         | `owned` `rented` `hostel` `paying_guest` `company_quarters` `relative_owned` or `null` |
 | `addressType`                           | `present` `permanent` `previous` or `null`                            |
-| `respondent`                            | `{ name: 1–200, relation: 1–100 }` or `null`                          |
+| `respondent`                            | `{ name: 1–200, relation: 1–100 }` or `null`; both trimmed first, so whitespace-only is rejected |
 | `isSignatureCaptured`                   | boolean                                                               |
+| `currentLatitude` / `currentLongitude`  | number (−90…90 / −180…180) or `null`; both `null` or both numbers      |
+| `distanceToCaseMeters`                  | number ≥ 0, or `null` when the case location could not be determined  |
+| `forceProceed`                          | boolean — never defaulted                                             |
 
-`200`: `data` is the updated `CaseSummary` (shape of 1.6 items).
-Errors: `404 Case component not found: <id>`.
+For `verified_clear`, `residenceType`, `addressType` and `respondent` must be non-null and
+`isSignatureCaptured` must be `true`; each failing field is its own `details` entry (e.g.
+`{ "path": "body.residenceType", "message": "residenceType is required for verified_clear" }`). Other
+statuses store what was sent.
+
+Every field is stored on the component, with the server's submission time. `residenceType` /
+`addressType` are stored as what was observed; the back-office values that Case Details returns are not
+changed. A second submission replaces the first.
+
+`200`: `data` is the updated `CaseSummary` (shape of 1.6 items) — unchanged.
+Errors: `400 Validation failed` (shape or `verified_clear` rules), `404 Case component not found: <id>`
+(also when the component isn't assigned to the calling executive — same body, so ids can't be probed),
+then `400 Unknown verificationStatus`.
 
 ### 1.12 `GET /me` — current field executive
 
@@ -532,36 +559,47 @@ curl -s -X POST "$BASE/security/mock-location" \
 
 Errors: `404 No field executive session found`.
 
-### 1.14 `POST /cases/:caseId/evidence` — upload one camera photo (multipart)
+### 1.14 `POST /cases/:caseId/evidence` — upload one camera photo (base64 in JSON)
 
 Bearer. `:caseId` is a **component** id assigned to you, in Pending or Beyond TAT. One photo per request,
-JPEG only (checked against the file's real bytes), ≤ 10 MB, in the part `file`. Idempotent by the
-photo's SHA-256: the same bytes again for the same component return the existing record with `200`.
+sent base64-encoded inside an `application/json` body. This route accepts bodies up to **14 MB**; every
+other route keeps the app-wide 100 kb JSON limit. The decoded photo must be a JPEG (checked against its
+real bytes) of at most 10 MB. Idempotent by the SHA-256 of the decoded photo: the same bytes again for the
+same component return the existing record with `200`.
 Contract: `docs/api-contracts/mobile-evidence-upload.md` (monorepo root).
 
 ```bash
+# base64 -i is macOS; on Linux use `base64 -w0`. The output must be one line, no data: prefix.
+PHOTO_B64=$(base64 -i ./house_photo_1-1791105302123.jpg | tr -d '\n')
 curl -s -X POST "$BASE/cases/case-0123-comp-1/evidence" \
   -H "Authorization: Bearer $TOKEN" \
-  -F "file=@./house_photo_1-1791105302123.jpg;type=image/jpeg" \
-  -F "documentTypeCode=house_photo_1" \
-  -F "latitude=17.4935" \
-  -F "longitude=78.3129" \
-  -F "accuracyMeters=8.5" \
-  -F "capturedAt=2026-10-04T09:15:02.123Z" \
-  -F "isMockLocation=false"
+  -H 'Content-Type: application/json' \
+  --data-binary @- <<JSON
+{
+  "documentTypeCode": "house_photo_1",
+  "latitude": 17.4935,
+  "longitude": 78.3129,
+  "accuracyMeters": 8.5,
+  "capturedAt": "2026-10-04T09:15:02.123Z",
+  "isMockLocation": false,
+  "fileName": "house_photo_1-1791105302123.jpg",
+  "contentBase64": "$PHOTO_B64"
+}
+JSON
 ```
 
-| Part               | Rules                                                                    |
+| Field              | Rules                                                                    |
 | ------------------ | ------------------------------------------------------------------------ |
-| `file`             | exactly one; JPEG; ≤ 10 MB; its name is kept as a sanitized display name  |
-| `documentTypeCode` | **required**, a `photo_type` master-data code                             |
-| `latitude`         | **required**, decimal −90..90                                             |
-| `longitude`        | **required**, decimal −180..180                                           |
-| `accuracyMeters`   | **required**, decimal ≥ 0                                                 |
-| `capturedAt`       | **required**, ISO 8601 with offset or `Z` (device clock, not checked against server time) |
-| `isMockLocation`   | **required**, `true` \| `false` — `true` is accepted and recorded         |
+| `documentTypeCode` | **required** string, a `photo_type` master-data code                      |
+| `latitude`         | **required** number −90..90 (a JSON number, not a string)                 |
+| `longitude`        | **required** number −180..180                                             |
+| `accuracyMeters`   | **required** number ≥ 0                                                   |
+| `capturedAt`       | **required** ISO 8601 with offset or `Z` (device clock, not checked against server time) |
+| `isMockLocation`   | **required** boolean — `true` is accepted and recorded                    |
+| `fileName`         | **required** string 1–255; kept as a sanitized display name               |
+| `contentBase64`    | **required** strict standard base64 (`A–Z a–z 0–9 + /`, `=` padding, length a multiple of 4), no `data:` prefix, no whitespace or line breaks; decoded: a JPEG of 1 byte … 10 MB |
 
-No other parts are accepted.
+The body is strict: no other field is accepted.
 
 `201` (new) / `200` (same bytes already recorded — first write wins, this request's metadata is ignored):
 
@@ -587,13 +625,34 @@ No other parts are accepted.
 }
 ```
 
-Errors: `400 Validation failed` (missing/invalid/unknown text part, with `details`) ·
-`400 Unknown documentTypeCode` · `400 Attach the photo in the "file" part` ·
-`400 Send exactly one photo per request` · `400 The photo must be sent in the "file" part` ·
-`400 Too many form fields` · `400 Form field too long` · `400 Invalid upload` ·
+Errors: `400 Malformed JSON body` · `400 Validation failed` (missing, mistyped or unknown field, or
+`contentBase64` empty / not strict base64 — with `details`) · `400 Unknown documentTypeCode` ·
 `404 Case not found` (unknown, or not assigned to you) · `409 Accept the case before adding evidence` (New) ·
-`409 Evidence can no longer be added to a completed case` · `413 The photo must be 10 MB or smaller` ·
-`415 Upload evidence as multipart/form-data` · `415 The photo must be a JPEG image`.
+`409 Evidence can no longer be added to a completed case` · `413 Request body is too large` (body over 14 MB) ·
+`413 The photo must be 10 MB or smaller` (decoded photo) · `415 Send the photo as application/json` ·
+`415 The photo must be a JPEG image` (decoded bytes).
+
+### 1.15 `POST /auth/logout` — revoke this mobile session
+
+Bearer. No body.
+
+```bash
+curl -s -X POST "$BASE/auth/logout" -H "Authorization: Bearer $TOKEN"
+```
+
+`200`: `{ "success": true, "data": { "signedOut": true } }` — same shape as 2.2 and 3.2.
+
+The token is revoked on the server: every mobile route (this one included) then answers it with
+`401 Invalid or expired authentication token`. Revocation is a per-account session version
+(`field_executives.mobile_session_version`, carried in the token as `sessionVersion`; absent reads as
+`0`), bumped only if it still matches this token — a logout that arrives after a newer login leaves
+that login signed in. Device binding and device history are unchanged: the next login on the bound
+phone works as normal, and moving to another phone still needs a device change request.
+Contract: `docs/api-contracts/mobile-logout.md` (monorepo root).
+
+Errors (from the Bearer check): `401 Missing authentication token` ·
+`401 Invalid or expired authentication token` (invalid, expired, already logged out, superseded by a
+newer login, or the account no longer exists).
 
 ---
 

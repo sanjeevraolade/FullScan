@@ -1,7 +1,11 @@
 import type { Request, Response, NextFunction } from 'express';
 import * as caseService from '../services/case.service.js';
 import * as mobileEvidenceService from '../services/mobile-evidence.service.js';
-import { caseListQuerySchema, mobileEvidenceBodySchema } from '../routes/schemas/case.schema.js';
+import {
+  caseListQuerySchema,
+  mobileEvidenceBodySchema,
+  verificationOutcomeBodySchema,
+} from '../routes/schemas/case.schema.js';
 import { AppError } from '../utils/app-error.js';
 
 /** `authenticate` sets it on every request it lets through; this only guards the type. */
@@ -85,7 +89,10 @@ export async function getCaseDetail(req: Request, res: Response, next: NextFunct
 export async function submitVerificationOutcome(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const { caseId } = req.params;
-    const updated = await caseService.submitVerificationOutcome(caseId, req.body);
+    // `validate()` has already checked the body; parsing it again types it, trims the
+    // respondent and drops keys the contract does not define.
+    const outcome = verificationOutcomeBodySchema.parse(req.body);
+    const updated = await caseService.submitVerificationOutcome(caseId, currentFieldExecutiveId(req), outcome);
     res.json({ success: true, data: updated });
   } catch (err) {
     next(err);
@@ -94,21 +101,19 @@ export async function submitVerificationOutcome(req: Request, res: Response, nex
 
 /**
  * POST /api/v1/cases/:caseId/evidence
- * One camera photo (multipart `file`) with its capture metadata. `201` with the new
- * record, or `200` with the existing one when the same bytes were already uploaded.
+ * One camera photo, base64 in the JSON body, with its capture metadata. `201` with the
+ * new record, or `200` with the existing one when the same bytes were already uploaded.
  */
 export async function uploadCaseEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
     const fieldExecutiveId = currentFieldExecutiveId(req);
-    // `validate()` has already checked the text parts; parsing again converts and types them.
-    const metadata = mobileEvidenceBodySchema.parse(req.body);
-    const file = req.file ? { originalName: req.file.originalname, buffer: req.file.buffer } : undefined;
+    // `validate()` has already checked the body; parsing it again just types it.
+    const upload = mobileEvidenceBodySchema.parse(req.body);
 
     const { evidence, isNew } = await mobileEvidenceService.uploadMobileCaptureEvidence(
       fieldExecutiveId,
       req.params.caseId,
-      metadata,
-      file,
+      upload,
     );
     res.status(isNew ? 201 : 200).json({ success: true, data: evidence });
   } catch (err) {

@@ -110,11 +110,11 @@ describe('GET /api/v1/admin/cases/:caseId/evidence', () => {
 
     const capture = await uploadMobileCapture(await signInMobile(), componentId, {
       documentTypeCode: 'house_photo_2',
-      latitude: '-12.5',
-      longitude: '130',
-      accuracyMeters: '25',
+      latitude: -12.5,
+      longitude: 130,
+      accuracyMeters: 25,
       capturedAt: '2026-10-04T10:00:00+05:30',
-      isMockLocation: 'true',
+      isMockLocation: true,
     });
     expect(capture.status).toBe(201);
 

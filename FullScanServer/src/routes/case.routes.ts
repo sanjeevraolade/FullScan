@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import * as controller from '../controllers/case.controller.js';
 import { validate } from '../middleware/validate.js';
-import { parseMobileEvidenceUpload } from '../middleware/evidence-upload.js';
+import { parseMobileEvidenceJson } from '../middleware/json-body.js';
 import {
   acceptCaseSchema,
   getCaseCountsSchema,
@@ -35,13 +35,14 @@ caseRoutes.post(
   controller.submitVerificationOutcome,
 );
 
-// POST /api/v1/cases/:caseId/evidence — one camera photo (multipart `file` + capture metadata).
-// The text parts only exist on req.body once the multipart parser has run, so the body
-// is validated after it. 201 new / 200 same bytes already recorded.
+// POST /api/v1/cases/:caseId/evidence — one camera photo, base64 in a JSON body, with its
+// capture metadata. 201 new / 200 same bytes already recorded.
+// The app-wide 100 kb JSON parser skips this route (middleware/json-body.ts); it parses its
+// own body, up to 14 MB, here — after authentication — and validates it after that.
 caseRoutes.post(
   '/:caseId/evidence',
   validate(uploadCaseEvidenceTargetSchema),
-  parseMobileEvidenceUpload,
+  parseMobileEvidenceJson,
   validate(uploadCaseEvidenceSchema),
   controller.uploadCaseEvidence,
 );

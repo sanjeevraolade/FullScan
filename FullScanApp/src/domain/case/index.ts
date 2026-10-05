@@ -21,3 +21,14 @@ export {
   VERIFICATION_STATUS_UTV,
   VERIFICATION_STATUS_VERIFIED_CLEAR,
 } from './case-detail.entity';
+export type {
+  VerificationOutcomeAnswerField,
+  VerificationOutcomeAnswers,
+  VerificationOutcomeFieldErrorKeys,
+  VerificationOutcomeRequiredFields,
+  VerificationOutcomeValidationResult,
+} from './verification-outcome-validation';
+export {
+  validateVerificationOutcome,
+  VERIFICATION_OUTCOME_VALIDATION_SECTIONS,
+} from './verification-outcome-validation';

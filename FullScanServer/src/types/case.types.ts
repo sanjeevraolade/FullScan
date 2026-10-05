@@ -105,6 +105,26 @@ export interface CaseComponentRow {
   readonly cost_rejected_date: string | null;
   readonly cost_currency: string | null;
   readonly cost_amount: number | null;
+  /*
+   * The rest of the field executive's submitted outcome (POST /cases/:caseId/verification-outcome,
+   * docs/api-contracts/verification-outcome-submission.md), beside `selected_verification_status` and
+   * the respondent. Optional because components written before these fields existed do not have
+   * them: read a missing one as `null`. `observed_*` is what the executive saw on site — the
+   * back-office `address_type` / `residence_type` above are never written from the outcome.
+   */
+  readonly utv_reason?: string | null;
+  readonly utv_remarks?: string | null;
+  readonly insufficient_reason?: string | null;
+  readonly insufficient_remarks?: string | null;
+  readonly observed_residence_type?: ResidenceType | null;
+  readonly observed_address_type?: AddressType | null;
+  readonly is_signature_captured?: boolean | null;
+  readonly submitted_latitude?: number | null;
+  readonly submitted_longitude?: number | null;
+  readonly submitted_distance_meters?: number | null;
+  readonly is_force_proceed?: boolean | null;
+  /** Server time the outcome was recorded, in the stored timestamp format. */
+  readonly outcome_submitted_at?: string | null;
   readonly created_at: string;
   readonly updated_at: string;
 }
@@ -178,8 +198,16 @@ export interface CaseDetail {
 export type ResidenceType = 'owned' | 'rented' | 'hostel' | 'paying_guest' | 'company_quarters' | 'relative_owned';
 export type AddressType = 'present' | 'permanent' | 'previous';
 
-/** Field executive's verification outcome, submitted once the form is complete. */
+/** The verification status whose outcome must carry the residence, respondent and signature. */
+export const VERIFIED_CLEAR_STATUS = 'verified_clear';
+
+/**
+ * Field executive's verification outcome, submitted once the form is complete — the body of
+ * `POST /cases/:caseId/verification-outcome` after validation (respondent values trimmed).
+ * docs/api-contracts/verification-outcome-submission.md.
+ */
 export interface VerificationOutcomeInput {
+  /** A `verification_type_status` code; the service checks it against `dropdown_options`. */
   readonly verificationStatus: string;
   readonly utvReason: string | null;
   readonly utvRemarks: string | null;
@@ -189,4 +217,11 @@ export interface VerificationOutcomeInput {
   readonly addressType: AddressType | null;
   readonly respondent: Respondent | null;
   readonly isSignatureCaptured: boolean;
+  /** Device location at submit. Both `null` or both numbers. */
+  readonly currentLatitude: number | null;
+  readonly currentLongitude: number | null;
+  /** `null` when the case location could never be determined. */
+  readonly distanceToCaseMeters: number | null;
+  /** The executive bypassed the geo-fence through the Force Proceed consent. */
+  readonly forceProceed: boolean;
 }

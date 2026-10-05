@@ -143,11 +143,17 @@ export async function updateComponentBucket(
   return (await findComponentById(componentId))!;
 }
 
-/** Records the field executive's verification outcome and moves the component to Completed. */
+/**
+ * Records the field executive's verification outcome, every field as sent, and moves the
+ * component to Completed. The back-office `address_type` / `residence_type` are never
+ * written here: what the executive observed goes into `observed_*`.
+ */
 export async function updateComponentVerificationOutcome(
   componentId: string,
   outcome: VerificationOutcomeInput,
 ): Promise<CaseComponentRow> {
+  const now = nowTimestamp();
+
   await getCollection('case_components').updateOne(
     { _id: componentId },
     {
@@ -156,7 +162,19 @@ export async function updateComponentVerificationOutcome(
         selected_verification_status: outcome.verificationStatus,
         respondent_name: outcome.respondent?.name ?? null,
         respondent_relation: outcome.respondent?.relation ?? null,
-        updated_at: nowTimestamp(),
+        utv_reason: outcome.utvReason,
+        utv_remarks: outcome.utvRemarks,
+        insufficient_reason: outcome.insufficientReason,
+        insufficient_remarks: outcome.insufficientRemarks,
+        observed_residence_type: outcome.residenceType,
+        observed_address_type: outcome.addressType,
+        is_signature_captured: outcome.isSignatureCaptured,
+        submitted_latitude: outcome.currentLatitude,
+        submitted_longitude: outcome.currentLongitude,
+        submitted_distance_meters: outcome.distanceToCaseMeters,
+        is_force_proceed: outcome.forceProceed,
+        outcome_submitted_at: now,
+        updated_at: now,
       },
     },
     sessionOption(),

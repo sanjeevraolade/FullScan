@@ -140,7 +140,9 @@ function seedGeoFenceSettings(radiusMeters: number, locationRetryCount = 3): voi
 }
 
 /** `render` and `fireEvent` are async in React Native Testing Library 14. */
-async function renderCaseDetails(): Promise<void> {
+async function renderCaseDetails(
+  capturedPhotos?: readonly SerializedCapturedPhotoEvidence[],
+): Promise<void> {
   await render(
     <ThemeProvider>
       <NavigationContainer>
@@ -148,7 +150,7 @@ async function renderCaseDetails(): Promise<void> {
           <Stack.Screen
             name={ROUTE_NAMES.CASE_DETAILS}
             component={CaseDetailsScreen}
-            initialParams={{ caseId: 'case-1' }}
+            initialParams={capturedPhotos ? { caseId: 'case-1', capturedPhotos } : { caseId: 'case-1' }}
           />
         </Stack.Navigator>
       </NavigationContainer>
@@ -202,8 +204,29 @@ describe('CaseDetailsScreen geo-fence gating', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await LocalizationEngine.initialize();
-    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    // A complete outcome (with the submissions' photo), so these are about location, not validation.
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'utv' }));
     jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    jest
+      .mocked(caseEvidenceRepository.uploadCaseEvidence)
+      .mockImplementation(async (caseId, photo) => ({
+        id: 'evidence-1',
+        caseId,
+        fileName: 'house_photo_1-1788512700000.jpg',
+        mimeType: 'image/jpeg',
+        sizeBytes: 482113,
+        sha256: 'sha-evidence-1',
+        documentTypeCode: photo.documentTypeCode,
+        latitude: photo.latitude,
+        longitude: photo.longitude,
+        accuracyMeters: photo.accuracyMeters,
+        isMockLocation: false,
+        capturedAt: photo.capturedAt,
+        uploadedAt: new Date('2026-09-04T09:10:00.000Z'),
+        wasAlreadyUploaded: false,
+      }));
     useReferenceDataStore.setState({ referenceData: REFERENCE_DATA });
     useGeoFenceBypassStore.getState().clearConsents();
     useLocationStore.setState({
@@ -218,6 +241,7 @@ describe('CaseDetailsScreen geo-fence gating', () => {
   afterEach(() => {
     LocalizationEngine.dispose();
     useLocationStore.getState().reset();
+    EvidenceReceiptStorageService.clearReceipts('case-1');
   });
 
   it('reveals every section once the device is inside the geo-fence', async () => {
@@ -323,7 +347,7 @@ describe('CaseDetailsScreen geo-fence gating', () => {
 
   it('sends the visit location and measured distance on a normal submission', async () => {
     seedGeoFenceSettings(200);
-    await renderCaseDetails();
+    await renderCaseDetails([CAPTURED_PHOTO]);
     await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('case-details-submit-button'));
@@ -342,7 +366,7 @@ describe('CaseDetailsScreen geo-fence gating', () => {
 
   it('sends the visit location for a force-proceeded submission too', async () => {
     seedGeoFenceSettings(50);
-    await renderCaseDetails();
+    await renderCaseDetails([CAPTURED_PHOTO]);
     await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
     for (let attempt = 0; attempt < 3; attempt += 1) {
       await fireEvent.press(screen.getByTestId('case-details-recalculate-button'));
@@ -370,7 +394,7 @@ describe('CaseDetailsScreen geo-fence gating', () => {
 
   it('flags the submission as forceProceed so the back office can scrutinize the case', async () => {
     seedGeoFenceSettings(50);
-    await renderCaseDetails();
+    await renderCaseDetails([CAPTURED_PHOTO]);
     await waitFor(() => expect(screen.getByTestId('case-details-recalculate-button')).toBeTruthy());
 
     for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -395,7 +419,7 @@ describe('CaseDetailsScreen geo-fence gating', () => {
 
   it('leaves forceProceed false for a normal, inside-the-fence submission', async () => {
     seedGeoFenceSettings(200);
-    await renderCaseDetails();
+    await renderCaseDetails([CAPTURED_PHOTO]);
     await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
 
     await fireEvent.press(screen.getByTestId('case-details-submit-button'));
@@ -495,7 +519,10 @@ describe('CaseDetailsScreen unsaved-changes back guard', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await LocalizationEngine.initialize();
-    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    // Verified Clear, so the respondent fields these tests type into are on screen.
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'verified_clear' }));
     jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
     seedGeoFenceSettings(200);
     useGeoFenceBypassStore.getState().clearConsents();
@@ -679,7 +706,10 @@ describe('CaseDetailsScreen evidence upload on submit', () => {
   beforeEach(async () => {
     jest.clearAllMocks();
     await LocalizationEngine.initialize();
-    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    // A complete outcome, so the submissions here are about the upload, not validation.
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'utv' }));
     jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
     jest.mocked(caseEvidenceRepository.uploadCaseEvidence).mockResolvedValue(UPLOADED_EVIDENCE);
     seedGeoFenceSettings(200);
@@ -778,5 +808,226 @@ describe('CaseDetailsScreen evidence upload on submit', () => {
       ).toBeTruthy(),
     );
     expect(caseEvidenceRepository.uploadCaseEvidence).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('CaseDetailsScreen submission validation', () => {
+  const UPLOADED_EVIDENCE: UploadedCaseEvidence = {
+    id: 'evidence-1',
+    caseId: 'case-1',
+    fileName: 'house_photo_1-1788512700000.jpg',
+    mimeType: 'image/jpeg',
+    sizeBytes: 482113,
+    sha256: 'sha-evidence-1',
+    documentTypeCode: 'house_photo_1',
+    latitude: CAPTURED_PHOTO.latitude,
+    longitude: CAPTURED_PHOTO.longitude,
+    accuracyMeters: CAPTURED_PHOTO.accuracyMeters,
+    isMockLocation: false,
+    capturedAt: new Date('2026-09-04T09:05:00.000Z'),
+    uploadedAt: new Date('2026-09-04T09:10:00.000Z'),
+    wasAlreadyUploaded: false,
+  };
+
+  /** Verified Clear with the two dropdowns answered and a photo — the Select popover itself isn't driven here. */
+  function saveVerifiedClearDraft(): void {
+    DraftStorageService.saveDraft({
+      caseId: 'case-1',
+      verificationStatus: 'verified_clear',
+      utvReason: '',
+      utvRemarks: '',
+      insufficientReason: '',
+      insufficientRemarks: '',
+      residenceType: 'owned',
+      addressType: 'permanent',
+      respondentName: '',
+      respondentRelation: '',
+      isSignatureCaptured: false,
+      selectedPhotoTag: 'house_photo_1',
+      capturedPhotos: [CAPTURED_PHOTO],
+      geoFenceBypassConsent: null,
+      savedAt: '2026-09-10T10:00:00.000Z',
+    });
+  }
+
+  beforeEach(async () => {
+    jest.clearAllMocks();
+    await LocalizationEngine.initialize();
+    jest.mocked(caseRepository.fetchCaseDetail).mockResolvedValue(buildCaseDetail());
+    jest.mocked(caseRepository.submitVerificationOutcome).mockResolvedValue(buildCase());
+    jest.mocked(caseEvidenceRepository.uploadCaseEvidence).mockResolvedValue(UPLOADED_EVIDENCE);
+    seedGeoFenceSettings(200);
+    useGeoFenceBypassStore.getState().clearConsents();
+    useLocationStore.setState({
+      status: 'ready',
+      location: DEVICE_LOCATION,
+      errorReason: null,
+      isEvaluating: false,
+      evaluate: jest.fn().mockResolvedValue(undefined),
+    });
+  });
+
+  afterEach(() => {
+    LocalizationEngine.dispose();
+    useLocationStore.getState().reset();
+    DraftStorageService.deleteDraft('case-1');
+    EvidenceReceiptStorageService.clearReceipts('case-1');
+  });
+
+  it('marks the verification status as required with a red asterisk from the start', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    // Only the status and a photo are mandatory until Verified Clear is chosen.
+    const asterisks = screen.getAllByTestId('required-indicator', { includeHiddenElements: true });
+    expect(asterisks).toHaveLength(2);
+    for (const asterisk of asterisks) {
+      expect(asterisk).toHaveTextContent('*');
+      // The theme's error red ($error700), the same as the validation message.
+      expect(asterisk).toHaveStyle({ color: '#B91C1C' });
+      // Hidden from screen readers, which hear "required" in the field's own label instead.
+      expect(asterisk).toHaveProp('importantForAccessibility', 'no');
+    }
+    expect(screen.getByLabelText('Verification Status, required')).toBeTruthy();
+    expect(screen.getByLabelText('Geotagged Camera, required')).toBeTruthy();
+  });
+
+  it('marks every Verified Residence & Respondent field as required for Verified Clear', async () => {
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'verified_clear' }));
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-verified-residence-section')).toBeTruthy(),
+    );
+
+    // Status, photo + residence type, address type, respondent name, relationship and signature.
+    expect(screen.getAllByTestId('required-indicator', { includeHiddenElements: true })).toHaveLength(7);
+    expect(screen.getByLabelText('Type of Residence, required')).toBeTruthy();
+    expect(screen.getByLabelText('Type of Address, required')).toBeTruthy();
+    expect(screen.getByLabelText('Respondent Name, required')).toBeTruthy();
+    expect(screen.getByLabelText('Relationship with Candidate, required')).toBeTruthy();
+    expect(screen.getByLabelText('Capture Signature, required')).toBeTruthy();
+    // Marked, but not flagged until Submit is pressed.
+    expect(screen.queryByTestId('case-details-respondent-name-error')).toBeNull();
+  });
+
+  it('shows the photo error below the camera button when an outcome has no photo', async () => {
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'utv' }));
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+    expect(screen.queryByTestId('case-details-photo-error')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    expect(screen.getByTestId('case-details-photo-error')).toHaveTextContent(
+      'At least one photo is required',
+    );
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+  });
+
+  it('shows no validation errors before Submit is pressed', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    expect(screen.queryByTestId('case-details-validation-summary')).toBeNull();
+    expect(screen.queryByTestId('case-details-status-error')).toBeNull();
+  });
+
+  it('refuses to submit when nothing has been entered', async () => {
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    expect(
+      screen.getByText(
+        'Nothing has been entered yet. Select a verification status and complete its details before submitting.',
+      ),
+    ).toBeTruthy();
+    expect(screen.getByTestId('case-details-status-error')).toHaveTextContent('This field is required');
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+    // Still on the case.
+    expect(screen.getByTestId('case-details-submit-button')).toBeTruthy();
+  });
+
+  it('refuses to submit photos alone, and uploads nothing', async () => {
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() => expect(screen.getByTestId('case-details-submit-button')).toBeTruthy());
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    expect(
+      screen.getByText(
+        "Photos alone can't be submitted. Select a verification status and complete its details.",
+      ),
+    ).toBeTruthy();
+    expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+  });
+
+  it('flags every empty Verified Residence & Respondent field for Verified Clear', async () => {
+    jest
+      .mocked(caseRepository.fetchCaseDetail)
+      .mockResolvedValue(buildCaseDetail({ selectedVerificationStatus: 'verified_clear' }));
+    await renderCaseDetailsOverPreviousScreen([CAPTURED_PHOTO]);
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-verified-residence-section')).toBeTruthy(),
+    );
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    expect(
+      screen.getByText('Some required details are missing. Complete the highlighted fields before submitting.'),
+    ).toBeTruthy();
+    for (const errorTestId of [
+      'case-details-residence-type-error',
+      'case-details-address-type-error',
+      'case-details-respondent-name-error',
+      'case-details-respondent-relation-error',
+      'case-details-signature-error',
+    ]) {
+      expect(screen.getByTestId(errorTestId)).toHaveTextContent('This field is required');
+    }
+    expect(screen.queryByTestId('case-details-status-error')).toBeNull();
+    expect(caseEvidenceRepository.uploadCaseEvidence).not.toHaveBeenCalled();
+    expect(caseRepository.submitVerificationOutcome).not.toHaveBeenCalled();
+  });
+
+  it('submits Verified Clear once every residence and respondent field is filled in', async () => {
+    saveVerifiedClearDraft();
+    await renderCaseDetailsOverPreviousScreen();
+    await waitFor(() =>
+      expect(screen.getByTestId('case-details-verified-residence-section')).toBeTruthy(),
+    );
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+    expect(screen.getByTestId('case-details-respondent-name-error')).toBeTruthy();
+    expect(screen.queryByTestId('case-details-residence-type-error')).toBeNull();
+
+    await fireEvent.changeText(screen.getByTestId('case-details-respondent-name-input'), 'Anita Sharma');
+    await fireEvent.changeText(screen.getByTestId('case-details-respondent-relation-input'), 'Mother');
+    await fireEvent.press(screen.getByTestId('case-details-signature-button'));
+
+    // Errors clear as the fields are completed, before Submit is pressed again.
+    expect(screen.queryByTestId('case-details-respondent-name-error')).toBeNull();
+    expect(screen.queryByTestId('case-details-signature-error')).toBeNull();
+    expect(screen.queryByTestId('case-details-validation-summary')).toBeNull();
+
+    await fireEvent.press(screen.getByTestId('case-details-submit-button'));
+
+    await waitFor(() => expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledTimes(1));
+    expect(caseRepository.submitVerificationOutcome).toHaveBeenCalledWith(
+      'case-1',
+      expect.objectContaining({
+        verificationStatus: 'verified_clear',
+        residenceType: 'owned',
+        addressType: 'permanent',
+        respondent: { name: 'Anita Sharma', relation: 'Mother' },
+        isSignatureCaptured: true,
+      }),
+    );
   });
 });

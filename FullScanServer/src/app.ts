@@ -5,6 +5,7 @@ import pinoHttp from 'pino-http';
 
 import { logger } from './utils/logger.js';
 import { errorHandler } from './middleware/error-handler.js';
+import { parseJsonBody } from './middleware/json-body.js';
 import { authenticate } from './middleware/authenticate.js';
 import { authenticateAdmin, requireAdminRole } from './middleware/authenticate-admin.js';
 import { authRoutes } from './routes/auth.routes.js';
@@ -34,7 +35,8 @@ export const app = express();
 // Security & parsing
 app.use(helmet());
 app.use(cors());
-app.use(express.json());
+// JSON bodies up to 100 kb everywhere; the mobile evidence upload parses its own (14 MB) in its route.
+app.use(parseJsonBody);
 app.use(pinoHttp({ logger }));
 
 // Mobile app routes (field-executive session)

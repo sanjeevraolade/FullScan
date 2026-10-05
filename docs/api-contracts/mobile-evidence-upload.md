@@ -13,24 +13,46 @@ capture metadata, and the existing web and admin evidence lists show them alongs
 - **Auth:** field-executive JWT (`authenticate`), the same as every other `/api/v1/cases` route. An FE
   web cookie or admin cookie on its own → `401`.
 - **`:caseId`** is a **component** id, as on every mobile `/cases/:caseId` route.
-- **Content type:** `multipart/form-data`. Anything else → `415`.
+- **Content type:** `application/json`. The photo travels **base64-encoded inside the JSON body** — no
+  multipart. Anything other than JSON → `415`.
+- **Body size:** this route accepts JSON bodies up to **14 MB** (a 10 MB photo is ~13.4 MB as base64,
+  plus the metadata). The server's global JSON limit stays as it is for every other route.
 
-### Request parts
+### Request body
 
-| Part               | Kind | Rule                                                                                          |
-| ------------------ | ---- | --------------------------------------------------------------------------------------------- |
-| `file`             | file | Exactly one. JPEG only, checked by magic bytes (the client's `Content-Type` is ignored). ≤ 10 MB |
-| `documentTypeCode` | text | Required. A `code` of the `photo_type` master-data category (e.g. `house_photo_1`)              |
-| `latitude`         | text | Required. Decimal number, −90 … 90                                                              |
-| `longitude`        | text | Required. Decimal number, −180 … 180                                                            |
-| `accuracyMeters`   | text | Required. Decimal number ≥ 0                                                                    |
-| `capturedAt`       | text | Required. ISO 8601 datetime with offset or `Z`, e.g. `2026-10-04T09:15:02.123Z`                 |
-| `isMockLocation`   | text | Required. `"true"` or `"false"`                                                                 |
+```json
+{
+  "documentTypeCode": "house_photo_1",
+  "latitude": 17.4935,
+  "longitude": 78.3129,
+  "accuracyMeters": 8.5,
+  "capturedAt": "2026-10-04T09:15:02.123Z",
+  "isMockLocation": false,
+  "fileName": "house_photo_1-1791105302123.jpg",
+  "contentBase64": "/9j/4AAQSkZJRgABAQAAAQABAAD…"
+}
+```
 
-No other parts are accepted (unknown text fields → `400`).
+| Field              | Type    | Rule                                                                                       |
+| ------------------ | ------- | ------------------------------------------------------------------------------------------ |
+| `documentTypeCode` | string  | Required. A `code` of the `photo_type` master-data category (e.g. `house_photo_1`)          |
+| `latitude`         | number  | Required. −90 … 90                                                                          |
+| `longitude`        | number  | Required. −180 … 180                                                                        |
+| `accuracyMeters`   | number  | Required. ≥ 0                                                                               |
+| `capturedAt`       | string  | Required. ISO 8601 datetime with offset or `Z`, e.g. `2026-10-04T09:15:02.123Z`             |
+| `isMockLocation`   | boolean | Required                                                                                    |
+| `fileName`         | string  | Required. 1–255 chars. Display name only                                                    |
+| `contentBase64`    | string  | Required. The JPEG's bytes, standard base64 (RFC 4648 §4: `A–Z a–z 0–9 + /`, `=` padding, length a multiple of 4). **No `data:` URL prefix**, no whitespace or line breaks. Decoded size 1 byte … 10 MB. JPEG only, checked by magic bytes of the decoded bytes |
 
-- The file's name is a display name only. The app sends `<documentTypeCode>-<capturedAt epoch ms>.jpg`;
+The body schema is strict: any other field → `400`. Numbers and booleans are real JSON types, not
+strings.
+
+- `fileName` is a display name only. The app sends `<documentTypeCode>-<capturedAt epoch ms>.jpg`;
   the server keeps a sanitized copy (no path segments, control characters stripped, ≤ 255 chars).
+- The server decodes `contentBase64` and works on the decoded bytes from then on: the SHA-256, the size,
+  the type check and the file on disk are all of the decoded JPEG, never of the base64 text. A string
+  that isn't strict base64 is rejected rather than leniently decoded (Node's `Buffer.from(…, 'base64')`
+  silently skips invalid characters, so the server must validate before decoding).
 - `capturedAt` is the device clock and is stored as given (converted to the server's stored timestamp
   format). It is not checked against server time — device clocks drift. `uploadedAt` is the server's.
 - `isMockLocation: "true"` is **accepted and recorded**, not rejected. The app refuses to capture under a
@@ -86,12 +108,15 @@ Envelope: `{ "success": false, "error": "<message>" }`; Zod failures add `detail
 
 | Status | When                                                                                       |
 | ------ | ------------------------------------------------------------------------------------------ |
-| `400`  | Missing/invalid text part, unknown `documentTypeCode`, unknown extra part, no file, more than one file, file not in the `file` part |
+| `400`  | Malformed JSON; missing/invalid field; unknown extra field; `contentBase64` not strict base64 (incl. a `data:` prefix) or empty; unknown `documentTypeCode` |
 | `401`  | Missing/invalid mobile JWT                                                                 |
 | `404`  | `Case not found` — unknown component, or not assigned to this field executive              |
 | `409`  | Component is `new` (accept it first) or `completed` (closed to new evidence)               |
-| `413`  | File larger than 10 MB                                                                     |
-| `415`  | Not `multipart/form-data`, or the file is not a JPEG                                       |
+| `413`  | Request body over 14 MB, or decoded photo over 10 MB                                       |
+| `415`  | Not `application/json`, or the decoded bytes are not a JPEG                                |
+
+Malformed JSON and an oversized body must come back in the normal error envelope with `400` / `413`,
+not as a `500` from the generic error handler.
 
 ## Storage — `case_evidence`
 
@@ -126,7 +151,10 @@ break the moment the first mobile capture exists.
    `POST /cases/:caseId/verification-outcome`. Photos are not uploaded at capture time — the executive
    can still delete them until they submit, and server evidence can't be deleted.
 2. **How:** one request per photo, sequentially, in capture order. A photo already recorded as
-   uploaded (see 3) is skipped.
+   uploaded (see 3) is skipped. The app reads the watermarked JPEG's raw bytes from disk and
+   base64-encodes them as they are — never re-encoding or re-compressing the image, which would change
+   the evidence. Only one photo's base64 is held in memory at a time. A local file that can't be read
+   (e.g. purged from the temp directory) fails before any request is sent.
 3. **Upload receipts are persisted** (MMKV, per case, keyed by the photo's local file path → evidence
    `id`), so a retry — even after an app restart — only uploads what is left. Both `201` and `200` count
    as uploaded. Receipts for a case are cleared when its outcome submission succeeds.
@@ -134,8 +162,9 @@ break the moment the first mobile capture exists.
    retry. `409` maps to a "case is closed to new evidence" message; every other failure (network,
    timeout, missing local file, 4xx/5xx) maps to a generic "photos could not be uploaded, try again".
 5. The outcome request and payload are unchanged.
-6. Logging: counts, document type codes, HTTP status and evidence ids only — never file paths,
-   coordinates or bytes.
+6. Logging: counts, document type codes, HTTP status, evidence ids and base64 lengths only — never
+   file paths, coordinates, bytes or any part of the base64 string. The server never logs request
+   bodies on this route.
 
 ## Out of scope (follow-ups)
 

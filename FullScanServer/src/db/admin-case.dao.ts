@@ -303,6 +303,19 @@ const COMPONENT_DEFAULTS = {
   cost_rejected_date: null,
   cost_currency: null,
   cost_amount: null,
+  // The rest of the field executive's verification outcome (case.dao `updateComponentVerificationOutcome`).
+  utv_reason: null,
+  utv_remarks: null,
+  insufficient_reason: null,
+  insufficient_remarks: null,
+  observed_residence_type: null,
+  observed_address_type: null,
+  is_signature_captured: null,
+  submitted_latitude: null,
+  submitted_longitude: null,
+  submitted_distance_meters: null,
+  is_force_proceed: null,
+  outcome_submitted_at: null,
 } as const;
 
 export async function insertCase(values: CaseWriteValues): Promise<void> {
@@ -339,7 +352,8 @@ export async function insertCaseComponent(values: CaseComponentWriteValues): Pro
 
 /**
  * Updates an existing component. The verification outcome columns
- * (`selected_verification_status`, respondent, the date trail) are deliberately
+ * (`selected_verification_status`, respondent, the rest of the submitted outcome —
+ * `observed_*`, `submitted_*`, `is_force_proceed`, … — and the date trail) are deliberately
  * left out — they are the field executive's record of what happened on site, not
  * something the back office overwrites from a form.
  */

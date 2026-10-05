@@ -103,8 +103,9 @@ export function AppDrawerContent(props: DrawerContentComponentProps): ReactEleme
 
   const handleLogoutPress = (): void => {
     LoggerService.info(`${FILE_NAME}: AppDrawerContent.handleLogoutPress: logging out`);
-    // Session hygiene: the persisted token is cleared alongside in-memory
-    // state so it can't be replayed after logout.
+    // Session hygiene: `logout()` clears the persisted token and revokes it on
+    // the server so it can't be replayed. Fire-and-forget — it never rejects,
+    // and the user is never kept waiting on the network (or its absence).
     void logout();
     clearSession();
     // In-memory copy only — the persisted master-data cache is kept on
