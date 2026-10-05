@@ -397,7 +397,9 @@ No JavaScript errors (only the pre-existing missing `/favicon.ico`), and no serv
 - **No notifications.** Admins see new requests by opening the page (the Pending tab count); FEs see the
   outcome on their Profile. Nothing is emailed or pushed.
 - **The mobile app is not told about an approval.** It learns nothing until the FE signs in again. An
-  app session already open on the old phone keeps its existing token until it expires.
+  app session already open on the old phone keeps its existing token until it expires or the
+  account's next mobile login, on any phone — each login revokes every earlier mobile token (see
+  `docs/api-contracts/mobile-logout.md` at the monorepo root). Approval itself doesn't revoke it.
 - **Device details come from the handset** and are only as trustworthy as the app's login payload.
 - All timestamps are server UTC; the portals display them in the viewer's local time.
 

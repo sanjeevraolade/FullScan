@@ -31,6 +31,9 @@ npx tsc --noEmit    # type check (npm run lint is broken: no eslint.config.js)
 - All routes are under `/api/v1`. Auth scopes are isolated: mobile (`authenticate`), FE web
   (`authenticate-fe-web`, cookie `fs_fe_session`), admin (`authenticate-admin`, cookie
   `fs_admin_session`). Never let a token from one scope work on another.
+- Mobile tokens are revocable: `authenticate` checks the `sessionVersion` claim against
+  `field_executives.mobile_session_version` on every request. Only `auth.service.login()` issues them —
+  don't sign mobile tokens anywhere else.
 - Mobile `/cases/:caseId` params are **component** ids; admin `/admin/cases/:caseId` are **case** ids.
 
 ## Data changes

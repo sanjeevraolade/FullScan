@@ -496,7 +496,10 @@ open-redirect protection; `no-store` on portal HTML; no password or token in log
 - The Profile page cannot show **when** the phone was linked or last used: the server stores the
   device binding but no timestamp for it. The app version shown is the one reported at that first
   mobile login, not necessarily what is installed now.
-- JWTs are stateless: there is no server-side session revocation beyond deleting the account.
+- Web tokens are stateless: there is no server-side session revocation beyond deleting the account.
+  (Mobile tokens can be revoked — see `docs/api-contracts/mobile-logout.md` at the monorepo root —
+  but that session version isn't applied to `fe_web` tokens, and a mobile logout doesn't sign the
+  browser out.)
 - No password change/reset or MFA for FEs (same as mobile).
 - Same development-server caveats as the Admin Portal: default `JWT_SECRET`, wildcard `cors()`.
   See `ADMIN_PORTAL.md` §14.

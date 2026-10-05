@@ -21,7 +21,10 @@ Three sections, per spec:
    "coming soon" notice — no screens exist yet for these).
 3. **Logout** — pinned to the bottom via a bordered footer `Box`. Clears the session store and calls
    `rootNavigation.replace(ROUTE_NAMES.LOGIN)` (via `navigation.getParent()`), so the back button can't
-   return to an authenticated screen after logout.
+   return to an authenticated screen after logout. It also fires `logout()` from
+   `authentication-repository.ts` without awaiting it: that deletes the stored token and revokes it on
+   the server (`POST /auth/logout`), and never rejects — see
+   [mobile-logout.md](../../../docs/features-added/mobile-logout.md).
 
 New hand-rolled `LogoutIcon` (`src/shared/components/icons/logout-icon.tsx`) — Gluestack UI ships no
 sign-out icon, so it follows the same `createIcon` pattern as the existing `FilterIcon`.

@@ -6,6 +6,10 @@ Login goes from three sequential requests (`/auth/login`, `/me`, `/reference-dat
 > **Extended by [master-data-sync.md](master-data-sync.md):** the login 200 also carries
 > `masterDataUpdatedAt`, `/master-data` carries a top-level `updatedAt`, and the app skips
 > `/master-data` when the two match its cached copy.
+>
+> **Extended by [mobile-logout.md](mobile-logout.md):** the login token carries a `sessionVersion`
+> claim, each successful login revokes every earlier mobile token for the account, and
+> `POST /api/v1/auth/logout` revokes the current one.
 
 ## `POST /api/v1/auth/login`
 

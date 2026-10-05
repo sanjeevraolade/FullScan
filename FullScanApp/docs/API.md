@@ -83,7 +83,9 @@ Login with email and password. Returns JWT access + refresh tokens.
 Exchange refresh token for new access token.
 
 ### POST `/auth/logout`
-Invalidate refresh token.
+Revoke the bearer's mobile session on the server. **Auth required.** No body → `{ signedOut: true }`.
+The token is then refused on every mobile route; device binding is unchanged. Contract:
+[`docs/api-contracts/mobile-logout.md`](../../docs/api-contracts/mobile-logout.md).
 
 ---
 
